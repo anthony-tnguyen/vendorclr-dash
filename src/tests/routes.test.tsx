@@ -7,7 +7,20 @@ import { describe, expect, it, vi } from "vitest";
 // The route components are exercised directly; router links are stubbed so the
 // tests stay focused on page rendering rather than the generated route tree.
 vi.mock("@tanstack/react-router", () => ({
-  Link: ({ to, children, ...rest }: { to: string; children: ReactNode }) => (
+  Link: ({
+    to,
+    children,
+    activeOptions: _activeOptions,
+    activeProps: _activeProps,
+    params: _params,
+    ...rest
+  }: {
+    to: string;
+    children: ReactNode;
+    activeOptions?: unknown;
+    activeProps?: unknown;
+    params?: unknown;
+  }) => (
     <a href={to} {...rest}>
       {children}
     </a>
