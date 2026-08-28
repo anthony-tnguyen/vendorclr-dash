@@ -1,0 +1,61 @@
+/*
+ * VendorClear design tokens.
+ * Palette: ink #0F172A, action #2563EB, surface #F8FAFC,
+ * ok #15803D, warn #D97706, danger #DC2626.
+ * No gradients, no ornamental effects.
+ */
+
+:root {
+  --radius: 0.375rem;
+
+  --font-sans-stack: "Manrope", ui-sans-serif, system-ui, sans-serif;
+  --font-mono-stack: "IBM Plex Mono", ui-monospace, SFMono-Regular, monospace;
+
+  --background: oklch(0.984 0.003 247.858); /* #F8FAFC */
+  --foreground: oklch(0.208 0.042 265.755); /* #0F172A */
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.208 0.042 265.755);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.208 0.042 265.755);
+
+  --primary: oklch(0.546 0.215 262.881); /* #2563EB */
+  --primary-foreground: oklch(1 0 0);
+  --secondary: oklch(0.968 0.007 247.896);
+  --secondary-foreground: oklch(0.208 0.042 265.755);
+  --muted: oklch(0.968 0.007 247.896);
+  --muted-foreground: oklch(0.554 0.046 257.417);
+  --accent: oklch(0.955 0.02 259);
+  --accent-foreground: oklch(0.208 0.042 265.755);
+
+  --destructive: oklch(0.577 0.245 27.325); /* #DC2626 */
+  --destructive-foreground: oklch(1 0 0);
+
+  --ok: oklch(0.517 0.145 149.9); /* #15803D */
+  --ok-foreground: oklch(1 0 0);
+  --ok-soft: oklch(0.955 0.035 150);
+  --warn: oklch(0.679 0.157 63.5); /* #D97706 */
+  --warn-foreground: oklch(1 0 0);
+  --warn-soft: oklch(0.96 0.045 80);
+  --danger-soft: oklch(0.955 0.03 25);
+  --info-soft: oklch(0.955 0.025 262);
+
+  --ink: oklch(0.208 0.042 265.755);
+  --border: oklch(0.909 0.015 255.508);
+  --input: oklch(0.909 0.015 255.508);
+  --ring: oklch(0.546 0.215 262.881);
+
+  --sidebar: oklch(0.208 0.042 265.755);
+  --sidebar-foreground: oklch(0.97 0.005 250);
+  --sidebar-primary: oklch(0.546 0.215 262.881);
+  --sidebar-primary-foreground: oklch(1 0 0);
+  --sidebar-accent: oklch(0.27 0.04 262);
+  --sidebar-accent-foreground: oklch(0.97 0.005 250);
+  --sidebar-border: oklch(0.3 0.035 262);
+  --sidebar-ring: oklch(0.546 0.215 262.881);
+
+  --chart-1: oklch(0.546 0.215 262.881);
+  --chart-2: oklch(0.517 0.145 149.9);
+  --chart-3: oklch(0.679 0.157 63.5);
+  --chart-4: oklch(0.577 0.245 27.325);
+  --chart-5: oklch(0.554 0.046 257.417);
+}

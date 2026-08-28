@@ -10,33 +10,221 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as LoginRouteImport } from './routes/login'
+import { Route as ResetPasswordRouteImport } from './routes/reset-password'
+import { Route as SignupRouteImport } from './routes/signup'
+import { Route as DashboardIndexRouteImport } from './routes/dashboard.index'
+import { Route as DashboardReportsRouteImport } from './routes/dashboard.reports'
+import { Route as DashboardSettingsRouteImport } from './routes/dashboard.settings'
+import { Route as DashboardTasksRouteImport } from './routes/dashboard.tasks'
+import { Route as DashboardAdminIndexRouteImport } from './routes/dashboard.admin.index'
+import { Route as DashboardAdminAccessRouteImport } from './routes/dashboard.admin.access'
+import { Route as DashboardAdminCompaniesRouteImport } from './routes/dashboard.admin.companies'
+import { Route as DashboardAdminComplianceRouteImport } from './routes/dashboard.admin.compliance'
+import { Route as DashboardAdminLeadsRouteImport } from './routes/dashboard.admin.leads'
+import { Route as DashboardVendorsIndexRouteImport } from './routes/dashboard.vendors.index'
+import { Route as DashboardVendorsVendorIdRouteImport } from './routes/dashboard.vendors.$vendorId'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const LoginRoute = LoginRouteImport.update({
+  id: '/login',
+  path: '/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ResetPasswordRoute = ResetPasswordRouteImport.update({
+  id: '/reset-password',
+  path: '/reset-password',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SignupRoute = SignupRouteImport.update({
+  id: '/signup',
+  path: '/signup',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DashboardIndexRoute = DashboardIndexRouteImport.update({
+  id: '/dashboard/',
+  path: '/dashboard/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DashboardReportsRoute = DashboardReportsRouteImport.update({
+  id: '/dashboard/reports',
+  path: '/dashboard/reports',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DashboardSettingsRoute = DashboardSettingsRouteImport.update({
+  id: '/dashboard/settings',
+  path: '/dashboard/settings',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DashboardTasksRoute = DashboardTasksRouteImport.update({
+  id: '/dashboard/tasks',
+  path: '/dashboard/tasks',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DashboardAdminIndexRoute = DashboardAdminIndexRouteImport.update({
+  id: '/dashboard/admin/',
+  path: '/dashboard/admin/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DashboardAdminAccessRoute = DashboardAdminAccessRouteImport.update({
+  id: '/dashboard/admin/access',
+  path: '/dashboard/admin/access',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DashboardAdminCompaniesRoute = DashboardAdminCompaniesRouteImport.update({
+  id: '/dashboard/admin/companies',
+  path: '/dashboard/admin/companies',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DashboardAdminComplianceRoute =
+  DashboardAdminComplianceRouteImport.update({
+    id: '/dashboard/admin/compliance',
+    path: '/dashboard/admin/compliance',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const DashboardAdminLeadsRoute = DashboardAdminLeadsRouteImport.update({
+  id: '/dashboard/admin/leads',
+  path: '/dashboard/admin/leads',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DashboardVendorsIndexRoute = DashboardVendorsIndexRouteImport.update({
+  id: '/dashboard/vendors/',
+  path: '/dashboard/vendors/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DashboardVendorsVendorIdRoute =
+  DashboardVendorsVendorIdRouteImport.update({
+    id: '/dashboard/vendors/$vendorId',
+    path: '/dashboard/vendors/$vendorId',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/login': typeof LoginRoute
+  '/reset-password': typeof ResetPasswordRoute
+  '/signup': typeof SignupRoute
+  '/dashboard/reports': typeof DashboardReportsRoute
+  '/dashboard/settings': typeof DashboardSettingsRoute
+  '/dashboard/tasks': typeof DashboardTasksRoute
+  '/dashboard/': typeof DashboardIndexRoute
+  '/dashboard/admin/access': typeof DashboardAdminAccessRoute
+  '/dashboard/admin/companies': typeof DashboardAdminCompaniesRoute
+  '/dashboard/admin/compliance': typeof DashboardAdminComplianceRoute
+  '/dashboard/admin/leads': typeof DashboardAdminLeadsRoute
+  '/dashboard/vendors/$vendorId': typeof DashboardVendorsVendorIdRoute
+  '/dashboard/admin/': typeof DashboardAdminIndexRoute
+  '/dashboard/vendors/': typeof DashboardVendorsIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/login': typeof LoginRoute
+  '/reset-password': typeof ResetPasswordRoute
+  '/signup': typeof SignupRoute
+  '/dashboard/reports': typeof DashboardReportsRoute
+  '/dashboard/settings': typeof DashboardSettingsRoute
+  '/dashboard/tasks': typeof DashboardTasksRoute
+  '/dashboard': typeof DashboardIndexRoute
+  '/dashboard/admin/access': typeof DashboardAdminAccessRoute
+  '/dashboard/admin/companies': typeof DashboardAdminCompaniesRoute
+  '/dashboard/admin/compliance': typeof DashboardAdminComplianceRoute
+  '/dashboard/admin/leads': typeof DashboardAdminLeadsRoute
+  '/dashboard/vendors/$vendorId': typeof DashboardVendorsVendorIdRoute
+  '/dashboard/admin': typeof DashboardAdminIndexRoute
+  '/dashboard/vendors': typeof DashboardVendorsIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/login': typeof LoginRoute
+  '/reset-password': typeof ResetPasswordRoute
+  '/signup': typeof SignupRoute
+  '/dashboard/reports': typeof DashboardReportsRoute
+  '/dashboard/settings': typeof DashboardSettingsRoute
+  '/dashboard/tasks': typeof DashboardTasksRoute
+  '/dashboard/': typeof DashboardIndexRoute
+  '/dashboard/admin/access': typeof DashboardAdminAccessRoute
+  '/dashboard/admin/companies': typeof DashboardAdminCompaniesRoute
+  '/dashboard/admin/compliance': typeof DashboardAdminComplianceRoute
+  '/dashboard/admin/leads': typeof DashboardAdminLeadsRoute
+  '/dashboard/vendors/$vendorId': typeof DashboardVendorsVendorIdRoute
+  '/dashboard/admin/': typeof DashboardAdminIndexRoute
+  '/dashboard/vendors/': typeof DashboardVendorsIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/'
+  fullPaths:
+    | '/'
+    | '/login'
+    | '/reset-password'
+    | '/signup'
+    | '/dashboard/reports'
+    | '/dashboard/settings'
+    | '/dashboard/tasks'
+    | '/dashboard/'
+    | '/dashboard/admin/access'
+    | '/dashboard/admin/companies'
+    | '/dashboard/admin/compliance'
+    | '/dashboard/admin/leads'
+    | '/dashboard/vendors/$vendorId'
+    | '/dashboard/admin/'
+    | '/dashboard/vendors/'
   fileRoutesByTo: FileRoutesByTo
-  to: '/'
-  id: '__root__' | '/'
+  to:
+    | '/'
+    | '/login'
+    | '/reset-password'
+    | '/signup'
+    | '/dashboard/reports'
+    | '/dashboard/settings'
+    | '/dashboard/tasks'
+    | '/dashboard'
+    | '/dashboard/admin/access'
+    | '/dashboard/admin/companies'
+    | '/dashboard/admin/compliance'
+    | '/dashboard/admin/leads'
+    | '/dashboard/vendors/$vendorId'
+    | '/dashboard/admin'
+    | '/dashboard/vendors'
+  id:
+    | '__root__'
+    | '/'
+    | '/login'
+    | '/reset-password'
+    | '/signup'
+    | '/dashboard/reports'
+    | '/dashboard/settings'
+    | '/dashboard/tasks'
+    | '/dashboard/'
+    | '/dashboard/admin/access'
+    | '/dashboard/admin/companies'
+    | '/dashboard/admin/compliance'
+    | '/dashboard/admin/leads'
+    | '/dashboard/vendors/$vendorId'
+    | '/dashboard/admin/'
+    | '/dashboard/vendors/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  LoginRoute: typeof LoginRoute
+  ResetPasswordRoute: typeof ResetPasswordRoute
+  SignupRoute: typeof SignupRoute
+  DashboardReportsRoute: typeof DashboardReportsRoute
+  DashboardSettingsRoute: typeof DashboardSettingsRoute
+  DashboardTasksRoute: typeof DashboardTasksRoute
+  DashboardIndexRoute: typeof DashboardIndexRoute
+  DashboardAdminAccessRoute: typeof DashboardAdminAccessRoute
+  DashboardAdminCompaniesRoute: typeof DashboardAdminCompaniesRoute
+  DashboardAdminComplianceRoute: typeof DashboardAdminComplianceRoute
+  DashboardAdminLeadsRoute: typeof DashboardAdminLeadsRoute
+  DashboardVendorsVendorIdRoute: typeof DashboardVendorsVendorIdRoute
+  DashboardAdminIndexRoute: typeof DashboardAdminIndexRoute
+  DashboardVendorsIndexRoute: typeof DashboardVendorsIndexRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -48,11 +236,123 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/login': {
+      id: '/login'
+      path: '/login'
+      fullPath: '/login'
+      preLoaderRoute: typeof LoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/reset-password': {
+      id: '/reset-password'
+      path: '/reset-password'
+      fullPath: '/reset-password'
+      preLoaderRoute: typeof ResetPasswordRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/signup': {
+      id: '/signup'
+      path: '/signup'
+      fullPath: '/signup'
+      preLoaderRoute: typeof SignupRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/dashboard/': {
+      id: '/dashboard/'
+      path: '/dashboard'
+      fullPath: '/dashboard/'
+      preLoaderRoute: typeof DashboardIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/dashboard/reports': {
+      id: '/dashboard/reports'
+      path: '/dashboard/reports'
+      fullPath: '/dashboard/reports'
+      preLoaderRoute: typeof DashboardReportsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/dashboard/settings': {
+      id: '/dashboard/settings'
+      path: '/dashboard/settings'
+      fullPath: '/dashboard/settings'
+      preLoaderRoute: typeof DashboardSettingsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/dashboard/tasks': {
+      id: '/dashboard/tasks'
+      path: '/dashboard/tasks'
+      fullPath: '/dashboard/tasks'
+      preLoaderRoute: typeof DashboardTasksRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/dashboard/admin/': {
+      id: '/dashboard/admin/'
+      path: '/dashboard/admin'
+      fullPath: '/dashboard/admin/'
+      preLoaderRoute: typeof DashboardAdminIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/dashboard/admin/access': {
+      id: '/dashboard/admin/access'
+      path: '/dashboard/admin/access'
+      fullPath: '/dashboard/admin/access'
+      preLoaderRoute: typeof DashboardAdminAccessRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/dashboard/admin/companies': {
+      id: '/dashboard/admin/companies'
+      path: '/dashboard/admin/companies'
+      fullPath: '/dashboard/admin/companies'
+      preLoaderRoute: typeof DashboardAdminCompaniesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/dashboard/admin/compliance': {
+      id: '/dashboard/admin/compliance'
+      path: '/dashboard/admin/compliance'
+      fullPath: '/dashboard/admin/compliance'
+      preLoaderRoute: typeof DashboardAdminComplianceRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/dashboard/admin/leads': {
+      id: '/dashboard/admin/leads'
+      path: '/dashboard/admin/leads'
+      fullPath: '/dashboard/admin/leads'
+      preLoaderRoute: typeof DashboardAdminLeadsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/dashboard/vendors/': {
+      id: '/dashboard/vendors/'
+      path: '/dashboard/vendors'
+      fullPath: '/dashboard/vendors/'
+      preLoaderRoute: typeof DashboardVendorsIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/dashboard/vendors/$vendorId': {
+      id: '/dashboard/vendors/$vendorId'
+      path: '/dashboard/vendors/$vendorId'
+      fullPath: '/dashboard/vendors/$vendorId'
+      preLoaderRoute: typeof DashboardVendorsVendorIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  LoginRoute: LoginRoute,
+  ResetPasswordRoute: ResetPasswordRoute,
+  SignupRoute: SignupRoute,
+  DashboardReportsRoute: DashboardReportsRoute,
+  DashboardSettingsRoute: DashboardSettingsRoute,
+  DashboardTasksRoute: DashboardTasksRoute,
+  DashboardIndexRoute: DashboardIndexRoute,
+  DashboardAdminAccessRoute: DashboardAdminAccessRoute,
+  DashboardAdminCompaniesRoute: DashboardAdminCompaniesRoute,
+  DashboardAdminComplianceRoute: DashboardAdminComplianceRoute,
+  DashboardAdminLeadsRoute: DashboardAdminLeadsRoute,
+  DashboardVendorsVendorIdRoute: DashboardVendorsVendorIdRoute,
+  DashboardAdminIndexRoute: DashboardAdminIndexRoute,
+  DashboardVendorsIndexRoute: DashboardVendorsIndexRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
