@@ -4,7 +4,9 @@ import { useDemoSession } from "@/app/App";
 import { adminNav, customerNav } from "@/app/router";
 import { cn } from "@/lib/utils";
 
-function NavList({ title, items }: { title: string; items: typeof customerNav }) {
+type NavItems = typeof customerNav | typeof adminNav;
+
+function NavList({ title, items }: { title: string; items: NavItems }) {
   return (
     <div>
       <p className="px-3 text-[11px] font-semibold uppercase tracking-wider text-sidebar-foreground/60">
@@ -16,7 +18,7 @@ function NavList({ title, items }: { title: string; items: typeof customerNav })
             <Link
               to={item.to}
               aria-label={`${item.label} — ${item.description}`}
-              activeOptions={{ exact: item.to === "/dashboard" || item.to === "/dashboard/admin" }}
+              activeOptions={{ exact: (item.to as string) === "/dashboard" || (item.to as string) === "/dashboard/admin" }}
               activeProps={{
                 className: "bg-sidebar-accent text-sidebar-foreground font-semibold",
                 "aria-current": "page",
