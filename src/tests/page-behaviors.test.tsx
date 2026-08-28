@@ -119,7 +119,7 @@ describe("administrator route behavior", () => {
   it("renders the administrator overview after the demo role switch", async () => {
     await renderAdminRoute("/dashboard/admin");
 
-    expect(await screen.findByText("Companies monitored")).toBeInTheDocument();
+    expect(await screen.findByText("Customer companies")).toBeInTheDocument();
   });
 
   it("renders companies after the demo role switch", async () => {
@@ -138,7 +138,7 @@ describe("administrator route behavior", () => {
     const { user } = await renderAdminRoute("/dashboard/admin/compliance");
 
     expect(await screen.findByText("Certificate of insurance")).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: /open review for/i }));
+    await user.click(screen.getByRole("button", { name: "Open review for Certificate of insurance from Delgado Concrete Works" }));
     expect(await screen.findByRole("status")).toHaveTextContent(
       /no review was recorded and no notification was sent/i,
     );
