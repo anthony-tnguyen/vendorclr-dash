@@ -21,7 +21,7 @@ export interface ComplianceItem {
   status: ComplianceStatus;
   /** ISO date (yyyy-mm-dd) or null when not applicable. */
   effectiveDate: string | null;
-  note?: string;
+  note?: string | undefined;
 }
 
 export interface CoverageLimit {
