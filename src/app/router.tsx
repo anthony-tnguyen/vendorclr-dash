@@ -29,18 +29,18 @@ export interface NavItem {
   description: string;
 }
 
-export const customerNav: NavItem[] = [
+export const customerNav = [
   { label: "Overview", to: routes.dashboard, description: "Program compliance summary" },
   { label: "Vendors", to: routes.vendors, description: "Vendor roster and compliance rail" },
   { label: "Tasks", to: routes.tasks, description: "Open compliance follow-ups" },
   { label: "Reports", to: routes.reports, description: "Project level compliance reporting" },
   { label: "Settings", to: routes.settings, description: "Requirement defaults and contacts" },
-];
+] as const satisfies readonly NavItem[];
 
-export const adminNav: NavItem[] = [
+export const adminNav = [
   { label: "Admin overview", to: routes.adminOverview, description: "Platform operations summary" },
   { label: "Companies", to: routes.adminCompanies, description: "Customer accounts" },
   { label: "Compliance queue", to: routes.adminCompliance, description: "Documents awaiting review" },
   { label: "Leads", to: routes.adminLeads, description: "Inbound pipeline" },
   { label: "Access", to: routes.adminAccess, description: "Role and scope management" },
-];
+] as const satisfies readonly NavItem[];
