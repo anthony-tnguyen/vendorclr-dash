@@ -1,6 +1,6 @@
 import { createMemoryHistory, RouterProvider } from "@tanstack/react-router";
 import { render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import { getRouter } from "@/router";
 
 const expectedRouteIds = [
@@ -20,23 +20,19 @@ const expectedRouteIds = [
   "/dashboard/admin/access",
 ] as const;
 
-const routers: ReturnType<typeof getRouter>[] = [];
-
 function createTestRouter(initialEntry: string) {
   const router = getRouter();
   router.update({
     history: createMemoryHistory({ initialEntries: [initialEntry] }),
   });
-  routers.push(router);
   return router;
 }
 
-afterEach(() => {
-  for (const router of routers.splice(0)) {
-    router.dispose();
-  }
-});
-
+/*
+ * src/test/setup.ts calls Testing Library cleanup after every test. That
+ * unmounts RouterProvider and releases its subscriptions; this TanStack Router
+ * version exposes no router.dispose() lifecycle API.
+ */
 describe("generated TanStack route tree", () => {
   it("registers every required customer and administrator route", () => {
     const router = createTestRouter("/dashboard");
