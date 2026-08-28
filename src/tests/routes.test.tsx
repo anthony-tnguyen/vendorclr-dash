@@ -172,7 +172,10 @@ describe("administrator routes", () => {
     const user = userEvent.setup();
     renderPage(<AccessPage />);
     await user.click(screen.getByRole("button", { name: /preview as administrator/i }));
+    await screen.findByText("Rosa Sandoval");
     await user.click(screen.getByRole("button", { name: /invite teammate/i }));
-    expect(screen.getByRole("status")).toHaveTextContent(/no invitation was created or emailed/i);
+    expect(
+      await screen.findByText(/no invitation was created or emailed/i),
+    ).toBeInTheDocument();
   });
 });
