@@ -461,7 +461,7 @@ const accessGrants: AccessGrant[] = [
   },
 ];
 
-const delay = <T,>(value: T): Promise<T> =>
+const delay = <T>(value: T): Promise<T> =>
   new Promise((resolve) => setTimeout(() => resolve(value), 120));
 
 export function createDemoRepository(): DashboardRepository {

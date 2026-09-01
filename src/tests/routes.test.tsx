@@ -23,6 +23,10 @@ const expectedRouteIds = [
 function createTestRouter(initialEntry: string) {
   const router = getRouter();
   router.update({
+    // Spread the existing options: update() replaces the whole option set, and
+    // getRouter() supplies routeTree and the queryClient context that the root
+    // route requires. Passing history alone drops them.
+    ...router.options,
     history: createMemoryHistory({ initialEntries: [initialEntry] }),
   });
   return router;
@@ -38,7 +42,7 @@ describe("generated TanStack route tree", () => {
     const router = createTestRouter("/dashboard");
     const registeredRouteIds = Object.keys(router.routesById);
 
-    expect(registeredRouteIds).toEqual(expect.arrayContaining(expectedRouteIds));
+    expect(registeredRouteIds).toEqual(expect.arrayContaining([...expectedRouteIds]));
   });
 
   it("matches the dynamic vendor route and supplies the real vendorId parameter", async () => {

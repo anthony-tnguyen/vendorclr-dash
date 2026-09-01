@@ -40,7 +40,11 @@ export const customerNav = [
 export const adminNav = [
   { label: "Admin overview", to: routes.adminOverview, description: "Platform operations summary" },
   { label: "Companies", to: routes.adminCompanies, description: "Customer accounts" },
-  { label: "Compliance queue", to: routes.adminCompliance, description: "Documents awaiting review" },
+  {
+    label: "Compliance queue",
+    to: routes.adminCompliance,
+    description: "Documents awaiting review",
+  },
   { label: "Leads", to: routes.adminLeads, description: "Inbound pipeline" },
   { label: "Access", to: routes.adminAccess, description: "Role and scope management" },
 ] as const satisfies readonly NavItem[];

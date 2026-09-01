@@ -8,11 +8,7 @@
 export type DemoRole = "customer" | "admin";
 
 export type ComplianceKey =
-  | "coi"
-  | "additionalInsured"
-  | "waiverOfSubrogation"
-  | "lienWaiver"
-  | "renewal";
+  "coi" | "additionalInsured" | "waiverOfSubrogation" | "lienWaiver" | "renewal";
 
 export type ComplianceStatus = "compliant" | "expiring" | "missing" | "expired" | "pending";
 

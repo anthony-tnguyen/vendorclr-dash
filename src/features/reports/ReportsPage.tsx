@@ -16,9 +16,7 @@ export function ReportsPage() {
       actions={
         <button
           type="button"
-          onClick={() =>
-            setNotice("Demo mode: no file was generated, exported or downloaded.")
-          }
+          onClick={() => setNotice("Demo mode: no file was generated, exported or downloaded.")}
           className="focusable rounded-sm border border-border px-3 py-2 text-sm font-medium"
         >
           Export CSV (demo)
