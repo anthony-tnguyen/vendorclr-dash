@@ -1,6 +1,6 @@
 import { Link } from "@tanstack/react-router";
 import type { ReactNode } from "react";
-import { useDemoSession } from "@/app/App";
+import { useSession } from "@/app/App";
 import { adminNav, customerNav } from "@/app/router";
 import { cn } from "@/lib/utils";
 
@@ -18,7 +18,11 @@ function NavList({ title, items }: { title: string; items: NavItems }) {
             <Link
               to={item.to}
               aria-label={`${item.label} — ${item.description}`}
-              activeOptions={{ exact: (item.to as string) === "/dashboard" || (item.to as string) === "/dashboard/admin" }}
+              activeOptions={{
+                exact:
+                  (item.to as string) === "/dashboard" ||
+                  (item.to as string) === "/dashboard/admin",
+              }}
               activeProps={{
                 className: "bg-sidebar-accent text-sidebar-foreground font-semibold",
                 "aria-current": "page",
@@ -34,14 +38,46 @@ function NavList({ title, items }: { title: string; items: NavItems }) {
   );
 }
 
+function SessionPanel() {
+  const { mode, canSwitchRole } = useSession();
+
+  if (mode === "demo") return <DemoRoleSwitcher />;
+  // Staff get the same switcher to preview the customer console; it is a view
+  // toggle, not a privilege change - RLS decides what the database returns.
+  return canSwitchRole ? <DemoRoleSwitcher /> : <SignedInPanel />;
+}
+
+function SignedInPanel() {
+  const { personName, companyName, signOut } = useSession();
+
+  return (
+    <div className="rounded-sm border border-sidebar-border p-3">
+      <p className="truncate text-xs font-semibold text-sidebar-foreground">{personName}</p>
+      <p className="truncate text-[11px] text-sidebar-foreground/70">{companyName}</p>
+      <button
+        type="button"
+        onClick={() => void signOut()}
+        className="focusable mt-2 w-full rounded-sm border border-sidebar-border px-2 py-1.5 text-xs font-semibold text-sidebar-foreground"
+      >
+        Sign out
+      </button>
+    </div>
+  );
+}
+
 function DemoRoleSwitcher() {
-  const { role, setRole } = useDemoSession();
+  const { role, setRole, mode } = useSession();
+  const isDemo = mode === "demo";
 
   return (
     <div className="rounded-sm border border-warn/40 bg-warn-soft p-3">
-      <p className="text-[11px] font-bold uppercase tracking-wider text-warn">Demo mode</p>
+      <p className="text-[11px] font-bold uppercase tracking-wider text-warn">
+        {isDemo ? "Demo mode" : "Staff view"}
+      </p>
       <p className="mt-1 text-xs text-foreground">
-        Role preview only. This is not sign-in and grants no real access.
+        {isDemo
+          ? "Role preview only. This is not sign-in and grants no real access."
+          : "Switches which console you see. Data access is enforced by the database."}
       </p>
       <fieldset className="mt-2">
         <legend className="sr-only">Choose demo role</legend>
@@ -77,7 +113,7 @@ export interface AppShellProps {
 }
 
 export function AppShell({ title, subtitle, actions, children }: AppShellProps) {
-  const { personName, companyName, role } = useDemoSession();
+  const { personName, companyName, role, mode } = useSession();
 
   return (
     <div className="min-h-screen bg-background">
@@ -106,7 +142,7 @@ export function AppShell({ title, subtitle, actions, children }: AppShellProps) 
             <NavList title="Administrator" items={adminNav} />
           </nav>
           <div className="px-3 pb-6">
-            <DemoRoleSwitcher />
+            <SessionPanel />
           </div>
         </aside>
 
@@ -115,9 +151,7 @@ export function AppShell({ title, subtitle, actions, children }: AppShellProps) 
             <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
               <div className="min-w-0">
                 <h1 className="text-lg font-bold tracking-tight text-foreground">{title}</h1>
-                {subtitle ? (
-                  <p className="mt-1 text-sm text-muted-foreground">{subtitle}</p>
-                ) : null}
+                {subtitle ? <p className="mt-1 text-sm text-muted-foreground">{subtitle}</p> : null}
               </div>
               <div className="flex flex-wrap items-center gap-2">
                 {actions}
@@ -132,8 +166,9 @@ export function AppShell({ title, subtitle, actions, children }: AppShellProps) 
             {children}
           </main>
           <footer className="border-t border-border px-4 py-4 text-xs text-muted-foreground sm:px-6">
-            Demo environment. Uploads, emails, reviews and exports are simulated in memory and are
-            never persisted or sent.
+            {mode === "demo"
+              ? "Demo environment. Uploads, emails, reviews and exports are simulated in memory and are never persisted or sent."
+              : "Document upload, extraction and renewal email are not built yet. Vendor and policy records are live."}
           </footer>
         </div>
       </div>

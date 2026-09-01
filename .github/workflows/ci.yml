@@ -27,5 +27,12 @@ jobs:
       - name: Run tests
         run: bun run test
 
+      # Applies supabase/migrations to a real Postgres (PGlite/WASM) and asserts
+      # the RLS tenancy boundary holds. No Docker or database service needed.
+      # This is the only check that would catch a policy regression - a broken
+      # RLS policy returns rows instead of raising, so nothing else notices.
+      - name: Verify database schema and RLS policies
+        run: bun run db:verify
+
       - name: Build production bundle
         run: bun run build
