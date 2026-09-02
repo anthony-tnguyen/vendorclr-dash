@@ -6,7 +6,14 @@ import reactRefresh from "eslint-plugin-react-refresh";
 import tseslint from "typescript-eslint";
 
 export default tseslint.config(
-  { ignores: ["dist", ".output", ".vinxi"] },
+  {
+    // supabase/functions/** runs in Supabase's Deno Edge Runtime, a separate
+    // deployment target with its own globals (Deno) and import specifiers
+    // (jsr:, npm:) this project's Node-oriented ESLint/TS config doesn't
+    // understand. It has no build step of its own to lint against here -
+    // see the docblock at the top of send-renewal-reminders/index.ts.
+    ignores: ["dist", ".output", ".vinxi", "supabase/functions/**"],
+  },
   {
     extends: [js.configs.recommended, ...tseslint.configs.recommended],
     files: ["**/*.{ts,tsx}"],

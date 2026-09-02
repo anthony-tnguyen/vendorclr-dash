@@ -30,6 +30,8 @@ Four phases so far:
 | `20260902000200_document_extraction.sql` | Adds `parsed_data`, `extraction_confidence`, `duplicate_of_document_id` to `vendor_documents` |
 | `20260902000300_compliance_engine.sql` | `vendor_documents.applied_policy_id`/`review_reason`, and `apply_policy_renewal()` |
 | `20260902000400_notification_emails.sql` | Widens `email_outbox.template` to add `document_received`, `admin_review_needed` |
+| `20260902000500_renewal_reminders.sql` | `policy_reminder_log`, `current_reminder_threshold()`, `policies_due_for_reminder`; widens `email_outbox.template` to add `renewal_reminder` |
+| `20260902000600_schedule_renewal_reminders.sql` | Enables `pg_cron`/`pg_net`, schedules a daily call into the `send-renewal-reminders` Edge Function — see [Renewal reminders](#renewal-reminders) |
 
 The headline modelling change: **a vendor no longer owns one flat policy.**
 `Vendor.policyNumber` / `Vendor.expiresOn` in `src/data/contracts.ts` could hold
@@ -320,6 +322,82 @@ useful to do with a send error beyond not letting it propagate. Every attempt,
 including a failed one, is still recorded in `email_outbox` - the same
 pattern `createUploadRequest()` already used in Phase 1.
 
+### Renewal reminders
+
+Migrations 9/10 close the last gap Phase 3 deliberately left open: nothing
+prompted a vendor before their certificate actually expired. A daily job now
+emails at 90, 60, 30, 14, and 7 days out, keyed off `general_liability` for
+the same reason as everywhere else in this schema — it's the policy that
+drives `computeComplianceItems()`.
+
+Split across two layers because they need very different things to verify:
+
+- **Detection is plain SQL**, fully covered by `db:verify`:
+  - `policy_reminder_log` records which tier has already fired for which
+    policy (`unique (policy_id, days_threshold)` — the constraint that makes
+    the whole system idempotent).
+  - `current_reminder_threshold(days_until)` picks the single *tightest*
+    applicable tier for a day-count (45 days left resolves to 60, not 90), so
+    a daily job sends exactly one reminder per threshold crossed rather than
+    a backlog.
+  - `policies_due_for_reminder` is the view a scheduled job actually reads:
+    active GL policies whose current threshold has not already been logged.
+    A renewal resets the cycle for free — `apply_policy_renewal()` always
+    inserts a new `vendor_policies` row rather than mutating the old one, and
+    the log is keyed by `policy_id`, so a fresh row starts with no log
+    entries and the 90-day tier is immediately available again.
+- **Scheduling and sending need the real stack**: `pg_cron` (a background
+  worker) and `pg_net` (real outbound HTTP) don't exist in PGlite, so
+  migration 11 is excluded from `db:verify` (`SKIPPED_IN_PGLITE` in
+  `supabase/tests/harness.ts`) and verified instead against the live project
+  — `get_advisors` after applying, then a direct `curl` invocation of the
+  deployed function (done for this phase; see the commit history for the
+  exact commands).
+
+**How the pieces connect**, once deployed:
+
+```
+pg_cron (13:00 UTC daily)
+  -> pg_net: POST https://<ref>.supabase.co/functions/v1/send-renewal-reminders
+       Authorization: Bearer <service_role_key>   (both read from Supabase Vault by name)
+  -> Edge Function (Deno, supabase/functions/send-renewal-reminders/)
+       - confirms the caller's JWT role is service_role (defense in depth on
+         top of the platform's own verify_jwt=true check)
+       - reads policies_due_for_reminder
+       - per policy: creates a fresh vendor_upload_requests row + magic-link
+         token (same shape as createUploadRequest(), Phase 1)
+       - sends via Resend, or logs a stub result if RESEND_API_KEY is unset
+       - writes email_outbox always; writes policy_reminder_log ONLY on an
+         actual successful send — a failed or not-configured send is left
+         unlogged on purpose, so tomorrow's run retries it. The log's job is
+         to stop double-SENDING, not to mark a threshold "handled" when
+         nothing went out.
+```
+
+The Edge Function duplicates `uploadTokens.ts`'s Web-Crypto-only helpers and
+writes its own `renewal_reminder`-specific copy in
+`supabase/functions/send-renewal-reminders/emailTemplates.ts` (worded as an
+automated nudge — "expires in 30 days" — rather than the manually-triggered
+`renewal_request` template's "please send an updated certificate", since the
+vendor didn't just ask for this). Neither file is imported from `src/` — this
+runs in Supabase's Deno Edge Runtime, a separate deployment target with no
+shared build step across that boundary, which is also why
+`supabase/functions/**` is excluded from this project's own `tsc`/`eslint`
+(see the `@ts-nocheck` docblock at the top of `index.ts`).
+
+`project_url` and `service_role_key` live in Supabase Vault
+(`select vault.create_secret(value, name)`), not in a migration file — the
+migration's `cron.schedule()` call only stores that command as text; it
+isn't evaluated until the job actually fires, so the migration can be
+applied before the secrets exist or the function is deployed. `RESEND_API_KEY`
+and `APP_URL` are Edge Function secrets (set once per project outside git,
+same as `RESEND_API_KEY` in the Node app's own `.env`) — unset today, so the
+function currently runs in the same graceful stub mode as `getEmailSender()`
+does locally: it still creates the upload request and records the attempt in
+`email_outbox` (`status = 'queued'`), it just doesn't call Resend, and
+because nothing was actually sent, `policy_reminder_log` stays unwritten and
+tomorrow's run tries again.
+
 ## Security model
 
 Tenancy is enforced in the database, not in React.
@@ -414,7 +492,13 @@ refused by RLS exactly as a direct write would be (the function is not
 `security definer`), and `anon` cannot execute it at all; and (migration 9)
 that the widened `email_outbox.template` constraint accepts
 `document_received`/`admin_review_needed` while still rejecting anything
-outside the allow-list. The harness stubs a minimal
+outside the allow-list; and (migration 10) `current_reminder_threshold()` at
+every tier boundary, `policies_due_for_reminder`'s filtering (GL-only,
+active-only, has-an-expiration-date, threshold-not-already-logged, superseded
+policies excluded) and cross-tenant RLS isolation, and
+`policy_reminder_log`'s uniqueness/check constraints — see
+[Renewal reminders](#renewal-reminders) for what migration 11 needs the live
+project for instead. The harness stubs a minimal
 `storage.objects`/`storage.buckets` schema (PGlite has no `storage` schema of
 its own) — see `supabase/tests/harness.ts`.
 
@@ -498,6 +582,19 @@ Deliberate, and worth revisiting as later phases grow on top of them:
   rather than one email with every recipient, or a digest. Fine at current
   scale (a company typically has one owner); revisit if a company with
   several owners starts finding this noisy.
+- **One reminder run time, no per-company timezone.** `send-renewal-reminders`
+  fires at a single fixed 13:00 UTC for every tenant. Fine while every
+  customer is US-based and this is the only scheduled job; revisit once
+  "which hour" starts to matter to a customer.
+- **The Edge Function's `for` loop is sequential, not batched.** Correct at
+  current scale (a handful of due policies a day); a company with hundreds of
+  policies renewing in the same week would want concurrent sends with a
+  concurrency cap, not one HTTP round-trip to Resend at a time.
+- **A `not_configured` reminder retries daily with no backoff**, since
+  `policy_reminder_log` is only written on an actual send. Fine until
+  `RESEND_API_KEY` is set (at which point it stops being reachable at all);
+  would need real backoff if a *configured* Resend integration started
+  failing repeatedly for one vendor (a bad address, e.g.) instead.
 
 ## What is still not built
 
@@ -524,14 +621,6 @@ automatically. What's not built yet:
   always hears the outcome, and the company's owner(s) get the specific
   reason by email - but there's still no *screen* for a reviewer to act on
   it from.
-- **The 90/60/30/14/7-day reminder schedule and next-renewal scheduling.**
-  Needs a scheduling mechanism this phase deliberately didn't reach for
-  without its own dedicated pass. `pg_cron` is available on the linked
-  project but not yet enabled, and - unlike everything built so far - a
-  scheduled job can't call Resend's HTTP API directly from plain SQL without
-  either `pg_net` (fire-and-forget, no synchronous response handling) or a
-  separate Supabase Edge Function it calls into; getting that decision right
-  needs its own verified pass rather than a guess bolted onto this one.
 - **Hardening (Phase 4).** Audit log, an automated (not just manually-invoked)
   retry queue, email bounce handling, malware/file-content checks beyond
   mime-type and size, upload-request cancellation UI, admin review tools.

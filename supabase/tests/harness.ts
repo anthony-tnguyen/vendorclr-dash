@@ -109,6 +109,20 @@ const DEFAULT_GRANTS = `
   grant all on all tables in schema storage to anon, authenticated, service_role;
 `;
 
+/**
+ * Migrations that create extensions PGlite cannot support: pg_cron and pg_net
+ * both need a real background worker / real networking, which a single-process
+ * WASM Postgres build does not have. `db:verify` cannot exercise these - they're
+ * covered instead by get_advisors + a smoke test against the live hosted
+ * project, same as anything else that needs the real stack (see supabase/README.md).
+ *
+ * Named explicitly, not pattern-matched, so a future migration is only ever
+ * skipped here on purpose, never by accident.
+ */
+export const SKIPPED_IN_PGLITE: readonly string[] = [
+  "20260902000600_schedule_renewal_reminders.sql",
+];
+
 export function migrationFiles(): string[] {
   return readdirSync(MIGRATIONS_DIR)
     .filter((f) => f.endsWith(".sql"))
@@ -119,13 +133,14 @@ export function readMigration(name: string): string {
   return readFileSync(join(MIGRATIONS_DIR, name), "utf8");
 }
 
-/** A fresh in-memory database with every migration applied. */
+/** A fresh in-memory database with every PGlite-compatible migration applied. */
 export async function createTestDb(): Promise<PGlite> {
   const db = new PGlite();
   await db.waitReady;
   await db.exec(BOOTSTRAP);
 
   for (const file of migrationFiles()) {
+    if (SKIPPED_IN_PGLITE.includes(file)) continue;
     try {
       await db.exec(readMigration(file));
     } catch (error) {
