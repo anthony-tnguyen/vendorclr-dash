@@ -3,7 +3,8 @@ import { Link } from "@tanstack/react-router";
 import { AppShell } from "@/components/shell/AppShell";
 import { ComplianceRail } from "@/components/compliance/ComplianceRail";
 import { EmptyState, ErrorState, LoadingState } from "@/components/states/AsyncState";
-import { getRepository } from "@/data/repository";
+import { getRepository, isBackendConfigured } from "@/data/repository";
+import { RequestDocumentsAction } from "./RequestDocumentsAction";
 
 const currency = new Intl.NumberFormat("en-US", {
   style: "currency",
@@ -149,10 +150,14 @@ export function VendorDetailPage({ vendorId }: { vendorId: string }) {
                   </dd>
                 </div>
               </dl>
-              <p className="mt-4 rounded-sm border border-border bg-muted px-3 py-2 text-xs">
-                Demo-only: document requests, uploads and reviews are simulated. Nothing is sent or
-                stored.
-              </p>
+              {isBackendConfigured() ? (
+                <RequestDocumentsAction vendorId={data.id} />
+              ) : (
+                <p className="mt-4 rounded-sm border border-border bg-muted px-3 py-2 text-xs">
+                  Demo-only: document requests, uploads and reviews are simulated. Nothing is sent
+                  or stored.
+                </p>
+              )}
             </section>
           </div>
         </div>

@@ -47,10 +47,18 @@ export function AccessPage() {
                 <caption className="sr-only">Access grants by person</caption>
                 <thead className="border-b border-border text-xs uppercase tracking-wide text-muted-foreground">
                   <tr>
-                    <th scope="col" className="px-3 py-2 font-medium">Person</th>
-                    <th scope="col" className="px-3 py-2 font-medium">Role</th>
-                    <th scope="col" className="px-3 py-2 font-medium">Scope</th>
-                    <th scope="col" className="px-3 py-2 font-medium">Last active</th>
+                    <th scope="col" className="px-3 py-2 font-medium">
+                      Person
+                    </th>
+                    <th scope="col" className="px-3 py-2 font-medium">
+                      Role
+                    </th>
+                    <th scope="col" className="px-3 py-2 font-medium">
+                      Scope
+                    </th>
+                    <th scope="col" className="px-3 py-2 font-medium">
+                      Last active
+                    </th>
                   </tr>
                 </thead>
                 <tbody>

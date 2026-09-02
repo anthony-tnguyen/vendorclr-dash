@@ -150,7 +150,10 @@ export function VendorForm({ onDone }: { onDone?: () => void }) {
       </div>
 
       {notice ? (
-        <p role="status" className="mt-3 rounded-sm border border-border bg-muted px-3 py-2 text-xs">
+        <p
+          role="status"
+          className="mt-3 rounded-sm border border-border bg-muted px-3 py-2 text-xs"
+        >
           {notice}
         </p>
       ) : null}

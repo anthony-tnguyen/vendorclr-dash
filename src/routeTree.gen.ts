@@ -17,6 +17,7 @@ import { Route as DashboardIndexRouteImport } from './routes/dashboard.index'
 import { Route as DashboardReportsRouteImport } from './routes/dashboard.reports'
 import { Route as DashboardSettingsRouteImport } from './routes/dashboard.settings'
 import { Route as DashboardTasksRouteImport } from './routes/dashboard.tasks'
+import { Route as VendorUploadTokenRouteImport } from './routes/vendor-upload.$token'
 import { Route as DashboardAdminIndexRouteImport } from './routes/dashboard.admin.index'
 import { Route as DashboardAdminAccessRouteImport } from './routes/dashboard.admin.access'
 import { Route as DashboardAdminCompaniesRouteImport } from './routes/dashboard.admin.companies'
@@ -65,6 +66,11 @@ const DashboardTasksRoute = DashboardTasksRouteImport.update({
   path: '/dashboard/tasks',
   getParentRoute: () => rootRouteImport,
 } as any)
+const VendorUploadTokenRoute = VendorUploadTokenRouteImport.update({
+  id: '/vendor-upload/$token',
+  path: '/vendor-upload/$token',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const DashboardAdminIndexRoute = DashboardAdminIndexRouteImport.update({
   id: '/dashboard/admin/',
   path: '/dashboard/admin/',
@@ -111,6 +117,7 @@ export interface FileRoutesByFullPath {
   '/dashboard/reports': typeof DashboardReportsRoute
   '/dashboard/settings': typeof DashboardSettingsRoute
   '/dashboard/tasks': typeof DashboardTasksRoute
+  '/vendor-upload/$token': typeof VendorUploadTokenRoute
   '/dashboard/': typeof DashboardIndexRoute
   '/dashboard/admin/access': typeof DashboardAdminAccessRoute
   '/dashboard/admin/companies': typeof DashboardAdminCompaniesRoute
@@ -128,6 +135,7 @@ export interface FileRoutesByTo {
   '/dashboard/reports': typeof DashboardReportsRoute
   '/dashboard/settings': typeof DashboardSettingsRoute
   '/dashboard/tasks': typeof DashboardTasksRoute
+  '/vendor-upload/$token': typeof VendorUploadTokenRoute
   '/dashboard': typeof DashboardIndexRoute
   '/dashboard/admin/access': typeof DashboardAdminAccessRoute
   '/dashboard/admin/companies': typeof DashboardAdminCompaniesRoute
@@ -146,6 +154,7 @@ export interface FileRoutesById {
   '/dashboard/reports': typeof DashboardReportsRoute
   '/dashboard/settings': typeof DashboardSettingsRoute
   '/dashboard/tasks': typeof DashboardTasksRoute
+  '/vendor-upload/$token': typeof VendorUploadTokenRoute
   '/dashboard/': typeof DashboardIndexRoute
   '/dashboard/admin/access': typeof DashboardAdminAccessRoute
   '/dashboard/admin/companies': typeof DashboardAdminCompaniesRoute
@@ -165,6 +174,7 @@ export interface FileRouteTypes {
     | '/dashboard/reports'
     | '/dashboard/settings'
     | '/dashboard/tasks'
+    | '/vendor-upload/$token'
     | '/dashboard/'
     | '/dashboard/admin/access'
     | '/dashboard/admin/companies'
@@ -182,6 +192,7 @@ export interface FileRouteTypes {
     | '/dashboard/reports'
     | '/dashboard/settings'
     | '/dashboard/tasks'
+    | '/vendor-upload/$token'
     | '/dashboard'
     | '/dashboard/admin/access'
     | '/dashboard/admin/companies'
@@ -199,6 +210,7 @@ export interface FileRouteTypes {
     | '/dashboard/reports'
     | '/dashboard/settings'
     | '/dashboard/tasks'
+    | '/vendor-upload/$token'
     | '/dashboard/'
     | '/dashboard/admin/access'
     | '/dashboard/admin/companies'
@@ -217,6 +229,7 @@ export interface RootRouteChildren {
   DashboardReportsRoute: typeof DashboardReportsRoute
   DashboardSettingsRoute: typeof DashboardSettingsRoute
   DashboardTasksRoute: typeof DashboardTasksRoute
+  VendorUploadTokenRoute: typeof VendorUploadTokenRoute
   DashboardIndexRoute: typeof DashboardIndexRoute
   DashboardAdminAccessRoute: typeof DashboardAdminAccessRoute
   DashboardAdminCompaniesRoute: typeof DashboardAdminCompaniesRoute
@@ -285,6 +298,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DashboardTasksRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/vendor-upload/$token': {
+      id: '/vendor-upload/$token'
+      path: '/vendor-upload/$token'
+      fullPath: '/vendor-upload/$token'
+      preLoaderRoute: typeof VendorUploadTokenRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/dashboard/admin/': {
       id: '/dashboard/admin/'
       path: '/dashboard/admin'
@@ -345,6 +365,7 @@ const rootRouteChildren: RootRouteChildren = {
   DashboardReportsRoute: DashboardReportsRoute,
   DashboardSettingsRoute: DashboardSettingsRoute,
   DashboardTasksRoute: DashboardTasksRoute,
+  VendorUploadTokenRoute: VendorUploadTokenRoute,
   DashboardIndexRoute: DashboardIndexRoute,
   DashboardAdminAccessRoute: DashboardAdminAccessRoute,
   DashboardAdminCompaniesRoute: DashboardAdminCompaniesRoute,

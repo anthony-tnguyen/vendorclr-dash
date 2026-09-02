@@ -49,7 +49,9 @@ export function ComplianceQueuePage() {
                     </p>
                   </div>
                   <div className="mt-2 flex flex-wrap items-center gap-2 sm:mt-0">
-                    <span className="numeric text-xs text-muted-foreground">{item.submittedOn}</span>
+                    <span className="numeric text-xs text-muted-foreground">
+                      {item.submittedOn}
+                    </span>
                     <span className="rounded-sm border border-border px-1.5 py-0.5 text-[11px] uppercase">
                       {item.state}
                     </span>
@@ -57,9 +59,7 @@ export function ComplianceQueuePage() {
                       type="button"
                       aria-label={`Open review for ${item.document} from ${item.vendorName}`}
                       onClick={() =>
-                        setNotice(
-                          "Demo mode: no review was recorded and no notification was sent.",
-                        )
+                        setNotice("Demo mode: no review was recorded and no notification was sent.")
                       }
                       className="focusable rounded-sm border border-border px-2 py-1 text-xs font-medium"
                     >

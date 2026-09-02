@@ -7,6 +7,10 @@ import { getRouter } from "@/router";
 async function renderRoute(initialEntry: string) {
   const router = getRouter();
   router.update({
+    // Spread the existing options: update() replaces the whole option set, and
+    // getRouter() supplies routeTree and the queryClient context that the root
+    // route requires. Passing history alone drops them.
+    ...router.options,
     history: createMemoryHistory({ initialEntries: [initialEntry] }),
   });
   await router.load();
@@ -70,7 +74,9 @@ describe("authenticated-demo route behavior", () => {
       await screen.findByRole("heading", { level: 1, name: "Corbett Structural Steel" }),
     ).toBeInTheDocument();
     expect(await screen.findByText("Coverage limits")).toBeInTheDocument();
-    expect(screen.getByLabelText("Compliance rail for Corbett Structural Steel")).toBeInTheDocument();
+    expect(
+      screen.getByLabelText("Compliance rail for Corbett Structural Steel"),
+    ).toBeInTheDocument();
   });
 
   it("renders the unknown-vendor empty state through the dynamic route", async () => {
@@ -138,7 +144,11 @@ describe("administrator route behavior", () => {
     const { user } = await renderAdminRoute("/dashboard/admin/compliance");
 
     expect(await screen.findByText("Certificate of insurance")).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "Open review for Certificate of insurance from Delgado Concrete Works" }));
+    await user.click(
+      screen.getByRole("button", {
+        name: "Open review for Certificate of insurance from Delgado Concrete Works",
+      }),
+    );
     expect(await screen.findByRole("status")).toHaveTextContent(
       /no review was recorded and no notification was sent/i,
     );

@@ -26,18 +26,32 @@ export function CompaniesPage() {
               <caption className="sr-only">Customer companies</caption>
               <thead className="border-b border-border text-xs uppercase tracking-wide text-muted-foreground">
                 <tr>
-                  <th scope="col" className="px-3 py-2 font-medium">Company</th>
-                  <th scope="col" className="px-3 py-2 font-medium">Plan</th>
-                  <th scope="col" className="px-3 py-2 font-medium">Vendors</th>
-                  <th scope="col" className="px-3 py-2 font-medium">Seats</th>
-                  <th scope="col" className="px-3 py-2 font-medium">Compliance</th>
-                  <th scope="col" className="px-3 py-2 font-medium">Renews</th>
+                  <th scope="col" className="px-3 py-2 font-medium">
+                    Company
+                  </th>
+                  <th scope="col" className="px-3 py-2 font-medium">
+                    Plan
+                  </th>
+                  <th scope="col" className="px-3 py-2 font-medium">
+                    Vendors
+                  </th>
+                  <th scope="col" className="px-3 py-2 font-medium">
+                    Seats
+                  </th>
+                  <th scope="col" className="px-3 py-2 font-medium">
+                    Compliance
+                  </th>
+                  <th scope="col" className="px-3 py-2 font-medium">
+                    Renews
+                  </th>
                 </tr>
               </thead>
               <tbody>
                 {(companies.data ?? []).map((company) => (
                   <tr key={company.id} className="border-b border-border last:border-0">
-                    <th scope="row" className="px-3 py-3 font-medium">{company.name}</th>
+                    <th scope="row" className="px-3 py-3 font-medium">
+                      {company.name}
+                    </th>
                     <td className="px-3 py-3 text-xs">{company.plan}</td>
                     <td className="numeric px-3 py-3 text-xs">{company.vendors}</td>
                     <td className="numeric px-3 py-3 text-xs">{company.seats}</td>

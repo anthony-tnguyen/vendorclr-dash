@@ -137,6 +137,80 @@ export interface ComplianceQueueItemRow {
   updated_at: string;
 }
 
+export type UploadRequestPurpose = "renewal" | "initial" | "correction";
+export type UploadRequestStatus =
+  | "pending"
+  | "email_sent"
+  | "opened"
+  | "uploaded"
+  | "processing"
+  | "completed"
+  | "needs_review"
+  | "expired"
+  | "cancelled";
+
+export interface VendorUploadRequestRow {
+  id: string;
+  company_id: string;
+  vendor_id: string;
+  token_hash: string;
+  purpose: UploadRequestPurpose;
+  status: UploadRequestStatus;
+  expires_at: string;
+  opened_at: string | null;
+  uploaded_at: string | null;
+  completed_at: string | null;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export type DocumentSource = "vendor_portal" | "client_upload" | "admin" | "email";
+export type DocumentProcessingStatus =
+  "uploaded" | "processing" | "processed" | "needs_review" | "failed";
+
+export interface VendorDocumentRow {
+  id: string;
+  company_id: string;
+  vendor_id: string;
+  upload_request_id: string | null;
+  storage_path: string;
+  file_name: string;
+  mime_type: string;
+  file_size: number;
+  sha256: string;
+  source: DocumentSource;
+  processing_status: DocumentProcessingStatus;
+  processing_error: string | null;
+  /** Validated against InsuranceExtractionSchema (src/workflows/insuranceExtractionSchema.ts). Null until processed/needs_review. */
+  parsed_data: Record<string, unknown> | null;
+  /** Mirrors parsed_data.overall_confidence for cheap SQL filtering. 0-1, or null. */
+  extraction_confidence: number | null;
+  /** Set when an earlier document for the same vendor shares this file's sha256. */
+  duplicate_of_document_id: string | null;
+  uploaded_at: string;
+  processed_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export type EmailTemplate = "vendor_onboarding" | "renewal_request";
+export type EmailStatus = "queued" | "sent" | "failed";
+
+export interface EmailOutboxRow {
+  id: string;
+  company_id: string;
+  vendor_id: string;
+  upload_request_id: string | null;
+  template: EmailTemplate;
+  to_email: string;
+  status: EmailStatus;
+  provider_message_id: string | null;
+  error: string | null;
+  sent_at: string | null;
+  created_at: string;
+}
+
 export interface LeadRow {
   id: string;
   company_name: string;
@@ -207,6 +281,30 @@ export interface Database {
         ComplianceQueueItemRow,
         Pick<ComplianceQueueItemRow, "company_id" | "vendor_id" | "document_label"> &
           Partial<ComplianceQueueItemRow>
+      >;
+      vendor_upload_requests: Table<
+        VendorUploadRequestRow,
+        Pick<VendorUploadRequestRow, "company_id" | "vendor_id" | "token_hash" | "expires_at"> &
+          Partial<VendorUploadRequestRow>
+      >;
+      vendor_documents: Table<
+        VendorDocumentRow,
+        Pick<
+          VendorDocumentRow,
+          | "company_id"
+          | "vendor_id"
+          | "storage_path"
+          | "file_name"
+          | "mime_type"
+          | "file_size"
+          | "sha256"
+        > &
+          Partial<VendorDocumentRow>
+      >;
+      email_outbox: Table<
+        EmailOutboxRow,
+        Pick<EmailOutboxRow, "company_id" | "vendor_id" | "template" | "to_email"> &
+          Partial<EmailOutboxRow>
       >;
       leads: Table<LeadRow, Pick<LeadRow, "company_name"> & Partial<LeadRow>>;
     };

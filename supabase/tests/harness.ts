@@ -47,6 +47,50 @@ const BOOTSTRAP = `
       (nullif(current_setting('request.jwt.claims', true), '')::jsonb ->> 'sub')
     )::uuid
   $$;
+
+  -- Real Supabase projects apply this at project creation. It grants EXECUTE
+  -- to anon/authenticated DIRECTLY, on every function created afterwards -
+  -- separately from the PUBLIC pseudo-role. "revoke ... from public" (which
+  -- migration 1 originally did, before the hardening migration fixed it) does
+  -- NOT touch this grant; only "revoke ... from anon" explicitly does. Without
+  -- this line the harness would not reproduce the bug that shipped, and could
+  -- not verify the fix - see function-grants.test.ts.
+  alter default privileges in schema public grant execute on functions to anon, authenticated, service_role;
+
+  -- Minimal stand-in for Supabase Storage, which is not a schema PGlite ships
+  -- with. Only what migration 4 depends on: the buckets/objects tables its
+  -- INSERT and RLS policy touch, and foldername(), which storage's real
+  -- implementation also exposes as a plain SQL helper on the object path.
+  create schema if not exists storage;
+
+  create table storage.buckets (
+    id text primary key,
+    name text not null,
+    public boolean not null default false,
+    file_size_limit bigint,
+    allowed_mime_types text[],
+    created_at timestamptz not null default now()
+  );
+
+  create table storage.objects (
+    id uuid primary key default gen_random_uuid(),
+    bucket_id text references storage.buckets (id),
+    name text,
+    owner uuid,
+    created_at timestamptz not null default now()
+  );
+
+  -- Real Supabase projects ship storage.objects with RLS already on; migration
+  -- 4 only adds a policy on top of that. Match it here or the policy is inert.
+  alter table storage.objects enable row level security;
+
+  create or replace function storage.foldername(name text) returns text[]
+  language sql immutable as $$
+    select case
+      when array_length(string_to_array(name, '/'), 1) <= 1 then array[]::text[]
+      else (string_to_array(name, '/'))[1 : array_length(string_to_array(name, '/'), 1) - 1]
+    end
+  $$;
 `;
 
 /**
@@ -57,6 +101,12 @@ const DEFAULT_GRANTS = `
   grant usage on schema public to anon, authenticated, service_role;
   grant all on all tables in schema public to anon, authenticated, service_role;
   grant all on all sequences in schema public to anon, authenticated, service_role;
+
+  -- Matches Supabase's real storage grants: broad table access, restricted by
+  -- storage.objects RLS (the vendor_documents_bucket_read policy) same as any
+  -- other table.
+  grant usage on schema storage to anon, authenticated, service_role;
+  grant all on all tables in schema storage to anon, authenticated, service_role;
 `;
 
 export function migrationFiles(): string[] {

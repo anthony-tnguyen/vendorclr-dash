@@ -26,18 +26,32 @@ export function LeadsPage() {
               <caption className="sr-only">Inbound leads</caption>
               <thead className="border-b border-border text-xs uppercase tracking-wide text-muted-foreground">
                 <tr>
-                  <th scope="col" className="px-3 py-2 font-medium">Company</th>
-                  <th scope="col" className="px-3 py-2 font-medium">Contact</th>
-                  <th scope="col" className="px-3 py-2 font-medium">Trade</th>
-                  <th scope="col" className="px-3 py-2 font-medium">Source</th>
-                  <th scope="col" className="px-3 py-2 font-medium">Created</th>
-                  <th scope="col" className="px-3 py-2 font-medium">Stage</th>
+                  <th scope="col" className="px-3 py-2 font-medium">
+                    Company
+                  </th>
+                  <th scope="col" className="px-3 py-2 font-medium">
+                    Contact
+                  </th>
+                  <th scope="col" className="px-3 py-2 font-medium">
+                    Trade
+                  </th>
+                  <th scope="col" className="px-3 py-2 font-medium">
+                    Source
+                  </th>
+                  <th scope="col" className="px-3 py-2 font-medium">
+                    Created
+                  </th>
+                  <th scope="col" className="px-3 py-2 font-medium">
+                    Stage
+                  </th>
                 </tr>
               </thead>
               <tbody>
                 {(leads.data ?? []).map((lead) => (
                   <tr key={lead.id} className="border-b border-border last:border-0">
-                    <th scope="row" className="px-3 py-3 font-medium">{lead.company}</th>
+                    <th scope="row" className="px-3 py-3 font-medium">
+                      {lead.company}
+                    </th>
                     <td className="px-3 py-3 text-xs">{lead.contact}</td>
                     <td className="px-3 py-3 text-xs">{lead.trade}</td>
                     <td className="px-3 py-3 text-xs">{lead.source}</td>

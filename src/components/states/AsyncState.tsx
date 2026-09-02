@@ -1,7 +1,13 @@
 import type { ReactNode } from "react";
 import { cn } from "@/lib/utils";
 
-export function LoadingState({ label = "Loading data", rows = 4 }: { label?: string; rows?: number }) {
+export function LoadingState({
+  label = "Loading data",
+  rows = 4,
+}: {
+  label?: string;
+  rows?: number;
+}) {
   return (
     <div role="status" aria-live="polite" className="rounded-md border border-border bg-card p-4">
       <p className="text-sm text-muted-foreground">{label}…</p>
