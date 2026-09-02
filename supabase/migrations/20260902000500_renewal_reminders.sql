@@ -55,6 +55,7 @@ create table public.policy_reminder_log (
 
 create index policy_reminder_log_policy_idx on public.policy_reminder_log (policy_id);
 create index policy_reminder_log_company_idx on public.policy_reminder_log (company_id);
+create index policy_reminder_log_vendor_idx on public.policy_reminder_log (vendor_id);
 
 create trigger policy_reminder_log_company_matches_vendor
   before insert or update on public.policy_reminder_log

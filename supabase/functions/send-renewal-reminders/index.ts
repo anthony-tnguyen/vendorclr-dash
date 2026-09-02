@@ -115,9 +115,10 @@ Deno.serve(async (req: Request) => {
 
   const dueRows = (due ?? []) as DueRow[];
   if (dueRows.length === 0) {
-    return new Response(JSON.stringify({ processed: 0, sent: 0, failed: 0, skipped: 0 }), {
-      headers: { "Content-Type": "application/json" },
-    });
+    return new Response(
+      JSON.stringify({ processed: 0, sent: 0, failed: 0, notConfigured: 0, skipped: 0 }),
+      { headers: { "Content-Type": "application/json" } },
+    );
   }
 
   const vendorIds = [...new Set(dueRows.map((r) => r.vendor_id))];
@@ -144,6 +145,7 @@ Deno.serve(async (req: Request) => {
 
   let sent = 0;
   let failed = 0;
+  let notConfigured = 0;
   let skipped = 0;
 
   for (const row of dueRows) {
@@ -259,6 +261,8 @@ Deno.serve(async (req: Request) => {
           days_threshold: row.days_threshold,
         });
         sent++;
+      } else if (sendStatus === "not_configured") {
+        notConfigured++;
       } else {
         failed++;
       }
@@ -269,7 +273,10 @@ Deno.serve(async (req: Request) => {
   }
 
   return new Response(
-    JSON.stringify({ processed: dueRows.length, sent, failed, skipped }),
+    // notConfigured is deliberately separate from failed: it means "no
+    // RESEND_API_KEY yet," a known deployment gap, not an error worth
+    // alerting on - see the docblock above.
+    JSON.stringify({ processed: dueRows.length, sent, failed, notConfigured, skipped }),
     { headers: { "Content-Type": "application/json" } },
   );
 });

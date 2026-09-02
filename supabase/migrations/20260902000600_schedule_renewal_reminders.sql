@@ -30,7 +30,15 @@
 -- there's a real timezone/preference story.
 
 create extension if not exists pg_cron;
-create extension if not exists pg_net;
+
+-- pg_net does NOT support `alter extension ... set schema` (confirmed by
+-- trying it against the live project - Postgres rejects it directly), so the
+-- schema has to be right at creation time or a later fix means drop +
+-- recreate. `extensions` is where this project already keeps pgcrypto and
+-- uuid-ossp, keeping pg_net out of `public` the same way get_advisors
+-- expects. pg_cron needed no such placement - it installs into pg_catalog on
+-- its own.
+create extension if not exists pg_net with schema extensions;
 
 select cron.schedule(
   'send-renewal-reminders-daily',
