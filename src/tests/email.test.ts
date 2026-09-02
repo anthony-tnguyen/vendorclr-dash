@@ -2,6 +2,12 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { getEmailSender } from "@/workflows/emailSender";
 import {
+  adminReviewNeededHtml,
+  adminReviewNeededSubject,
+  adminReviewNeededText,
+  documentReceivedHtml,
+  documentReceivedSubject,
+  documentReceivedText,
   renewalRequestHtml,
   renewalRequestSubject,
   renewalRequestText,
@@ -60,6 +66,88 @@ describe("renewal request email templates", () => {
   it("falls back to a generic greeting with no contact name", () => {
     const noName = { ...SAMPLE, vendorContactName: "" };
     expect(renewalRequestText(noName)).toContain("Hello,");
+  });
+});
+
+describe("documentReceived email templates", () => {
+  const BASE = {
+    vendorContactName: "Dana Corbett",
+    vendorName: "Corbett Structural Steel",
+    companyName: "Halstead Builders",
+  };
+
+  it("reassures with no action needed when the document was auto-processed", () => {
+    const text = documentReceivedText({ ...BASE, outcome: "processed" });
+    expect(text).toContain("no further action is needed");
+  });
+
+  it("says a closer look is happening, without repeating the internal reason, for needs_review", () => {
+    const text = documentReceivedText({ ...BASE, outcome: "needs_review" });
+    expect(text).toContain("taking a closer look");
+    // The vendor-facing copy must never surface matching-engine internals
+    // like a specific carrier/policy-number mismatch reason.
+    expect(text).not.toMatch(/carrier changed|policy number changed/i);
+  });
+
+  it("is honest but not alarming about a failed extraction", () => {
+    const text = documentReceivedText({ ...BASE, outcome: "failed" });
+    expect(text).toContain("ran into an issue");
+  });
+
+  it("falls back to a generic greeting with no contact name", () => {
+    expect(
+      documentReceivedText({ ...BASE, vendorContactName: "", outcome: "processed" }),
+    ).toContain("Hello,");
+  });
+
+  it("escapes HTML-significant characters in the company name", () => {
+    const html = documentReceivedHtml({
+      ...BASE,
+      companyName: `Bob's <Construction> & Sons`,
+      outcome: "processed",
+    });
+    expect(html).not.toContain("<Construction>");
+    expect(html).toContain("&lt;Construction&gt;");
+  });
+
+  it("gives every outcome a distinct, non-empty subject", () => {
+    const subjects = (["processed", "needs_review", "failed"] as const).map((outcome) =>
+      documentReceivedSubject({ ...BASE, outcome }),
+    );
+    for (const subject of subjects) expect(subject.length).toBeGreaterThan(0);
+  });
+});
+
+describe("adminReviewNeeded email templates", () => {
+  const BASE = {
+    vendorName: "Rivera Electrical Contractors",
+    documentFileName: "coi-2026.pdf",
+    outcome: "needs_review" as const,
+  };
+
+  it("names the vendor and file in the subject and body", () => {
+    const text = adminReviewNeededText({ ...BASE, reason: null });
+    expect(adminReviewNeededSubject({ ...BASE, reason: null })).toContain(
+      "Rivera Electrical Contractors",
+    );
+    expect(text).toContain("coi-2026.pdf");
+  });
+
+  it("includes the specific matching-engine reason when one was recorded", () => {
+    const reason = 'Carrier changed: "Travelers" on file, "Hartford" extracted.';
+    const text = adminReviewNeededText({ ...BASE, reason });
+    expect(text).toContain(reason);
+  });
+
+  it("falls back to a generic note when no reason was recorded", () => {
+    const text = adminReviewNeededText({ ...BASE, reason: null });
+    expect(text).toContain("Compliance Queue");
+  });
+
+  it("escapes HTML-significant characters in the reason", () => {
+    const html = adminReviewNeededHtml({ ...BASE, reason: `<script>alert(1)</script>` });
+    expect(html).not.toContain("<script>alert(1)</script>");
+    expect(html).toContain("&lt;script&gt;");
   });
 });
 

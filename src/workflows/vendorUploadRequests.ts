@@ -12,7 +12,17 @@ import {
 } from "./complianceEngine";
 import { getDocumentExtractor, type ExtractDocumentResult } from "./documentExtraction";
 import { getEmailSender } from "./emailSender";
-import { renewalRequestHtml, renewalRequestSubject, renewalRequestText } from "./emailTemplates";
+import {
+  adminReviewNeededHtml,
+  adminReviewNeededSubject,
+  adminReviewNeededText,
+  documentReceivedHtml,
+  documentReceivedSubject,
+  documentReceivedText,
+  renewalRequestHtml,
+  renewalRequestSubject,
+  renewalRequestText,
+} from "./emailTemplates";
 import type { ExtractedPolicy } from "./insuranceExtractionSchema";
 import {
   ALLOWED_UPLOAD_MIME_TYPES,
@@ -373,13 +383,18 @@ export const uploadDocumentForToken = createServerFn({ method: "POST" })
 
     if (uploadError) throw new Error("Could not store the file. Try again.");
 
+    // Shared with the applyExtractionResult() call below, so the admin
+    // notification email names exactly the file this row records - not a
+    // second, independently-computed fallback that could drift from it.
+    const fileName = file.name || `certificate.${file.type.split("/")[1] ?? "pdf"}`;
+
     const { error: docError } = await supabase.from("vendor_documents").insert({
       id: documentId,
       company_id: row.company_id,
       vendor_id: row.vendor_id,
       upload_request_id: row.id,
       storage_path: storagePath,
-      file_name: file.name || `certificate.${file.type.split("/")[1] ?? "pdf"}`,
+      file_name: fileName,
       mime_type: file.type,
       file_size: file.size,
       sha256,
@@ -428,6 +443,7 @@ export const uploadDocumentForToken = createServerFn({ method: "POST" })
       documentId,
       companyId: row.company_id,
       vendorId: row.vendor_id,
+      documentFileName: fileName,
       queueItemId: queueItem?.id ?? null,
       extraction,
     });
@@ -583,6 +599,124 @@ async function applyComplianceEngine(
 }
 
 /**
+ * Emails the vendor (always, whatever the outcome) and the company's owner(s)
+ * (only when a human needs to act). Never throws - a bad send must not undo
+ * the extraction/compliance-engine work that already committed, the same
+ * principle runExtractionSafely() applies one layer up. Every attempt is
+ * still recorded in email_outbox, including a failed one, matching
+ * createUploadRequest()'s pattern exactly.
+ */
+async function notifyDocumentOutcome(
+  supabase: SupabaseClient,
+  params: {
+    companyId: string;
+    vendorId: string;
+    documentFileName: string;
+    finalStatus: "processed" | "needs_review" | "failed";
+    reviewReason: string | null;
+    processingError: string | null;
+  },
+): Promise<void> {
+  try {
+    const { data: vendorRow } = await supabase
+      .from("vendors")
+      .select("name, contact_name, contact_email, companies ( name )")
+      .eq("id", params.vendorId)
+      .maybeSingle();
+
+    const vendor = vendorRow as unknown as {
+      name: string;
+      contact_name: string;
+      contact_email: string;
+      companies: { name: string } | null;
+    } | null;
+
+    if (vendor?.contact_email) {
+      const sender = getEmailSender();
+      const emailInput = {
+        vendorContactName: vendor.contact_name ?? "",
+        vendorName: vendor.name,
+        companyName: vendor.companies?.name ?? "your client",
+        outcome: params.finalStatus,
+      };
+      const sendResult = await sender.send({
+        to: vendor.contact_email,
+        subject: documentReceivedSubject(emailInput),
+        html: documentReceivedHtml(emailInput),
+        text: documentReceivedText(emailInput),
+      });
+      await supabase.from("email_outbox").insert({
+        company_id: params.companyId,
+        vendor_id: params.vendorId,
+        template: "document_received",
+        to_email: vendor.contact_email,
+        status:
+          sendResult.status === "sent"
+            ? "sent"
+            : sendResult.status === "failed"
+              ? "failed"
+              : "queued",
+        provider_message_id: sendResult.providerMessageId,
+        error: sendResult.error,
+        sent_at: sendResult.status === "sent" ? new Date().toISOString() : null,
+      });
+    }
+
+    if (params.finalStatus === "needs_review" || params.finalStatus === "failed") {
+      const { data: owners } = await supabase
+        .from("company_members")
+        .select("profiles ( email )")
+        .eq("company_id", params.companyId)
+        .eq("role", "owner");
+
+      const ownerEmails = (
+        (owners ?? []) as unknown as Array<{ profiles: { email: string } | null }>
+      )
+        .map((row) => row.profiles?.email)
+        .filter((email): email is string => Boolean(email));
+
+      if (ownerEmails.length > 0) {
+        const sender = getEmailSender();
+        const emailInput = {
+          vendorName: vendor?.name ?? "A vendor",
+          documentFileName: params.documentFileName,
+          outcome: params.finalStatus,
+          reason: params.reviewReason ?? params.processingError,
+        };
+        for (const to of ownerEmails) {
+          const sendResult = await sender.send({
+            to,
+            subject: adminReviewNeededSubject(emailInput),
+            html: adminReviewNeededHtml(emailInput),
+            text: adminReviewNeededText(emailInput),
+          });
+          await supabase.from("email_outbox").insert({
+            company_id: params.companyId,
+            vendor_id: params.vendorId,
+            template: "admin_review_needed",
+            to_email: to,
+            status:
+              sendResult.status === "sent"
+                ? "sent"
+                : sendResult.status === "failed"
+                  ? "failed"
+                  : "queued",
+            provider_message_id: sendResult.providerMessageId,
+            error: sendResult.error,
+            sent_at: sendResult.status === "sent" ? new Date().toISOString() : null,
+          });
+        }
+      }
+    }
+  } catch {
+    // A notification failure must never surface as an upload/reprocess
+    // failure - the document was already stored and its status already
+    // recorded. Nothing useful to do with the error here beyond not letting
+    // it propagate; the missing email_outbox row is itself the visible trace.
+  }
+}
+
+/**
  * Writes the extraction outcome onto vendor_documents, and - only when the
  * result needs a human look - nudges the matching compliance_queue_items row
  * from 'queued' to 'in-review' so it stands out on the existing admin screen.
@@ -600,11 +734,12 @@ async function applyExtractionResult(
     documentId: string;
     companyId: string;
     vendorId: string;
+    documentFileName: string;
     queueItemId: string | null;
     extraction: ExtractDocumentResult;
   },
 ): Promise<void> {
-  const { documentId, companyId, vendorId, queueItemId, extraction } = params;
+  const { documentId, companyId, vendorId, documentFileName, queueItemId, extraction } = params;
 
   let finalStatus = extraction.status === "not_configured" ? "failed" : extraction.status;
   let reviewReason: string | null = null;
@@ -642,6 +777,15 @@ async function applyExtractionResult(
       .update({ state: "in-review" })
       .eq("id", queueItemId);
   }
+
+  await notifyDocumentOutcome(supabase, {
+    companyId,
+    vendorId,
+    documentFileName,
+    finalStatus,
+    reviewReason,
+    processingError: extraction.error,
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -671,7 +815,7 @@ export const reprocessDocument = createServerFn({ method: "POST" })
 
     const { data: doc, error: docError } = await supabase
       .from("vendor_documents")
-      .select("id, storage_path, mime_type, vendor_id, company_id")
+      .select("id, storage_path, mime_type, vendor_id, company_id, file_name")
       .eq("id", data.documentId)
       .maybeSingle();
 
@@ -704,6 +848,7 @@ export const reprocessDocument = createServerFn({ method: "POST" })
       documentId: doc.id,
       companyId: doc.company_id,
       vendorId: doc.vendor_id,
+      documentFileName: doc.file_name,
       queueItemId: queueItem?.id ?? null,
       extraction,
     });

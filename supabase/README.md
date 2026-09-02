@@ -14,7 +14,8 @@ Four phases so far:
   [Document intelligence (Phase 2)](#document-intelligence-phase-2).
 - **Phase 3** — the compliance engine: a deterministic (never LLM-confidence-
   gated) rule decides whether an extraction is safe to apply automatically,
-  updates `vendor_policies` when it is, and recomputes the compliance rail.
+  updates `vendor_policies` when it is, recomputes the compliance rail, and
+  emails the vendor and the company's owner(s) with the outcome.
   See [The compliance engine (Phase 3)](#the-compliance-engine-phase-3).
 
 ## What the migrations create
@@ -28,6 +29,7 @@ Four phases so far:
 | `20260902000100_security_and_performance_hardening.sql` | Fixes discovered by applying 1-4 to a real project and running Supabase's advisor — see [Security model](#security-model) |
 | `20260902000200_document_extraction.sql` | Adds `parsed_data`, `extraction_confidence`, `duplicate_of_document_id` to `vendor_documents` |
 | `20260902000300_compliance_engine.sql` | `vendor_documents.applied_policy_id`/`review_reason`, and `apply_policy_renewal()` |
+| `20260902000400_notification_emails.sql` | Widens `email_outbox.template` to add `document_received`, `admin_review_needed` |
 
 The headline modelling change: **a vendor no longer owns one flat policy.**
 `Vendor.policyNumber` / `Vendor.expiresOn` in `src/data/contracts.ts` could hold
@@ -289,6 +291,35 @@ row for a given vendor without guessing. `vendor_policies.each_occurrence_limit`
 the correct source of truth for carried limits going forward. See
 [Known compromises](#known-compromises).
 
+### Notification emails
+
+`notifyDocumentOutcome()`, called at the end of `applyExtractionResult()`,
+sends two kinds of email once a document's final `processing_status` is
+known - the vendor's own upload experience was otherwise just an in-browser
+"thanks", with no way to learn later whether anything actually happened:
+
+- **`document_received`, to the vendor, always** - outcome-dependent copy
+  (`documentOutcomeCopy()` in `emailTemplates.ts`) that deliberately never
+  repeats the specific matching-engine reason for `needs_review`/`failed`. To
+  a vendor, `"Carrier changed: 'Travelers' on file, 'Hartford' extracted"`
+  reads as unexplained internal jargon at best, or an invitation to argue
+  with an automated decision at worst - they get reassurance and a "we'll
+  follow up," not the diagnosis.
+- **`admin_review_needed`, to the company's owner(s), only when a human needs
+  to act** - carries the specific reason (`review_reason` or
+  `processing_error`), since the person reading this one is the one who has
+  to act on it. Resolved via `company_members` (`role = 'owner'`) joined to
+  `profiles` for the email address - both reads already covered by existing
+  RLS (`shares_company_with()` lets a company member read a fellow member's
+  profile).
+
+Wrapped in a try/catch that swallows everything: a notification failure must
+never surface as an upload or reprocess failure. The document and its
+`processing_status` are already committed by the time this runs: nothing
+useful to do with a send error beyond not letting it propagate. Every attempt,
+including a failed one, is still recorded in `email_outbox` - the same
+pattern `createUploadRequest()` already used in Phase 1.
+
 ## Security model
 
 Tenancy is enforced in the database, not in React.
@@ -375,14 +406,17 @@ bucket's RLS — including a regression test for the regex guard in front of the
 constraints (confidence between 0 and 1), that `duplicate_of_document_id` sets to
 null rather than erroring when its target is deleted, and that two documents for
 the same vendor are allowed to share a `sha256` (duplicate detection reads that,
-it isn't a uniqueness constraint); and (Phase 3) `apply_policy_renewal()` -
+it isn't a uniqueness constraint); (Phase 3) `apply_policy_renewal()` -
 superseding the old policy and inserting the new one is genuinely atomic (a
 CHECK-constraint-violating renewal rolls back the whole call, old row included),
 a `read_only` member and an owner acting outside their own company are both
 refused by RLS exactly as a direct write would be (the function is not
-`security definer`), and `anon` cannot execute it at all. The harness stubs a
-minimal `storage.objects`/`storage.buckets` schema (PGlite has no `storage`
-schema of its own) — see `supabase/tests/harness.ts`.
+`security definer`), and `anon` cannot execute it at all; and (migration 9)
+that the widened `email_outbox.template` constraint accepts
+`document_received`/`admin_review_needed` while still rejecting anything
+outside the allow-list. The harness stubs a minimal
+`storage.objects`/`storage.buckets` schema (PGlite has no `storage` schema of
+its own) — see `supabase/tests/harness.ts`.
 
 `src/tests/upload-tokens.test.ts` and `src/tests/email.test.ts` separately cover
 the pure token/email logic (no database needed for those).
@@ -394,7 +428,10 @@ markdown-fence stripping, invalid JSON, a thrown API error, and a model refusal.
 `src/tests/compliance-engine.test.ts` covers `matchExtractedPolicy()` and
 `computeComplianceItems()` - every match outcome, the deliberate `null` !=
 `"compliant"` handling, and that `lienWaiver` is never touched by a
-certificate-of-insurance extraction.
+certificate-of-insurance extraction. `src/tests/email.test.ts` also covers the
+new `documentReceived`/`adminReviewNeeded` templates specifically for the
+property that matters most: the vendor-facing copy never leaks a
+matching-engine reason, while the admin-facing copy always includes it.
 
 `supabase/tests/function-grants.test.ts` asserts the exact anon/authenticated
 EXECUTE matrix on every RLS-primitive and trigger-only function — see the
@@ -457,11 +494,10 @@ Deliberate, and worth revisiting as later phases grow on top of them:
   redundantly - see the `vendor_coverage_limits` compromise above, which this
   sharpens now that one side of the pair (`vendor_policies`) is a live,
   auto-updated source of truth and the other (`vendor_coverage_limits`) isn't.
-- **No vendor-facing notification when a document needs review or was
-  auto-applied.** `email_outbox`/`emailSender.ts`/`emailTemplates.ts` already
-  exist from Phase 1 - this is a small, well-understood addition, deliberately
-  left out of this pass to keep the matching/auto-update/recompute core
-  properly tested on its own.
+- **`notifyDocumentOutcome()` emails every company owner individually**,
+  rather than one email with every recipient, or a digest. Fine at current
+  scale (a company typically has one owner); revisit if a company with
+  several owners starts finding this noisy.
 
 ## What is still not built
 
@@ -483,14 +519,19 @@ automatically. What's not built yet:
 - **A review-queue UI.** `needs_review` documents only show up as
   `compliance_queue_items` rows in `'in-review'` state on the existing admin
   screen - there is no screen yet for looking at `parsed_data`,
-  `review_reason`, or approving/rejecting a match by hand.
-- **Vendor notifications.** Nothing emails a vendor when their document was
-  auto-approved or needs one more thing - see
-  [Known compromises](#known-compromises).
+  `review_reason`, or approving/rejecting a match by hand. Notification
+  emails now exist (`notifyDocumentOutcome()`, migration 9) - the vendor
+  always hears the outcome, and the company's owner(s) get the specific
+  reason by email - but there's still no *screen* for a reviewer to act on
+  it from.
 - **The 90/60/30/14/7-day reminder schedule and next-renewal scheduling.**
-  Needs a scheduling mechanism (`pg_cron` is available on the linked project
-  but not yet enabled) this phase deliberately didn't reach for without its
-  own dedicated pass.
+  Needs a scheduling mechanism this phase deliberately didn't reach for
+  without its own dedicated pass. `pg_cron` is available on the linked
+  project but not yet enabled, and - unlike everything built so far - a
+  scheduled job can't call Resend's HTTP API directly from plain SQL without
+  either `pg_net` (fire-and-forget, no synchronous response handling) or a
+  separate Supabase Edge Function it calls into; getting that decision right
+  needs its own verified pass rather than a guess bolted onto this one.
 - **Hardening (Phase 4).** Audit log, an automated (not just manually-invoked)
   retry queue, email bounce handling, malware/file-content checks beyond
   mime-type and size, upload-request cancellation UI, admin review tools.

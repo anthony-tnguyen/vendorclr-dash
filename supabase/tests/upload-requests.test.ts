@@ -177,6 +177,32 @@ describe("email_outbox", () => {
     );
     expect(rows[0]?.n).toBe(0);
   });
+
+  it.each(["document_received", "admin_review_needed"])(
+    "accepts the %s template added in migration 9",
+    async (template) => {
+      const rows = await asUser<{ template: string }>(
+        db,
+        ALICE,
+        `insert into public.email_outbox (company_id, vendor_id, template, to_email)
+         values ($1, $2, $3, 'dana@corbettsteel.example') returning template`,
+        [alicesCompany, alicesVendor, template],
+      );
+      expect(rows[0]?.template).toBe(template);
+    },
+  );
+
+  it("still rejects a template outside the widened allow-list", async () => {
+    await expect(
+      asUser(
+        db,
+        ALICE,
+        `insert into public.email_outbox (company_id, vendor_id, template, to_email)
+         values ($1, $2, 'not_a_real_template', 'dana@corbettsteel.example')`,
+        [alicesCompany, alicesVendor],
+      ),
+    ).rejects.toThrow();
+  });
 });
 
 describe("vendor-documents storage bucket", () => {
