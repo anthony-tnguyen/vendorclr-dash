@@ -32,6 +32,7 @@ Four phases so far:
 | `20260902000400_notification_emails.sql` | Widens `email_outbox.template` to add `document_received`, `admin_review_needed` |
 | `20260902000500_renewal_reminders.sql` | `policy_reminder_log`, `current_reminder_threshold()`, `policies_due_for_reminder`; widens `email_outbox.template` to add `renewal_reminder` |
 | `20260902000600_schedule_renewal_reminders.sql` | Enables `pg_cron`/`pg_net`, schedules a daily call into the `send-renewal-reminders` Edge Function — see [Renewal reminders](#renewal-reminders) |
+| `20260902000700_review_queue.sql` | Adds `document_id`, `resolution`, `resolution_note`, `resolved_at`, and a `'resolved'` state to `compliance_queue_items` — see [The review queue screen](#the-review-queue-screen) |
 
 The headline modelling change: **a vendor no longer owns one flat policy.**
 `Vendor.policyNumber` / `Vendor.expiresOn` in `src/data/contracts.ts` could hold
@@ -398,6 +399,58 @@ does locally: it still creates the upload request and records the attempt in
 because nothing was actually sent, `policy_reminder_log` stays unwritten and
 tomorrow's run tries again.
 
+### The review queue screen
+
+Closes the gap the README used to list under "What is still not built": a
+`needs_review`/`failed` document had no screen to actually look at
+`parsed_data`/`review_reason` on, or to approve/reject by hand - staff had to
+wait for the vendor to send a *new* certificate that happened to match
+cleanly. Staff-only (`/dashboard/admin/compliance/$queueItemId`,
+`AdminGuard`-gated same as the queue list it opens from), it shows what the
+certificate extracted side by side with what's currently on file per
+coverage type, and lets a reviewer **Approve & apply** or **Reject**.
+
+Two decisions worth being explicit about:
+
+- **Approve is all classified coverage lines on the certificate, or nothing**
+  - not a per-line UI. `resolveReviewItem()` re-reads `parsed_data` fresh
+    from the database (never a client-supplied payload) and calls the same
+    `apply_policy_renewal()` RPC the automated path uses for every classified
+    line, bypassing only `matchExtractedPolicy()`'s automated gate - the
+    human looking at the whole document *is* the override that gate exists
+    to defer to. This also means a `new_coverage` line (the vendor's first
+    policy of a given type, which the automated path can never apply on its
+    own - `matchExtractedPolicy()` returns `new_coverage`, not `renew`, and
+    only `renew` auto-applies) can finally be recorded, through this screen.
+    Editable/per-line overrides are not built - see Known compromises.
+- **Staff act across companies they don't belong to, on purpose, through the
+  service role.** `vendor_policies`/`vendor_documents`/`compliance_queue_items`
+  writes and the storage bucket's read policy all gate on company membership
+  (`can_write_company()`/`current_company_ids()`) with **no** platform-admin
+  bypass - by design, so a customer's data stays writable only by that
+  customer's own members and by nothing else, in every other path through
+  this schema. `assertPlatformAdmin()` (`vendorUploadRequests.ts`) confirms
+  the caller really is staff via `is_platform_admin()` on the request-scoped
+  client - RLS-checked, cannot be spoofed - before `getReviewQueueItem()`/
+  `resolveReviewItem()` (`documentReview.ts`) and the now-fixed
+  `reprocessDocument()` switch to the service role for the actual reads and
+  writes. This was a real, pre-existing bug in `reprocessDocument()`: its own
+  docblock claimed the request-scoped client was sufficient because "the
+  caller is a signed-in admin," conflating platform-admin session with
+  company membership - the one screen that could ever call it (this one) is
+  staff-only, and staff are almost never members of the customer's company
+  whose document they're reviewing. Fixed as part of building this screen,
+  not left for later.
+
+Migration 12 (`20260902000700_review_queue.sql`) is what makes the link
+exact: `compliance_queue_items.document_id` replaces `reprocessDocument()`'s
+former approximation ("the vendor's most recently created queue item",
+wrong once a vendor has more than one upload in flight), and
+`resolution`/`resolution_note`/`resolved_at` plus a new `'resolved'` state
+give a resolved item somewhere to go - `listQueue()` now excludes it, since
+the queue's own subtitle is "awaiting reviewer action," while the outcome
+stays on the row for anyone who opens it directly.
+
 ## Security model
 
 Tenancy is enforced in the database, not in React.
@@ -498,7 +551,10 @@ active-only, has-an-expiration-date, threshold-not-already-logged, superseded
 policies excluded) and cross-tenant RLS isolation, and
 `policy_reminder_log`'s uniqueness/check constraints — see
 [Renewal reminders](#renewal-reminders) for what migration 11 needs the live
-project for instead. The harness stubs a minimal
+project for instead; and (migration 12) `compliance_queue_items.document_id`
+setting to null rather than erroring when its document is deleted, and the
+resolved/resolution pairing constraint in both directions (a resolved item
+must carry a resolution, a non-resolved item must not). The harness stubs a minimal
 `storage.objects`/`storage.buckets` schema (PGlite has no `storage` schema of
 its own) — see `supabase/tests/harness.ts`.
 
@@ -595,6 +651,15 @@ Deliberate, and worth revisiting as later phases grow on top of them:
   `RESEND_API_KEY` is set (at which point it stops being reachable at all);
   would need real backoff if a *configured* Resend integration started
   failing repeatedly for one vendor (a bad address, e.g.) instead.
+- **The review screen's approve is all-or-nothing per document, not per
+  coverage line**, and the values it applies are exactly what the model
+  extracted - a reviewer cannot edit a carrier name or fix a misread number
+  before approving. Fine for what triggers review today (a changed carrier,
+  a new coverage type, a date that didn't move forward - all things a
+  reviewer is either fine with as extracted or not); would need real
+  per-line approval and editable fields once a common review reason becomes
+  "the extraction is close but slightly wrong" rather than "the change
+  itself needs a person's judgment."
 
 ## What is still not built
 
@@ -613,14 +678,6 @@ automatically. What's not built yet:
   [Known compromises](#known-compromises); today `vendor_coverage_limits`
   holds required amounts but nothing compares them against what a policy
   actually carries.
-- **A review-queue UI.** `needs_review` documents only show up as
-  `compliance_queue_items` rows in `'in-review'` state on the existing admin
-  screen - there is no screen yet for looking at `parsed_data`,
-  `review_reason`, or approving/rejecting a match by hand. Notification
-  emails now exist (`notifyDocumentOutcome()`, migration 9) - the vendor
-  always hears the outcome, and the company's owner(s) get the specific
-  reason by email - but there's still no *screen* for a reviewer to act on
-  it from.
 - **Hardening (Phase 4).** Audit log, an automated (not just manually-invoked)
   retry queue, email bounce handling, malware/file-content checks beyond
   mime-type and size, upload-request cancellation UI, admin review tools.

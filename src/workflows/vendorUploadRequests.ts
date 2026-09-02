@@ -69,6 +69,23 @@ import {
  * separately.
  */
 
+/**
+ * Confirms the calling session belongs to VendorClear staff before a server
+ * function drops from the request-scoped client to the service role.
+ * is_platform_admin() runs through the request-scoped client so it is
+ * decided by RLS/auth.uid() exactly as any other authenticated call would
+ * be - this cannot be spoofed by a caller claiming to be an admin, only by
+ * actually being one in platform_admins. Throws rather than returning a
+ * boolean: every caller of this wants "stop here" on failure, not a value to
+ * remember to check. Exported for documentReview.ts, which needs the same
+ * check before its own service-role reads/writes.
+ */
+export async function assertPlatformAdmin(): Promise<void> {
+  const supabase = getRequestScopedClient();
+  const { data: isAdmin, error } = await supabase.rpc("is_platform_admin");
+  if (error || !isAdmin) throw new Error("This action is limited to VendorClear staff accounts.");
+}
+
 function bareVendorUploadUrl(): string {
   // VITE_APP_URL is optional; local dev and same-origin deploys both work
   // without it since the link only needs to be correct once it's actually
@@ -411,12 +428,16 @@ export const uploadDocumentForToken = createServerFn({ method: "POST" })
 
     // Gives staff visibility through the admin Compliance Queue page, which
     // already reads compliance_queue_items - Phase 1 wires the upload into
-    // that existing screen rather than building a new one.
+    // that existing screen rather than building a new one. document_id links
+    // this row back to the exact document it was created for (migration 12) -
+    // reprocessDocument() and the review screen both rely on this being exact,
+    // not an approximation.
     const { data: queueItem } = await supabase
       .from("compliance_queue_items")
       .insert({
         company_id: row.company_id,
         vendor_id: row.vendor_id,
+        document_id: documentId,
         document_label: file.name || "Uploaded certificate",
         state: "queued",
       })
@@ -488,6 +509,109 @@ async function runExtractionSafely(input: {
  * 'needs_review' in applyExtractionResult(), and the reasons collected here
  * become vendor_documents.review_reason.
  */
+/**
+ * Every active policy for a vendor, keyed by policy_type - the "what's on
+ * file right now" side of a match decision. Exported so documentReview.ts
+ * (the human-review approve action) reads the exact same shape as the
+ * automated path, via a fresh read rather than trusting anything cached from
+ * whenever the document was originally uploaded.
+ */
+export async function fetchActivePoliciesByType(
+  supabase: SupabaseClient,
+  vendorId: string,
+): Promise<Map<string, ExistingPolicySnapshot>> {
+  const { data: activePolicies } = await supabase
+    .from("vendor_policies")
+    .select("id, policy_type, carrier_name, policy_number, expiration_date")
+    .eq("vendor_id", vendorId)
+    .eq("status", "active");
+
+  return new Map<string, ExistingPolicySnapshot>(
+    (
+      (activePolicies ?? []) as Array<{
+        id: string;
+        policy_type: string;
+        carrier_name: string;
+        policy_number: string;
+        expiration_date: string | null;
+      }>
+    ).map((p) => [
+      p.policy_type,
+      {
+        id: p.id,
+        carrierName: p.carrier_name,
+        policyNumber: p.policy_number,
+        expirationDate: p.expiration_date,
+      },
+    ]),
+  );
+}
+
+/**
+ * Writes one classified extracted policy to vendor_policies via
+ * apply_policy_renewal() - superseding existingPolicyId if given, inserting
+ * fresh otherwise (apply_policy_renewal's UPDATE is a no-op against a null
+ * id, so "no existing policy of this type" and "renew this one" are both
+ * just a matter of what's passed here) - and, for general liability only,
+ * recomputes the compliance rail. The one piece of writing logic both the
+ * automated match path (applyComplianceEngine, below) and the human-review
+ * approval path (documentReview.ts) share; they differ only in *which*
+ * lines they call this for; see the callers, not the docblock, for that.
+ */
+export async function applyOnePolicyLine(
+  supabase: SupabaseClient,
+  params: {
+    companyId: string;
+    vendorId: string;
+    existingPolicyId: string | null;
+    policy: ExtractedPolicy & { type: NonNullable<ExtractedPolicy["type"]> };
+  },
+): Promise<{ newPolicyId: string } | { error: string }> {
+  const { companyId, vendorId, existingPolicyId, policy } = params;
+
+  const { data: newPolicyId, error: rpcError } = await supabase.rpc("apply_policy_renewal", {
+    p_company_id: companyId,
+    p_vendor_id: vendorId,
+    p_existing_policy_id: existingPolicyId,
+    p_policy_type: policy.type,
+    p_carrier_name: policy.carrier,
+    p_policy_number: policy.policy_number,
+    p_effective_date: policy.effective_date,
+    p_expiration_date: policy.expiration_date,
+    p_each_occurrence_limit: policy.limits.each_occurrence ?? null,
+    p_general_aggregate_limit: policy.limits.general_aggregate ?? null,
+    p_additional_insured: policy.additional_insured,
+    p_waiver_of_subrogation: policy.waiver_of_subrogation,
+  });
+
+  if (rpcError || !newPolicyId) {
+    return { error: rpcError?.message ?? "apply_policy_renewal returned no id" };
+  }
+
+  if (isGeneralLiability(policy.type)) {
+    const items = computeComplianceItems({
+      isPrimaryPolicy: true,
+      expirationDate: policy.expiration_date,
+      additionalInsured: policy.additional_insured,
+      waiverOfSubrogation: policy.waiver_of_subrogation,
+    });
+
+    await supabase.from("vendor_compliance_items").upsert(
+      (Object.keys(items) as Array<keyof typeof items>).map((key) => ({
+        company_id: companyId,
+        vendor_id: vendorId,
+        requirement_key: key,
+        status: items[key].status,
+        effective_date: items[key].effectiveDate,
+        note: items[key].note ?? null,
+      })),
+      { onConflict: "vendor_id,requirement_key" },
+    );
+  }
+
+  return { newPolicyId: newPolicyId as string };
+}
+
 async function applyComplianceEngine(
   supabase: SupabaseClient,
   params: { companyId: string; vendorId: string; policies: ExtractedPolicy[] },
@@ -507,31 +631,7 @@ async function applyComplianceEngine(
   );
   if (classified.length === 0) return { allMatched, appliedPolicyId, reasons };
 
-  const { data: activePolicies } = await supabase
-    .from("vendor_policies")
-    .select("id, policy_type, carrier_name, policy_number, expiration_date")
-    .eq("vendor_id", vendorId)
-    .eq("status", "active");
-
-  const existingByType = new Map<string, ExistingPolicySnapshot>(
-    (
-      (activePolicies ?? []) as Array<{
-        id: string;
-        policy_type: string;
-        carrier_name: string;
-        policy_number: string;
-        expiration_date: string | null;
-      }>
-    ).map((p) => [
-      p.policy_type,
-      {
-        id: p.id,
-        carrierName: p.carrier_name,
-        policyNumber: p.policy_number,
-        expirationDate: p.expiration_date,
-      },
-    ]),
-  );
+  const existingByType = await fetchActivePoliciesByType(supabase, vendorId);
 
   for (const extracted of classified) {
     const outcome = matchExtractedPolicy(extracted, existingByType.get(extracted.type) ?? null);
@@ -546,22 +646,14 @@ async function applyComplianceEngine(
       continue;
     }
 
-    const { data: newPolicyId, error: rpcError } = await supabase.rpc("apply_policy_renewal", {
-      p_company_id: companyId,
-      p_vendor_id: vendorId,
-      p_existing_policy_id: outcome.existingPolicyId,
-      p_policy_type: extracted.type,
-      p_carrier_name: extracted.carrier,
-      p_policy_number: extracted.policy_number,
-      p_effective_date: extracted.effective_date,
-      p_expiration_date: extracted.expiration_date,
-      p_each_occurrence_limit: extracted.limits.each_occurrence ?? null,
-      p_general_aggregate_limit: extracted.limits.general_aggregate ?? null,
-      p_additional_insured: extracted.additional_insured,
-      p_waiver_of_subrogation: extracted.waiver_of_subrogation,
+    const result = await applyOnePolicyLine(supabase, {
+      companyId,
+      vendorId,
+      existingPolicyId: outcome.existingPolicyId,
+      policy: extracted,
     });
 
-    if (rpcError || !newPolicyId) {
+    if ("error" in result) {
       allMatched = false;
       reasons.push(
         `${extracted.type}: matched cleanly but the database update failed - try reprocessing.`,
@@ -570,28 +662,9 @@ async function applyComplianceEngine(
     }
 
     if (isGeneralLiability(extracted.type)) {
-      appliedPolicyId = newPolicyId as string;
-
-      const items = computeComplianceItems({
-        isPrimaryPolicy: true,
-        expirationDate: extracted.expiration_date,
-        additionalInsured: extracted.additional_insured,
-        waiverOfSubrogation: extracted.waiver_of_subrogation,
-      });
-
-      await supabase.from("vendor_compliance_items").upsert(
-        (Object.keys(items) as Array<keyof typeof items>).map((key) => ({
-          company_id: companyId,
-          vendor_id: vendorId,
-          requirement_key: key,
-          status: items[key].status,
-          effective_date: items[key].effectiveDate,
-          note: items[key].note ?? null,
-        })),
-        { onConflict: "vendor_id,requirement_key" },
-      );
+      appliedPolicyId = result.newPolicyId;
     } else if (appliedPolicyId === null) {
-      appliedPolicyId = newPolicyId as string;
+      appliedPolicyId = result.newPolicyId;
     }
   }
 
@@ -801,17 +874,30 @@ export interface ReprocessDocumentResult {
 /**
  * Manual retry for a document whose extraction previously came back
  * `not_configured` (no ANTHROPIC_API_KEY yet) or `failed` (a transient
- * error). Runs entirely on the request-scoped client, not the service role:
- * the caller is a signed-in admin, not an anonymous vendor, so the same
- * can_write_company() RLS policy that gates every other vendor_documents
- * write gates this too - both the read that finds the document and the
- * write that records the new result. There is nothing here a service-role
- * bypass is needed for.
+ * error).
+ *
+ * Runs on the SERVICE role, after independently confirming the caller is a
+ * platform admin - not the request-scoped client the docblock here used to
+ * claim was sufficient. That was wrong: the only screen that can ever call
+ * this (the admin Compliance Queue / review screen, AdminGuard-gated on
+ * `role === "admin"`) is staff-only, and `can_write_company()` grants write
+ * access by *company membership*, which VendorClear staff reviewing a
+ * customer's documents do not have. `vendor_documents_update`,
+ * `compliance_queue_items_write`, and `apply_policy_renewal()` (deliberately
+ * not security definer) all gate on `can_write_company()`/company
+ * membership with no platform-admin bypass - so this previously either threw
+ * under RLS or silently updated nothing for the only caller that could ever
+ * reach it. assertPlatformAdmin() re-validates the caller server-side via
+ * RLS (is_platform_admin() cannot be spoofed) before this drops to the
+ * service role, the same "validate identity, then act unrestricted" shape
+ * already used for the anonymous vendor-portal endpoints, just with a
+ * session check instead of a token hash.
  */
 export const reprocessDocument = createServerFn({ method: "POST" })
   .validator(reprocessDocumentSchema)
   .handler(async ({ data }): Promise<ReprocessDocumentResult> => {
-    const supabase = getRequestScopedClient();
+    await assertPlatformAdmin();
+    const supabase = getServiceRoleClient();
 
     const { data: doc, error: docError } = await supabase
       .from("vendor_documents")
@@ -830,18 +916,14 @@ export const reprocessDocument = createServerFn({ method: "POST" })
     const fileBytes = await fileBlob.arrayBuffer();
     const extraction = await runExtractionSafely({ fileBytes, mimeType: doc.mime_type });
 
-    // Approximate on purpose: compliance_queue_items has no document_id
-    // column linking it back to a specific vendor_documents row, so this
-    // takes the vendor's most recently created queue item rather than the
-    // exact one this document produced. Fine for a single-document retry;
-    // add that column before relying on this for a vendor with concurrent
-    // uploads in flight.
+    // Exact now (migration 12), not an approximation: the queue item that
+    // named this document when it was created, not "whichever one the
+    // vendor most recently touched" - matters once a vendor has more than
+    // one upload in flight.
     const { data: queueItem } = await supabase
       .from("compliance_queue_items")
       .select("id")
-      .eq("vendor_id", doc.vendor_id)
-      .order("created_at", { ascending: false })
-      .limit(1)
+      .eq("document_id", doc.id)
       .maybeSingle();
 
     await applyExtractionResult(supabase, {

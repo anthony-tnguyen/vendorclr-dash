@@ -1,9 +1,10 @@
 import { useQuery } from "@tanstack/react-query";
+import { Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { AdminGuard } from "./AdminGuard";
 import { AppShell } from "@/components/shell/AppShell";
 import { EmptyState, ErrorState, LoadingState } from "@/components/states/AsyncState";
-import { getRepository } from "@/data/repository";
+import { getRepository, isBackendConfigured } from "@/data/repository";
 
 export function ComplianceQueuePage() {
   const repo = getRepository();
@@ -55,16 +56,31 @@ export function ComplianceQueuePage() {
                     <span className="rounded-sm border border-border px-1.5 py-0.5 text-[11px] uppercase">
                       {item.state}
                     </span>
-                    <button
-                      type="button"
-                      aria-label={`Open review for ${item.document} from ${item.vendorName}`}
-                      onClick={() =>
-                        setNotice("Demo mode: no review was recorded and no notification was sent.")
-                      }
-                      className="focusable rounded-sm border border-border px-2 py-1 text-xs font-medium"
-                    >
-                      Review (demo)
-                    </button>
+                    {isBackendConfigured() && item.documentId ? (
+                      <Link
+                        to="/dashboard/admin/compliance/$queueItemId"
+                        params={{ queueItemId: item.id }}
+                        aria-label={`Open review for ${item.document} from ${item.vendorName}`}
+                        className="focusable rounded-sm border border-border px-2 py-1 text-xs font-medium"
+                      >
+                        Review
+                      </Link>
+                    ) : (
+                      <button
+                        type="button"
+                        aria-label={`Open review for ${item.document} from ${item.vendorName}`}
+                        onClick={() =>
+                          setNotice(
+                            isBackendConfigured()
+                              ? "This item has no linked document to review."
+                              : "Demo mode: no review was recorded and no notification was sent.",
+                          )
+                        }
+                        className="focusable rounded-sm border border-border px-2 py-1 text-xs font-medium"
+                      >
+                        Review{isBackendConfigured() ? "" : " (demo)"}
+                      </button>
+                    )}
                   </div>
                 </li>
               ))}

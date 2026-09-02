@@ -366,13 +366,20 @@ export function createSupabaseRepository(
 
     async listQueue(): Promise<QueueItem[]> {
       const supabase = clientFactory();
+      // Excludes 'resolved' on purpose: this page's own subtitle is
+      // "awaiting reviewer action" - a resolved item's outcome is still
+      // permanently on its row (resolveReviewItem() in documentReview.ts
+      // writes resolution/resolution_note/resolved_at), it just no longer
+      // belongs on the "what still needs a person" list.
       const rows = unwrap(
         await supabase
           .from("compliance_queue_items")
           .select("*, vendors ( name ), companies ( name )")
+          .neq("state", "resolved")
           .order("submitted_on", { ascending: false }),
       ) as unknown as Array<{
         id: string;
+        document_id: string | null;
         document_label: string;
         submitted_on: string;
         state: QueueItem["state"];
@@ -382,6 +389,7 @@ export function createSupabaseRepository(
 
       return rows.map((row) => ({
         id: row.id,
+        documentId: row.document_id,
         vendorName: row.vendors?.name ?? "Unknown vendor",
         company: row.companies?.name ?? "Unknown company",
         document: row.document_label,
