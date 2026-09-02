@@ -192,6 +192,17 @@ describe("email_outbox", () => {
     },
   );
 
+  it("accepts renewal_reminder, added in migration 10", async () => {
+    const rows = await asUser<{ template: string }>(
+      db,
+      ALICE,
+      `insert into public.email_outbox (company_id, vendor_id, template, to_email)
+       values ($1, $2, 'renewal_reminder', 'dana@corbettsteel.example') returning template`,
+      [alicesCompany, alicesVendor],
+    );
+    expect(rows[0]?.template).toBe("renewal_reminder");
+  });
+
   it("still rejects a template outside the widened allow-list", async () => {
     await expect(
       asUser(

@@ -34,6 +34,7 @@ describe("migrations", () => {
       "email_outbox",
       "leads",
       "platform_admins",
+      "policy_reminder_log",
       "profiles",
       "tasks",
       "vendor_compliance_items",
@@ -59,7 +60,7 @@ describe("migrations", () => {
       where n.nspname = 'public' and c.relkind = 'v'
     `);
 
-    expect(result.rows.length).toBe(3);
+    expect(result.rows.length).toBe(4);
     for (const view of result.rows) {
       expect(view.reloptions ?? [], `${view.relname} must be security_invoker`).toContain(
         "security_invoker=true",
