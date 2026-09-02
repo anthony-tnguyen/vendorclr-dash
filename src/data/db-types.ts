@@ -182,6 +182,12 @@ export interface VendorDocumentRow {
   source: DocumentSource;
   processing_status: DocumentProcessingStatus;
   processing_error: string | null;
+  /** Validated against InsuranceExtractionSchema (src/workflows/insuranceExtractionSchema.ts). Null until processed/needs_review. */
+  parsed_data: Record<string, unknown> | null;
+  /** Mirrors parsed_data.overall_confidence for cheap SQL filtering. 0-1, or null. */
+  extraction_confidence: number | null;
+  /** Set when an earlier document for the same vendor shares this file's sha256. */
+  duplicate_of_document_id: string | null;
   uploaded_at: string;
   processed_at: string | null;
   created_at: string;

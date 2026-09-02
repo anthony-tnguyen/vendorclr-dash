@@ -1,6 +1,6 @@
 # Backend: auth, tenancy, the vendor/policy model, and the renewal loop
 
-Two phases so far:
+Three phases so far:
 
 - **Phase 0** — auth, tenancy, and a real vendor/policy model. Before this, the app
   had no users, no accounts, and no link between a vendor and whoever owns it.
@@ -8,6 +8,10 @@ Two phases so far:
   updated certificate, the vendor gets a magic link with no account required,
   uploads a file, and it lands in private storage and the existing admin
   Compliance Queue screen.
+- **Phase 2** — document intelligence: the uploaded file is read into
+  structured, confidence-scored JSON and stored alongside it. Still does not
+  touch `vendor_policies` or `vendor_compliance_items` — see
+  [Document intelligence (Phase 2)](#document-intelligence-phase-2).
 
 ## What the migrations create
 
@@ -18,6 +22,7 @@ Two phases so far:
 | `20260901000300_tasks_queue_leads_and_views.sql` | `tasks`, `compliance_queue_items`, `leads`, and the report/admin views |
 | `20260901000400_vendor_upload_requests_and_documents.sql` | `vendor_upload_requests`, `vendor_documents`, `email_outbox`, the private `vendor-documents` storage bucket |
 | `20260902000100_security_and_performance_hardening.sql` | Fixes discovered by applying 1-4 to a real project and running Supabase's advisor — see [Security model](#security-model) |
+| `20260902000200_document_extraction.sql` | Adds `parsed_data`, `extraction_confidence`, `duplicate_of_document_id` to `vendor_documents` |
 
 The headline modelling change: **a vendor no longer owns one flat policy.**
 `Vendor.policyNumber` / `Vendor.expiresOn` in `src/data/contracts.ts` could hold
@@ -50,7 +55,10 @@ For the Phase 1 vendor portal you additionally need `SUPABASE_SERVICE_ROLE_KEY`
 (server-only, no `VITE_` prefix — `supabase start` prints it). Optionally
 `RESEND_API_KEY` to send real email; without it, "Request updated certificate"
 still works and returns the magic link directly to the admin to copy and share.
-See `.env.example`.
+For Phase 2, optionally `ANTHROPIC_API_KEY`; without it a document is still
+stored but not extracted (`processing_status` ends up `'failed'`, with
+`processing_error` saying so) until `reprocessDocument()` is called after the
+key is set. See `.env.example`.
 
 ## The renewal loop (Phase 1)
 
@@ -119,6 +127,71 @@ see the PR for that check.
   client-supplied file name.
 - One error message for every invalid-token case (expired, wrong status, not
   found). Distinguishing them would let a caller narrow their guesses.
+
+## Document intelligence (Phase 2)
+
+```
+Document lands in vendor_documents (Phase 1)
+        │  uploadDocumentForToken() checks vendor_id + sha256 for an earlier
+        │  document already successfully processed - if found, its result is
+        │  copied instead of paying for a second identical extraction
+        ▼
+getDocumentExtractor().extract() - src/workflows/documentExtraction.ts
+        │  claude-opus-5, given the PDF/JPG/PNG directly as a document/image
+        │  content block, prompted for one JSON object matching
+        │  InsuranceExtractionSchema
+        ▼
+parseExtractionResponse() - strips a markdown fence if present, JSON.parse,
+normalizePolicyType() on each policy (carrier-facing synonyms -> the
+vendor_policies enum), then zod validation
+        ▼
+vendor_documents.parsed_data / extraction_confidence / processing_status set
+        │  overall_confidence >= 0.6 -> 'processed', below -> 'needs_review'
+        │  a thrown error, a refusal, or invalid JSON -> 'needs_review'/'failed'
+        ▼
+'needs_review' or 'failed' bumps the matching compliance_queue_items row to
+'in-review' - a clean 'processed' result leaves it exactly where Phase 1 left
+it: still awaiting a person's own review, not auto-approved.
+```
+
+**No OCR, no `pdf-parse`.** The original design for this phase split text
+extraction and OCR into two steps with a fallback between them. Claude reads a
+PDF or image document block directly and handles a scanned certificate the
+same way it handles a machine-generated one - there is no separate OCR path to
+fall back to, and no native PDF-parsing dependency to keep working across a
+Cloudflare Workers deployment target (nitro's default build target - see
+`vite.config.ts`).
+
+**Document classification is folded into the same call.** Rather than a
+separate step, `document_type` (e.g. `"ACORD_25"`) is one field the extraction
+already returns.
+
+**Confidence gates trust, not correctness.** `processed` does not mean
+"compliant" - a document that extracts cleanly with `additional_insured: false`
+is `processed`, and correctly so; that value still has to be checked against
+what a client actually requires, which is Phase 3's job. `processed` means
+"the model read this confidently enough that Phase 3 could reasonably act on
+it without a human looking first." The extraction prompt is written to prefer
+`null` and a lower `overall_confidence` over guessing - see the prompt in
+`documentExtraction.ts` for the specific instruction not to infer
+additional-insured/waiver status from a certificate's own checkbox alone,
+since a certificate of insurance typically states outright that it confers no
+rights and does not amend the referenced policies; that status is properly
+shown by an attached endorsement form (CG 20 10, CG 20 37, CG 24 04), which
+the model may not have been given.
+
+**`reprocessDocument()`** is the retry path for `'failed'` (including the
+`ANTHROPIC_API_KEY`-unset case, which is stored as `'failed'` with
+`processing_error` naming the real reason) or a transient error. It runs
+entirely on the request-scoped client - the caller is a signed-in admin, so
+the same `can_write_company()` RLS policy that gates every other
+`vendor_documents` write gates this too; there is nothing here a service-role
+bypass is needed for.
+
+**Duplicate detection is scoped per vendor, not global** - the same COI
+legitimately gets re-uploaded for different vendors (a broker's template).
+`vendor_documents_sha256_idx (vendor_id, sha256)` from Phase 1 already
+supports the lookup; this phase is what actually reads it.
 
 ## Security model
 
@@ -198,16 +271,25 @@ engine, same constraint and trigger semantics. Runs in CI on every push.
 Covered: migrations apply in order; every table has RLS on; every view is
 `security_invoker`; signup provisioning; the compliance-item seeding trigger; the
 cross-company child-row trigger; cross-tenant read and write isolation; `read_only`
-members; staff read-everything/write-nothing; `seed.sql` including idempotency; and
+members; staff read-everything/write-nothing; `seed.sql` including idempotency;
 (Phase 1) `vendor_upload_requests`/`vendor_documents`/`email_outbox` tenancy, the
 25MB file-size check at the database level, and the `vendor-documents` storage
 bucket's RLS — including a regression test for the regex guard in front of the
-`::uuid` cast on the folder-segment policy. The harness stubs a minimal
+`::uuid` cast on the folder-segment policy; and (Phase 2) the extraction columns'
+constraints (confidence between 0 and 1), that `duplicate_of_document_id` sets to
+null rather than erroring when its target is deleted, and that two documents for
+the same vendor are allowed to share a `sha256` (duplicate detection reads that,
+it isn't a uniqueness constraint). The harness stubs a minimal
 `storage.objects`/`storage.buckets` schema (PGlite has no `storage` schema of its
 own) — see `supabase/tests/harness.ts`.
 
 `src/tests/upload-tokens.test.ts` and `src/tests/email.test.ts` separately cover
 the pure token/email logic (no database needed for those).
+`src/tests/insurance-extraction-schema.test.ts` covers the extraction schema and
+the carrier-string-to-enum normalizer; `src/tests/document-extraction.test.ts`
+covers the extraction provider itself against a mocked Anthropic client (no API
+key or network call needed) - not-configured, high/low confidence routing,
+markdown-fence stripping, invalid JSON, a thrown API error, and a model refusal.
 
 `supabase/tests/function-grants.test.ts` asserts the exact anon/authenticated
 EXECUTE matrix on every RLS-primitive and trigger-only function — see the
@@ -231,8 +313,19 @@ Deliberate, and worth revisiting as later phases grow on top of them:
   `vendor_policies`. They are together only because the current `CoverageLimit`
   contract pairs them.
 - **`compliance_queue_items` is a real table**, now written to by
-  `uploadDocumentForToken()` as well as staff. Phase 2 should derive it from
-  `document_processing_jobs` and drop it.
+  `uploadDocumentForToken()`/`reprocessDocument()` as well as staff. A future
+  pass should derive it from a real processing-jobs table and drop it.
+- **No `document_processing_jobs` table.** Extraction runs synchronously,
+  inline in the upload request/response, with exactly one attempt and no
+  retry queue - `reprocessDocument()` is a manual, admin-triggered retry, not
+  an automated one. A jobs table would track nothing a single row on
+  `vendor_documents` doesn't already capture until processing is genuinely
+  asynchronous.
+- **`compliance_queue_items` has no `document_id` column.**
+  `reprocessDocument()` updates the vendor's most recently created queue item
+  as an approximation, not the exact one a given document produced - fine for
+  a single-document retry, worth fixing before a vendor can have concurrent
+  uploads in flight.
 - **One company per user.** `resolveCompanyId()` takes the oldest membership.
   Multi-company users need a company switcher in the session context first.
 - **`email_outbox` is one table**, not the `email_events` / `email_deliveries`
@@ -250,21 +343,24 @@ Deliberate, and worth revisiting as later phases grow on top of them:
 
 ## What is still not built
 
-Phases 0 and 1 give vendors and policies a real, tenant-scoped home and close the
-outbound half of the loop: request → email → magic link → upload → visible in the
-compliance queue. What's not built yet:
+Phases 0-2 give vendors and policies a real, tenant-scoped home, close the
+outbound half of the loop (request → email → magic link → upload → visible in the
+compliance queue), and turn an uploaded certificate into structured,
+confidence-scored JSON. What's not built yet:
 
-- **Document intelligence (Phase 2).** Text extraction with OCR fallback, the
-  insurance JSON schema, carrier/policy/date extraction, confidence scoring,
-  duplicate detection via `vendor_documents.sha256` (the column exists; nothing
-  reads it yet).
-- **The compliance engine (Phase 3).** Automatic policy matching, updating
-  `vendor_compliance_items` from extracted data, the review queue for low-confidence
-  extractions, and the 90/60/30/14/7-day reminder schedule.
-- **Hardening (Phase 4).** Audit log, retry queues, email bounce handling,
-  malware/file-content checks beyond mime-type and size, upload-request
-  cancellation UI, admin review tools.
+- **The compliance engine (Phase 3).** Matching extracted policy data against
+  what a client actually requires, updating `vendor_policies` and
+  `vendor_compliance_items` from a `processed` extraction, an actual review
+  queue UI for `needs_review` documents (they currently only show up as
+  `compliance_queue_items` rows in `'in-review'` state - there is no screen yet
+  for looking at `parsed_data` itself), and the 90/60/30/14/7-day reminder
+  schedule.
+- **Hardening (Phase 4).** Audit log, an automated (not just manually-invoked)
+  retry queue, email bounce handling, malware/file-content checks beyond
+  mime-type and size, upload-request cancellation UI, admin review tools.
 
-Nothing here claims otherwise: `vendor_documents.processing_status` starts and
-stays at `'uploaded'` — nothing moves it to `'processed'` yet — and
-`vendor_compliance_items` is never written by the upload path.
+Nothing here claims otherwise: `vendor_documents.parsed_data` and
+`extraction_confidence` are populated, but `vendor_policies` and
+`vendor_compliance_items` are never written by the upload or extraction path -
+a `processed` extraction result sits next to the vendor's actual policy
+records, unconnected to them, until Phase 3.

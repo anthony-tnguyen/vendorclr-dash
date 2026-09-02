@@ -1,7 +1,9 @@
 import { createServerFn } from "@tanstack/react-start";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { z } from "zod";
 
 import { getRequestScopedClient, getServiceRoleClient } from "@/lib/supabase/serverClient.server";
+import { getDocumentExtractor, type ExtractDocumentResult } from "./documentExtraction";
 import { getEmailSender } from "./emailSender";
 import { renewalRequestHtml, renewalRequestSubject, renewalRequestText } from "./emailTemplates";
 import {
@@ -30,12 +32,17 @@ import {
  *                            use the service-role client and re-validate the
  *                            token by hand before touching anything.
  *
- * Neither uploadDocumentForToken() nor anything downstream of it ever writes
- * to vendor_compliance_items. A received file is not evidence of compliance -
- * that determination is Phase 2/3 work (OCR, extraction, the compliance
- * engine). What this phase does on a successful upload is make the document
- * visible to staff: it appends a compliance_queue_items row, which is what the
- * existing admin Compliance Queue screen already reads from.
+ * Neither uploadDocumentForToken() nor reprocessDocument() nor anything
+ * downstream of them ever writes to vendor_compliance_items or
+ * vendor_policies. A received, even successfully-parsed, document is not
+ * evidence of compliance - that determination (matching extracted data
+ * against what a client actually requires) is Phase 3's compliance engine.
+ * What this phase does is: store the file (Phase 1), then extract it into
+ * structured, confidence-scored JSON and store *that* alongside it (Phase 2).
+ * Extraction failing never fails the upload itself - the vendor still sees
+ * "thanks, we received your document" even if extraction throws; the file is
+ * safely stored regardless, and vendor_documents.processing_status records
+ * what happened separately.
  */
 
 function bareVendorUploadUrl(): string {
@@ -332,6 +339,20 @@ export const uploadDocumentForToken = createServerFn({ method: "POST" })
       mimeType: file.type,
     });
 
+    // Checked before inserting, scoped per vendor rather than globally - the
+    // same COI legitimately gets re-uploaded for different vendors (a
+    // broker's template). If an earlier upload for this vendor already has a
+    // successful extraction, that result is copied instead of paying for a
+    // second identical extraction call.
+    const { data: existingDuplicate } = await supabase
+      .from("vendor_documents")
+      .select("id, processing_status, parsed_data, extraction_confidence")
+      .eq("vendor_id", row.vendor_id)
+      .eq("sha256", sha256)
+      .order("created_at", { ascending: true })
+      .limit(1)
+      .maybeSingle();
+
     const { error: uploadError } = await supabase.storage
       .from("vendor-documents")
       .upload(storagePath, bytes, { contentType: file.type, upsert: false });
@@ -349,6 +370,7 @@ export const uploadDocumentForToken = createServerFn({ method: "POST" })
       file_size: file.size,
       sha256,
       source: "vendor_portal",
+      duplicate_of_document_id: existingDuplicate?.id ?? null,
     });
 
     if (docError) throw new Error("Could not record the upload. Try again.");
@@ -361,12 +383,156 @@ export const uploadDocumentForToken = createServerFn({ method: "POST" })
     // Gives staff visibility through the admin Compliance Queue page, which
     // already reads compliance_queue_items - Phase 1 wires the upload into
     // that existing screen rather than building a new one.
-    await supabase.from("compliance_queue_items").insert({
-      company_id: row.company_id,
-      vendor_id: row.vendor_id,
-      document_label: file.name || "Uploaded certificate",
-      state: "queued",
+    const { data: queueItem } = await supabase
+      .from("compliance_queue_items")
+      .insert({
+        company_id: row.company_id,
+        vendor_id: row.vendor_id,
+        document_label: file.name || "Uploaded certificate",
+        state: "queued",
+      })
+      .select("id")
+      .single();
+
+    // Duplicate of an already-successfully-processed document: reuse its
+    // result rather than re-running extraction. Any other outcome (no
+    // duplicate, or the duplicate itself never finished processing) runs a
+    // fresh extraction below.
+    const reusableDuplicate =
+      existingDuplicate?.processing_status === "processed" ? existingDuplicate : null;
+
+    const extraction = reusableDuplicate
+      ? ({
+          status: "processed",
+          data: reusableDuplicate.parsed_data,
+          confidence: reusableDuplicate.extraction_confidence,
+          error: null,
+        } as ExtractDocumentResult)
+      : await runExtractionSafely({ fileBytes: bytes, mimeType: file.type });
+
+    await applyExtractionResult(supabase, {
+      documentId,
+      queueItemId: queueItem?.id ?? null,
+      extraction,
     });
 
     return { documentId };
+  });
+
+/**
+ * Never throws. A failure here must not fail the upload the vendor is
+ * waiting on - the file is already safely stored by the time this runs, and
+ * a bad network call to the extraction provider is not the vendor's problem.
+ */
+async function runExtractionSafely(input: {
+  fileBytes: ArrayBuffer;
+  mimeType: string;
+}): Promise<ExtractDocumentResult> {
+  try {
+    return await getDocumentExtractor().extract(input);
+  } catch (error) {
+    return {
+      status: "failed",
+      data: null,
+      confidence: null,
+      error: error instanceof Error ? error.message : "Unknown extraction error",
+    };
+  }
+}
+
+/**
+ * Writes the extraction outcome onto vendor_documents, and - only when the
+ * result needs a human look - nudges the matching compliance_queue_items row
+ * from 'queued' to 'in-review' so it stands out on the existing admin screen.
+ * A clean 'processed' result leaves the queue item exactly as Phase 1 left
+ * it: a document still awaiting a person's own review, not auto-approved.
+ */
+async function applyExtractionResult(
+  supabase: SupabaseClient,
+  params: { documentId: string; queueItemId: string | null; extraction: ExtractDocumentResult },
+): Promise<void> {
+  const { documentId, queueItemId, extraction } = params;
+
+  await supabase
+    .from("vendor_documents")
+    .update({
+      processing_status: extraction.status === "not_configured" ? "failed" : extraction.status,
+      parsed_data: extraction.data,
+      extraction_confidence: extraction.confidence,
+      processing_error: extraction.error,
+      processed_at: new Date().toISOString(),
+    })
+    .eq("id", documentId);
+
+  if (queueItemId && (extraction.status === "needs_review" || extraction.status === "failed")) {
+    await supabase
+      .from("compliance_queue_items")
+      .update({ state: "in-review" })
+      .eq("id", queueItemId);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// reprocessDocument - authenticated, runs via RLS as the calling admin
+// ---------------------------------------------------------------------------
+
+const reprocessDocumentSchema = z.object({ documentId: z.string().uuid() });
+
+export interface ReprocessDocumentResult {
+  status: ExtractDocumentResult["status"];
+}
+
+/**
+ * Manual retry for a document whose extraction previously came back
+ * `not_configured` (no ANTHROPIC_API_KEY yet) or `failed` (a transient
+ * error). Runs entirely on the request-scoped client, not the service role:
+ * the caller is a signed-in admin, not an anonymous vendor, so the same
+ * can_write_company() RLS policy that gates every other vendor_documents
+ * write gates this too - both the read that finds the document and the
+ * write that records the new result. There is nothing here a service-role
+ * bypass is needed for.
+ */
+export const reprocessDocument = createServerFn({ method: "POST" })
+  .validator(reprocessDocumentSchema)
+  .handler(async ({ data }): Promise<ReprocessDocumentResult> => {
+    const supabase = getRequestScopedClient();
+
+    const { data: doc, error: docError } = await supabase
+      .from("vendor_documents")
+      .select("id, storage_path, mime_type, vendor_id")
+      .eq("id", data.documentId)
+      .maybeSingle();
+
+    if (docError || !doc) throw new Error("Document not found.");
+
+    const { data: fileBlob, error: downloadError } = await supabase.storage
+      .from("vendor-documents")
+      .download(doc.storage_path);
+
+    if (downloadError || !fileBlob) throw new Error("Could not read the stored file.");
+
+    const fileBytes = await fileBlob.arrayBuffer();
+    const extraction = await runExtractionSafely({ fileBytes, mimeType: doc.mime_type });
+
+    // Approximate on purpose: compliance_queue_items has no document_id
+    // column linking it back to a specific vendor_documents row, so this
+    // takes the vendor's most recently created queue item rather than the
+    // exact one this document produced. Fine for a single-document retry;
+    // add that column before relying on this for a vendor with concurrent
+    // uploads in flight.
+    const { data: queueItem } = await supabase
+      .from("compliance_queue_items")
+      .select("id")
+      .eq("vendor_id", doc.vendor_id)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    await applyExtractionResult(supabase, {
+      documentId: doc.id,
+      queueItemId: queueItem?.id ?? null,
+      extraction,
+    });
+
+    return { status: extraction.status };
   });
