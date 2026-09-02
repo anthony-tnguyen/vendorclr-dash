@@ -3,9 +3,17 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { z } from "zod";
 
 import { getRequestScopedClient, getServiceRoleClient } from "@/lib/supabase/serverClient.server";
+import {
+  computeComplianceItems,
+  hasUnclassifiedPolicy,
+  isGeneralLiability,
+  matchExtractedPolicy,
+  type ExistingPolicySnapshot,
+} from "./complianceEngine";
 import { getDocumentExtractor, type ExtractDocumentResult } from "./documentExtraction";
 import { getEmailSender } from "./emailSender";
 import { renewalRequestHtml, renewalRequestSubject, renewalRequestText } from "./emailTemplates";
+import type { ExtractedPolicy } from "./insuranceExtractionSchema";
 import {
   ALLOWED_UPLOAD_MIME_TYPES,
   buildStoragePath,
@@ -32,17 +40,23 @@ import {
  *                            use the service-role client and re-validate the
  *                            token by hand before touching anything.
  *
- * Neither uploadDocumentForToken() nor reprocessDocument() nor anything
- * downstream of them ever writes to vendor_compliance_items or
- * vendor_policies. A received, even successfully-parsed, document is not
- * evidence of compliance - that determination (matching extracted data
- * against what a client actually requires) is Phase 3's compliance engine.
- * What this phase does is: store the file (Phase 1), then extract it into
- * structured, confidence-scored JSON and store *that* alongside it (Phase 2).
- * Extraction failing never fails the upload itself - the vendor still sees
- * "thanks, we received your document" even if extraction throws; the file is
- * safely stored regardless, and vendor_documents.processing_status records
- * what happened separately.
+ * uploadDocumentForToken() and reprocessDocument() now go further than
+ * storing and extracting a document: a `processed` extraction is run through
+ * complianceEngine.ts's deterministic matching rule, and only a clean match -
+ * same carrier, same policy number, a later expiration date, against an
+ * existing active policy of that type - is applied to vendor_policies and
+ * rolls the compliance rail forward. Everything else (a new carrier, a
+ * changed policy number, a coverage type the vendor has never had before, an
+ * unrecognized coverage type on the certificate) leaves vendor_policies and
+ * vendor_compliance_items untouched and routes the document to
+ * needs_review with a reason recorded on vendor_documents.review_reason.
+ * Confidence (Phase 2) and this match (Phase 3) are independent gates - a
+ * confident extraction that fails the match still needs a human decision.
+ *
+ * Extraction and matching failing never fails the upload itself - the vendor
+ * still sees "thanks, we received your document" regardless; the file is
+ * safely stored either way, and vendor_documents records what happened
+ * separately.
  */
 
 function bareVendorUploadUrl(): string {
@@ -412,6 +426,8 @@ export const uploadDocumentForToken = createServerFn({ method: "POST" })
 
     await applyExtractionResult(supabase, {
       documentId,
+      companyId: row.company_id,
+      vendorId: row.vendor_id,
       queueItemId: queueItem?.id ?? null,
       extraction,
     });
@@ -441,30 +457,186 @@ async function runExtractionSafely(input: {
 }
 
 /**
+ * Applies matchExtractedPolicy() to every classified policy in an extraction
+ * independently - a certificate listing GL + WC + Auto can cleanly renew GL
+ * while WC needs a human look, and each should be judged on its own rather
+ * than gating the whole document on the least-clean line item. Only the
+ * general-liability outcome, when it renews cleanly, recomputes the
+ * compliance rail: primaryPolicy() in supabaseRepository.ts already treats
+ * GL as the vendor's flagship policy for the same reason, and coi/
+ * additionalInsured/waiverOfSubrogation/renewal are specifically about that
+ * policy, not "any coverage of any kind."
+ *
+ * Returns whether every policy on the certificate matched cleanly - false
+ * downgrades the document's processing_status from 'processed' to
+ * 'needs_review' in applyExtractionResult(), and the reasons collected here
+ * become vendor_documents.review_reason.
+ */
+async function applyComplianceEngine(
+  supabase: SupabaseClient,
+  params: { companyId: string; vendorId: string; policies: ExtractedPolicy[] },
+): Promise<{ allMatched: boolean; appliedPolicyId: string | null; reasons: string[] }> {
+  const { companyId, vendorId, policies } = params;
+  const reasons: string[] = [];
+  let appliedPolicyId: string | null = null;
+  let allMatched = true;
+
+  if (hasUnclassifiedPolicy(policies)) {
+    allMatched = false;
+    reasons.push("The certificate lists a coverage type that could not be classified.");
+  }
+
+  const classified = policies.filter(
+    (p): p is ExtractedPolicy & { type: NonNullable<ExtractedPolicy["type"]> } => p.type !== null,
+  );
+  if (classified.length === 0) return { allMatched, appliedPolicyId, reasons };
+
+  const { data: activePolicies } = await supabase
+    .from("vendor_policies")
+    .select("id, policy_type, carrier_name, policy_number, expiration_date")
+    .eq("vendor_id", vendorId)
+    .eq("status", "active");
+
+  const existingByType = new Map<string, ExistingPolicySnapshot>(
+    (
+      (activePolicies ?? []) as Array<{
+        id: string;
+        policy_type: string;
+        carrier_name: string;
+        policy_number: string;
+        expiration_date: string | null;
+      }>
+    ).map((p) => [
+      p.policy_type,
+      {
+        id: p.id,
+        carrierName: p.carrier_name,
+        policyNumber: p.policy_number,
+        expirationDate: p.expiration_date,
+      },
+    ]),
+  );
+
+  for (const extracted of classified) {
+    const outcome = matchExtractedPolicy(extracted, existingByType.get(extracted.type) ?? null);
+
+    if (outcome.kind !== "renew") {
+      allMatched = false;
+      reasons.push(
+        outcome.kind === "new_coverage"
+          ? `${extracted.type}: no existing policy on file to renew against - first submission for this coverage type needs review.`
+          : `${extracted.type}: ${outcome.reason}`,
+      );
+      continue;
+    }
+
+    const { data: newPolicyId, error: rpcError } = await supabase.rpc("apply_policy_renewal", {
+      p_company_id: companyId,
+      p_vendor_id: vendorId,
+      p_existing_policy_id: outcome.existingPolicyId,
+      p_policy_type: extracted.type,
+      p_carrier_name: extracted.carrier,
+      p_policy_number: extracted.policy_number,
+      p_effective_date: extracted.effective_date,
+      p_expiration_date: extracted.expiration_date,
+      p_each_occurrence_limit: extracted.limits.each_occurrence ?? null,
+      p_general_aggregate_limit: extracted.limits.general_aggregate ?? null,
+      p_additional_insured: extracted.additional_insured,
+      p_waiver_of_subrogation: extracted.waiver_of_subrogation,
+    });
+
+    if (rpcError || !newPolicyId) {
+      allMatched = false;
+      reasons.push(
+        `${extracted.type}: matched cleanly but the database update failed - try reprocessing.`,
+      );
+      continue;
+    }
+
+    if (isGeneralLiability(extracted.type)) {
+      appliedPolicyId = newPolicyId as string;
+
+      const items = computeComplianceItems({
+        isPrimaryPolicy: true,
+        expirationDate: extracted.expiration_date,
+        additionalInsured: extracted.additional_insured,
+        waiverOfSubrogation: extracted.waiver_of_subrogation,
+      });
+
+      await supabase.from("vendor_compliance_items").upsert(
+        (Object.keys(items) as Array<keyof typeof items>).map((key) => ({
+          company_id: companyId,
+          vendor_id: vendorId,
+          requirement_key: key,
+          status: items[key].status,
+          effective_date: items[key].effectiveDate,
+          note: items[key].note ?? null,
+        })),
+        { onConflict: "vendor_id,requirement_key" },
+      );
+    } else if (appliedPolicyId === null) {
+      appliedPolicyId = newPolicyId as string;
+    }
+  }
+
+  return { allMatched, appliedPolicyId, reasons };
+}
+
+/**
  * Writes the extraction outcome onto vendor_documents, and - only when the
  * result needs a human look - nudges the matching compliance_queue_items row
  * from 'queued' to 'in-review' so it stands out on the existing admin screen.
  * A clean 'processed' result leaves the queue item exactly as Phase 1 left
  * it: a document still awaiting a person's own review, not auto-approved.
+ *
+ * A 'processed' extraction is downgraded to 'needs_review' here, after the
+ * fact, if applyComplianceEngine() could not cleanly apply every policy on
+ * the certificate - confidence and the deterministic match are independent
+ * gates, and a document must clear both to count as processed.
  */
 async function applyExtractionResult(
   supabase: SupabaseClient,
-  params: { documentId: string; queueItemId: string | null; extraction: ExtractDocumentResult },
+  params: {
+    documentId: string;
+    companyId: string;
+    vendorId: string;
+    queueItemId: string | null;
+    extraction: ExtractDocumentResult;
+  },
 ): Promise<void> {
-  const { documentId, queueItemId, extraction } = params;
+  const { documentId, companyId, vendorId, queueItemId, extraction } = params;
+
+  let finalStatus = extraction.status === "not_configured" ? "failed" : extraction.status;
+  let reviewReason: string | null = null;
+  let appliedPolicyId: string | null = null;
+
+  if (extraction.status === "processed" && extraction.data) {
+    const result = await applyComplianceEngine(supabase, {
+      companyId,
+      vendorId,
+      policies: extraction.data.policies,
+    });
+    appliedPolicyId = result.appliedPolicyId;
+    if (!result.allMatched) {
+      finalStatus = "needs_review";
+      reviewReason = result.reasons.join(" ");
+    }
+  }
 
   await supabase
     .from("vendor_documents")
     .update({
-      processing_status: extraction.status === "not_configured" ? "failed" : extraction.status,
+      processing_status: finalStatus,
       parsed_data: extraction.data,
       extraction_confidence: extraction.confidence,
       processing_error: extraction.error,
+      review_reason: reviewReason,
+      applied_policy_id: appliedPolicyId,
       processed_at: new Date().toISOString(),
     })
     .eq("id", documentId);
 
-  if (queueItemId && (extraction.status === "needs_review" || extraction.status === "failed")) {
+  if (queueItemId && (finalStatus === "needs_review" || finalStatus === "failed")) {
     await supabase
       .from("compliance_queue_items")
       .update({ state: "in-review" })
@@ -499,7 +671,7 @@ export const reprocessDocument = createServerFn({ method: "POST" })
 
     const { data: doc, error: docError } = await supabase
       .from("vendor_documents")
-      .select("id, storage_path, mime_type, vendor_id")
+      .select("id, storage_path, mime_type, vendor_id, company_id")
       .eq("id", data.documentId)
       .maybeSingle();
 
@@ -530,6 +702,8 @@ export const reprocessDocument = createServerFn({ method: "POST" })
 
     await applyExtractionResult(supabase, {
       documentId: doc.id,
+      companyId: doc.company_id,
+      vendorId: doc.vendor_id,
       queueItemId: queueItem?.id ?? null,
       extraction,
     });
