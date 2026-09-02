@@ -13,12 +13,23 @@ import { readSupabaseEnv } from "./env";
  * vendor" is decided once, by the can_write_company() policy, and is never
  * re-implemented here. Use this for every authenticated action.
  *
- * getServiceRoleClient() bypasses RLS entirely. It exists only for the two
- * vendor-portal endpoints with no session to run as - resolveUploadToken() and
- * uploadDocumentForToken() in vendorUploadRequests.ts. Both
- * independently re-validate the hashed token, its expiry and its status before
- * touching a row; the service-role key does not replace that check; it exists
- * because there is no auth.uid() for an anonymous vendor to check against.
+ * getServiceRoleClient() bypasses RLS entirely. Two different justifications
+ * use it, never a third without one:
+ *
+ *   - The vendor-portal endpoints with no session to run as -
+ *     resolveUploadToken() and uploadDocumentForToken() in
+ *     vendorUploadRequests.ts. Both independently re-validate the hashed
+ *     token, its expiry and its status before touching a row; the
+ *     service-role key does not replace that check, it exists because there
+ *     is no auth.uid() for an anonymous vendor to check against.
+ *   - Staff-only actions on customer data that RLS's company-membership
+ *     model was never meant to grant - reprocessDocument() and the review
+ *     screen's approve/reject actions in documentReview.ts.
+ *     assertPlatformAdmin() (vendorUploadRequests.ts) re-validates the
+ *     caller is platform staff via RLS/auth.uid() first; the service-role
+ *     key does not replace that check either, it exists because
+ *     can_write_company() is deliberately company-membership-only and staff
+ *     reviewing a customer's documents have none.
  *
  * Both throw if imported into browser code. TanStack Start's compiler strips
  * server-function handler bodies from the client bundle, but this guard turns

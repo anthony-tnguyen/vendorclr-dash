@@ -103,7 +103,15 @@ export interface QueueItem {
   company: string;
   document: string;
   submittedOn: string;
-  state: "queued" | "in-review" | "escalated";
+  state: "queued" | "in-review" | "escalated" | "resolved";
+  /**
+   * The vendor_documents row this item was created for - present in live mode
+   * (migration 12), absent in the demo repository, which has no document
+   * review flow to link to. Only listQueue() callers that can act on an item
+   * (the review screen link) need this; everything else already worked
+   * without it.
+   */
+  documentId?: string | null;
 }
 
 export interface Lead {
