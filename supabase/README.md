@@ -17,6 +17,7 @@ Two phases so far:
 | `20260901000200_vendor_domain.sql` | `vendors`, `vendor_policies`, `vendor_compliance_items`, `vendor_coverage_limits` |
 | `20260901000300_tasks_queue_leads_and_views.sql` | `tasks`, `compliance_queue_items`, `leads`, and the report/admin views |
 | `20260901000400_vendor_upload_requests_and_documents.sql` | `vendor_upload_requests`, `vendor_documents`, `email_outbox`, the private `vendor-documents` storage bucket |
+| `20260902000100_security_and_performance_hardening.sql` | Fixes discovered by applying 1-4 to a real project and running Supabase's advisor — see [Security model](#security-model) |
 
 The headline modelling change: **a vendor no longer owns one flat policy.**
 `Vendor.policyNumber` / `Vendor.expiresOn` in `src/data/contracts.ts` could hold
@@ -138,6 +139,48 @@ Tenancy is enforced in the database, not in React.
   The FK and the INSERT policy both pass if you attach a company-A row to a
   company-B vendor; only that trigger catches it.
 
+### `revoke ... from public` does not mean what it looks like it means
+
+Migration 1 originally revoked EXECUTE on every RLS-primitive function "from
+public" and granted it back to `authenticated` only, intending `anon` to have
+no access. Applied to a real project and checked with Supabase's advisor
+(`get_advisors`, type `security`) plus `has_function_privilege('anon', ...)`
+directly: **`anon` could still execute every one of them.**
+
+The cause: Supabase applies `alter default privileges in schema public grant
+execute on functions to anon, authenticated, service_role` at project
+creation. That grants EXECUTE to `anon` and `authenticated` **directly**, at
+function-creation time — a separate grant from the one made to the `PUBLIC`
+pseudo-role. `revoke ... from public` only revokes the PUBLIC grant; it does
+not touch a grant made straight to a named role. The two revokes look
+identical in a migration file and do completely different things.
+
+Fixed in `20260902000100_security_and_performance_hardening.sql`, which
+revokes from `anon` and `authenticated` by name:
+
+- **RLS-primitive functions** (`current_company_ids()`, `is_platform_admin()`,
+  `has_company_role()`, `can_write_company()`, `shares_company_with()`,
+  `create_company_for_current_user()`) — revoked from `anon`. `authenticated`
+  keeps EXECUTE on purpose: RLS policies invoke these as the querying role
+  regardless of `SECURITY DEFINER`, so revoking from `authenticated` too would
+  break every policy that calls them. Supabase's advisor still flags these
+  five as "callable by authenticated" — expected and correct; that access is
+  structural, not an oversight.
+- **Trigger-only functions** (`assert_company_matches_vendor()`,
+  `assert_task_company_matches_vendor()`, `handle_new_user()`,
+  `seed_vendor_compliance_items()`) — revoked from `anon` and `authenticated`
+  both. Firing as a trigger never required EXECUTE in the first place; only
+  direct invocation (e.g. `/rest/v1/rpc/handle_new_user`) does.
+
+`PGlite` does not reproduce Supabase's default-privileges bootstrap on its
+own, so the original bug was invisible to `db:verify` even though it was
+exercising these exact policies. The harness now applies the same `alter
+default privileges` statement Supabase does (see `BOOTSTRAP` in
+`supabase/tests/harness.ts`), and
+`supabase/tests/function-grants.test.ts` asserts the intended grant on every
+affected function by name — so this class of bug fails a local test run
+instead of only showing up in a hosted project's advisor.
+
 ### Verifying the boundary
 
 A broken RLS policy fails **silently** — it returns data instead of raising — so
@@ -165,6 +208,11 @@ own) — see `supabase/tests/harness.ts`.
 
 `src/tests/upload-tokens.test.ts` and `src/tests/email.test.ts` separately cover
 the pure token/email logic (no database needed for those).
+
+`supabase/tests/function-grants.test.ts` asserts the exact anon/authenticated
+EXECUTE matrix on every RLS-primitive and trigger-only function — see the
+`revoke ... from public` note above for what this specific suite exists to
+catch.
 
 **What it does not cover:** `auth.users` and `auth.uid()` in the harness are stubs
 matching the shape the migrations depend on. Real GoTrue behavior — email

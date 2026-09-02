@@ -48,6 +48,15 @@ const BOOTSTRAP = `
     )::uuid
   $$;
 
+  -- Real Supabase projects apply this at project creation. It grants EXECUTE
+  -- to anon/authenticated DIRECTLY, on every function created afterwards -
+  -- separately from the PUBLIC pseudo-role. "revoke ... from public" (which
+  -- migration 1 originally did, before the hardening migration fixed it) does
+  -- NOT touch this grant; only "revoke ... from anon" explicitly does. Without
+  -- this line the harness would not reproduce the bug that shipped, and could
+  -- not verify the fix - see function-grants.test.ts.
+  alter default privileges in schema public grant execute on functions to anon, authenticated, service_role;
+
   -- Minimal stand-in for Supabase Storage, which is not a schema PGlite ships
   -- with. Only what migration 4 depends on: the buckets/objects tables its
   -- INSERT and RLS policy touch, and foldername(), which storage's real
