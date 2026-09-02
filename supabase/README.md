@@ -1,6 +1,6 @@
 # Backend: auth, tenancy, the vendor/policy model, and the renewal loop
 
-Three phases so far:
+Four phases so far:
 
 - **Phase 0** — auth, tenancy, and a real vendor/policy model. Before this, the app
   had no users, no accounts, and no link between a vendor and whoever owns it.
@@ -12,6 +12,10 @@ Three phases so far:
   structured, confidence-scored JSON and stored alongside it. Still does not
   touch `vendor_policies` or `vendor_compliance_items` — see
   [Document intelligence (Phase 2)](#document-intelligence-phase-2).
+- **Phase 3** — the compliance engine: a deterministic (never LLM-confidence-
+  gated) rule decides whether an extraction is safe to apply automatically,
+  updates `vendor_policies` when it is, and recomputes the compliance rail.
+  See [The compliance engine (Phase 3)](#the-compliance-engine-phase-3).
 
 ## What the migrations create
 
@@ -23,6 +27,7 @@ Three phases so far:
 | `20260901000400_vendor_upload_requests_and_documents.sql` | `vendor_upload_requests`, `vendor_documents`, `email_outbox`, the private `vendor-documents` storage bucket |
 | `20260902000100_security_and_performance_hardening.sql` | Fixes discovered by applying 1-4 to a real project and running Supabase's advisor — see [Security model](#security-model) |
 | `20260902000200_document_extraction.sql` | Adds `parsed_data`, `extraction_confidence`, `duplicate_of_document_id` to `vendor_documents` |
+| `20260902000300_compliance_engine.sql` | `vendor_documents.applied_policy_id`/`review_reason`, and `apply_policy_renewal()` |
 
 The headline modelling change: **a vendor no longer owns one flat policy.**
 `Vendor.policyNumber` / `Vendor.expiresOn` in `src/data/contracts.ts` could hold
@@ -193,6 +198,97 @@ legitimately gets re-uploaded for different vendors (a broker's template).
 `vendor_documents_sha256_idx (vendor_id, sha256)` from Phase 1 already
 supports the lookup; this phase is what actually reads it.
 
+## The compliance engine (Phase 3)
+
+Two independent gates decide whether a document's data reaches
+`vendor_policies`, and a document must clear both:
+
+1. **Confidence (Phase 2)** - `overall_confidence >= 0.6`, or the extraction
+   never reaches `processed` at all.
+2. **A deterministic match (Phase 3, `src/workflows/complianceEngine.ts`)** -
+   the LLM's confidence in itself never gates a database write; a second,
+   independent check does. `matchExtractedPolicy()` auto-renews a policy only
+   when, against the vendor's existing active policy of that type, the
+   carrier matches, the policy number matches, and the new expiration date is
+   strictly later. Anything else - a new carrier, a changed policy number, a
+   date that didn't move forward, or simply no existing policy of that type
+   to compare against (`new_coverage` - a vendor's *first* submission for a
+   coverage type is deliberately never auto-applied) - requires a human
+   decision instead.
+
+```
+extraction reaches processing_status = 'processed' (Phase 2)
+        │
+        ▼
+for each classified policy on the certificate, independently:
+        │  a GL + WC + Auto certificate can cleanly renew GL while WC needs
+        │  a look - each policy is judged on its own, not the whole document
+        ▼
+matchExtractedPolicy(extracted, existing active policy of that type)
+        │
+   ┌────┴─────────────────┬───────────────────────┐
+   ▼                      ▼                        ▼
+'renew'                'new_coverage'          'needs_review'
+   │                  (no existing policy    (carrier/number/date
+   │                   of this type to        mismatch, or missing/
+   │                   compare against)       unparseable data)
+   ▼                      │                        │
+apply_policy_renewal() ---┴────────────────────────┘
+(RPC, atomic: supersedes         no vendor_policies write;
+ the old row, inserts the        vendor_documents.review_reason
+ new one, all-or-nothing)        records why
+   │
+   ▼
+general_liability specifically also recomputes the compliance rail
+(coi / additionalInsured / waiverOfSubrogation / renewal) via
+computeComplianceItems() - a non-GL renewal (WC, Auto, Umbrella) still
+updates vendor_policies but does not move the rail
+        │
+        ▼
+any policy on the certificate that didn't cleanly renew downgrades the
+WHOLE document from 'processed' to 'needs_review' (compliance_queue_items
+bumped to 'in-review', same as a low-confidence Phase 2 result) - a
+document is only "processed" once every coverage type on it cleared both
+gates
+```
+
+**`apply_policy_renewal()` is a Postgres function, not application code, and
+deliberately not `security definer`.** Superseding the old policy row and
+inserting its renewal has to be atomic - the table's own
+`vendor_policies_one_active_per_type` unique index allows only one `'active'`
+row per `(vendor_id, policy_type)`, so two separate statements risk leaving a
+vendor with *zero* active policies of that type if the second one fails. One
+RPC call is one transaction. Because it is not `security definer`, every
+statement inside runs with the **caller's own** row-level permissions - the
+same `can_write_company()` RLS policy that gates a direct `vendor_policies`
+write gates a call to this function too. `supabase/tests/compliance-engine.test.ts`
+verifies this doesn't just work for the happy path: a `read_only` member is
+refused, an owner cannot act on another company's vendor through it, `anon`
+cannot execute it at all, and a deliberately-broken renewal (an insert that
+violates a CHECK constraint) rolls back the *entire* call - the earlier
+`UPDATE` included - so the old policy is never left superseded with no
+replacement.
+
+**Null is never silently read as compliant.** The Phase 2 extraction prompt
+instructs the model to return `null` for `additional_insured`/
+`waiver_of_subrogation` rather than guess from a checkbox alone.
+`computeComplianceItems()` treats that `null` the same as never having been
+provided at all - `"missing"`, not `"compliant"` and not a false negative
+either. A certificate that explicitly says `false` also reads as `"missing"`:
+"the certificate says no" and "the certificate couldn't determine this" both
+mean the requirement isn't satisfied yet, which is the only fact the rail
+needs to convey.
+
+**`vendor_coverage_limits.carried_amount` is deliberately not auto-updated
+here.** That table pairs `required_amount` (what a client needs) with
+`carried_amount` (what a vendor has) under a free-text `label` with no fixed
+vocabulary tying it to a `policy_type` - there is no reliable way to match an
+extracted `each_occurrence`/`general_aggregate` limit back to the right label
+row for a given vendor without guessing. `vendor_policies.each_occurrence_limit`/
+`general_aggregate_limit` *are* updated precisely, by `policy_type`, and are
+the correct source of truth for carried limits going forward. See
+[Known compromises](#known-compromises).
+
 ## Security model
 
 Tenancy is enforced in the database, not in React.
@@ -275,13 +371,18 @@ members; staff read-everything/write-nothing; `seed.sql` including idempotency;
 (Phase 1) `vendor_upload_requests`/`vendor_documents`/`email_outbox` tenancy, the
 25MB file-size check at the database level, and the `vendor-documents` storage
 bucket's RLS — including a regression test for the regex guard in front of the
-`::uuid` cast on the folder-segment policy; and (Phase 2) the extraction columns'
+`::uuid` cast on the folder-segment policy; (Phase 2) the extraction columns'
 constraints (confidence between 0 and 1), that `duplicate_of_document_id` sets to
 null rather than erroring when its target is deleted, and that two documents for
 the same vendor are allowed to share a `sha256` (duplicate detection reads that,
-it isn't a uniqueness constraint). The harness stubs a minimal
-`storage.objects`/`storage.buckets` schema (PGlite has no `storage` schema of its
-own) — see `supabase/tests/harness.ts`.
+it isn't a uniqueness constraint); and (Phase 3) `apply_policy_renewal()` -
+superseding the old policy and inserting the new one is genuinely atomic (a
+CHECK-constraint-violating renewal rolls back the whole call, old row included),
+a `read_only` member and an owner acting outside their own company are both
+refused by RLS exactly as a direct write would be (the function is not
+`security definer`), and `anon` cannot execute it at all. The harness stubs a
+minimal `storage.objects`/`storage.buckets` schema (PGlite has no `storage`
+schema of its own) — see `supabase/tests/harness.ts`.
 
 `src/tests/upload-tokens.test.ts` and `src/tests/email.test.ts` separately cover
 the pure token/email logic (no database needed for those).
@@ -290,6 +391,10 @@ the carrier-string-to-enum normalizer; `src/tests/document-extraction.test.ts`
 covers the extraction provider itself against a mocked Anthropic client (no API
 key or network call needed) - not-configured, high/low confidence routing,
 markdown-fence stripping, invalid JSON, a thrown API error, and a model refusal.
+`src/tests/compliance-engine.test.ts` covers `matchExtractedPolicy()` and
+`computeComplianceItems()` - every match outcome, the deliberate `null` !=
+`"compliant"` handling, and that `lienWaiver` is never touched by a
+certificate-of-insurance extraction.
 
 `supabase/tests/function-grants.test.ts` asserts the exact anon/authenticated
 EXECUTE matrix on every RLS-primitive and trigger-only function — see the
@@ -331,7 +436,7 @@ Deliberate, and worth revisiting as later phases grow on top of them:
 - **`email_outbox` is one table**, not the `email_events` / `email_deliveries`
   split a fuller design calls for. One row per send attempt answers "did this go
   out" for Phase 1; split it once delivery-webhook data (opened/clicked/bounced)
-  needs its own lifecycle in Phase 3.
+  needs its own lifecycle.
 - **No token revocation or resend UI.** `vendor_upload_requests.status` already
   has `cancelled`, and a new request can simply be created, but there is no
   admin control to cancel an outstanding one yet.
@@ -340,27 +445,57 @@ Deliberate, and worth revisiting as later phases grow on top of them:
   `supabase gen types typescript --project-id <ref> > src/data/db-types.ts`, then
   add the generic back to `VendorClearClient` and drop the casts in
   `supabaseRepository.ts`.
+- **`vendor_coverage_limits.carried_amount` is not kept in sync with
+  `vendor_policies`.** A successful auto-renewal updates
+  `vendor_policies.each_occurrence_limit`/`general_aggregate_limit` precisely,
+  but the free-text `label` on `vendor_coverage_limits` (what the existing
+  Coverage Limits UI reads) has no fixed vocabulary tying it to a
+  `policy_type`, so there is no reliable way to auto-update it without
+  guessing which label row a given extracted limit belongs to. Split
+  `required_amount` onto a real `compliance_requirements` table and read
+  `carried_amount` live from `vendor_policies` instead of storing it
+  redundantly - see the `vendor_coverage_limits` compromise above, which this
+  sharpens now that one side of the pair (`vendor_policies`) is a live,
+  auto-updated source of truth and the other (`vendor_coverage_limits`) isn't.
+- **No vendor-facing notification when a document needs review or was
+  auto-applied.** `email_outbox`/`emailSender.ts`/`emailTemplates.ts` already
+  exist from Phase 1 - this is a small, well-understood addition, deliberately
+  left out of this pass to keep the matching/auto-update/recompute core
+  properly tested on its own.
 
 ## What is still not built
 
-Phases 0-2 give vendors and policies a real, tenant-scoped home, close the
+Phases 0-3 give vendors and policies a real, tenant-scoped home; close the
 outbound half of the loop (request → email → magic link → upload → visible in the
-compliance queue), and turn an uploaded certificate into structured,
-confidence-scored JSON. What's not built yet:
+compliance queue); turn an uploaded certificate into structured,
+confidence-scored JSON; and, when a deterministic match says it's safe, apply
+that JSON to `vendor_policies` and roll the compliance rail forward
+automatically. What's not built yet:
 
-- **The compliance engine (Phase 3).** Matching extracted policy data against
-  what a client actually requires, updating `vendor_policies` and
-  `vendor_compliance_items` from a `processed` extraction, an actual review
-  queue UI for `needs_review` documents (they currently only show up as
-  `compliance_queue_items` rows in `'in-review'` state - there is no screen yet
-  for looking at `parsed_data` itself), and the 90/60/30/14/7-day reminder
-  schedule.
+- **Matching against what a client actually *requires*, not just what changed.**
+  The Phase 3 engine answers "is this a clean renewal of what was already on
+  file" - it does not yet check the result against a client's stated
+  requirements (a specific limit, additional-insured, a waiver). That
+  determination needs the `compliance_requirements` table flagged in
+  [Known compromises](#known-compromises); today `vendor_coverage_limits`
+  holds required amounts but nothing compares them against what a policy
+  actually carries.
+- **A review-queue UI.** `needs_review` documents only show up as
+  `compliance_queue_items` rows in `'in-review'` state on the existing admin
+  screen - there is no screen yet for looking at `parsed_data`,
+  `review_reason`, or approving/rejecting a match by hand.
+- **Vendor notifications.** Nothing emails a vendor when their document was
+  auto-approved or needs one more thing - see
+  [Known compromises](#known-compromises).
+- **The 90/60/30/14/7-day reminder schedule and next-renewal scheduling.**
+  Needs a scheduling mechanism (`pg_cron` is available on the linked project
+  but not yet enabled) this phase deliberately didn't reach for without its
+  own dedicated pass.
 - **Hardening (Phase 4).** Audit log, an automated (not just manually-invoked)
   retry queue, email bounce handling, malware/file-content checks beyond
   mime-type and size, upload-request cancellation UI, admin review tools.
 
-Nothing here claims otherwise: `vendor_documents.parsed_data` and
-`extraction_confidence` are populated, but `vendor_policies` and
-`vendor_compliance_items` are never written by the upload or extraction path -
-a `processed` extraction result sits next to the vendor's actual policy
-records, unconnected to them, until Phase 3.
+Nothing here claims otherwise: a `processed` extraction that fails
+`matchExtractedPolicy()` for even one coverage type on the certificate leaves
+`vendor_policies` and `vendor_compliance_items` completely untouched for the
+whole document, and `vendor_documents.review_reason` says why.
