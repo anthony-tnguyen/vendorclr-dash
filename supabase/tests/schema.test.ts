@@ -31,13 +31,16 @@ describe("migrations", () => {
       "companies",
       "company_members",
       "compliance_queue_items",
+      "email_outbox",
       "leads",
       "platform_admins",
       "profiles",
       "tasks",
       "vendor_compliance_items",
       "vendor_coverage_limits",
+      "vendor_documents",
       "vendor_policies",
+      "vendor_upload_requests",
       "vendors",
     ]);
   });
