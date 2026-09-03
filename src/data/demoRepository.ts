@@ -35,6 +35,8 @@ const vendors: Vendor[] = [
     contactEmail: "dana@corbettsteel.example",
     policyNumber: "GL-8841-2266",
     expiresOn: "2026-11-30",
+    certificateHolderName: "Halstead Builders",
+    certificateHolderAddress: "500 Harbor Point Way, Boston, MA 02110",
     riskTier: "high",
     compliance: [
       c("coi", "compliant", "2026-11-30"),
@@ -59,6 +61,8 @@ const vendors: Vendor[] = [
     contactEmail: "manny@riveraelectric.example",
     policyNumber: "GL-2210-7741",
     expiresOn: "2026-09-14",
+    certificateHolderName: "Halstead Builders",
+    certificateHolderAddress: "500 Harbor Point Way, Boston, MA 02110",
     riskTier: "moderate",
     compliance: [
       c("coi", "expiring", "2026-09-14", "17 days to expiration"),
@@ -83,6 +87,8 @@ const vendors: Vendor[] = [
     contactEmail: "priya@northgatemech.example",
     policyNumber: "GL-5590-1183",
     expiresOn: "2027-02-28",
+    certificateHolderName: "Halstead Builders",
+    certificateHolderAddress: "500 Harbor Point Way, Boston, MA 02110",
     riskTier: "moderate",
     compliance: [
       c("coi", "compliant", "2027-02-28"),
@@ -107,6 +113,12 @@ const vendors: Vendor[] = [
     contactEmail: "sofia@delgadoconcrete.example",
     policyNumber: "GL-3320-9014",
     expiresOn: "2026-07-31",
+    // Deliberately wrong, unlike every other demo vendor - the certificate
+    // names a different client entirely. Shows what this field is actually
+    // for: catching a vendor whose broker never updated who the coverage is
+    // supposed to protect, not just confirming coverage exists.
+    certificateHolderName: "ABC General Contractors",
+    certificateHolderAddress: "88 Industrial Pkwy, Providence, RI 02903",
     riskTier: "high",
     compliance: [
       c("coi", "expired", "2026-07-31", "Certificate lapsed 28 days ago"),
@@ -131,6 +143,8 @@ const vendors: Vendor[] = [
     contactEmail: "grant@summitearth.example",
     policyNumber: "GL-7712-4408",
     expiresOn: "2026-12-31",
+    certificateHolderName: "Halstead Builders",
+    certificateHolderAddress: "500 Harbor Point Way, Boston, MA 02110",
     riskTier: "moderate",
     compliance: [
       c("coi", "compliant", "2026-12-31"),
@@ -155,6 +169,8 @@ const vendors: Vendor[] = [
     contactEmail: "tara@beaconroof.example",
     policyNumber: "GL-1194-6620",
     expiresOn: "2026-10-05",
+    certificateHolderName: "Halstead Builders",
+    certificateHolderAddress: "500 Harbor Point Way, Boston, MA 02110",
     riskTier: "low",
     compliance: [
       c("coi", "compliant", "2026-10-05"),
@@ -178,6 +194,8 @@ const vendors: Vendor[] = [
     contactEmail: "ben@clearlineglazing.example",
     policyNumber: "GL-6603-3357",
     expiresOn: "2026-09-30",
+    certificateHolderName: "Halstead Builders",
+    certificateHolderAddress: "500 Harbor Point Way, Boston, MA 02110",
     riskTier: "low",
     compliance: [
       c("coi", "compliant", "2026-09-30"),
@@ -201,6 +219,8 @@ const vendors: Vendor[] = [
     contactEmail: "alice@ironcladfp.example",
     policyNumber: "GL-4487-2290",
     expiresOn: "2027-01-15",
+    certificateHolderName: "Halstead Builders",
+    certificateHolderAddress: "500 Harbor Point Way, Boston, MA 02110",
     riskTier: "low",
     compliance: [
       c("coi", "compliant", "2027-01-15"),
@@ -481,6 +501,8 @@ export function createDemoRepository(): DashboardRepository {
         contactEmail: draft.contactEmail,
         policyNumber: "PENDING",
         expiresOn: "—",
+        certificateHolderName: "Not on file",
+        certificateHolderAddress: "Not on file",
         riskTier: "moderate",
         compliance: [
           c("coi", "missing", null),

@@ -289,6 +289,7 @@ export const resolveReviewItem = createServerFn({ method: "POST" })
           vendorId: queueRow.vendor_id,
           existingPolicyId: existing?.id ?? null,
           policy,
+          certificateHolder: parsed?.certificate_holder ?? { name: null, address: null },
         });
 
         if ("error" in result) {

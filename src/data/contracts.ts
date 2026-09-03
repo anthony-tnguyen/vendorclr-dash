@@ -46,6 +46,17 @@ export interface Vendor {
   contactEmail: string;
   policyNumber: string;
   expiresOn: string;
+  /**
+   * Who the vendor's current certificate actually names as certificate
+   * holder - from the extraction that produced the primary policy, not
+   * anything this app asserts is correct. "Not on file" (never "—" alone,
+   * which reads ambiguously here) when there's no policy yet or the
+   * extraction never captured one. Exists so a company can eyeball whether
+   * its own vendors actually named it correctly on their certificates, not
+   * just that coverage exists - see supabaseRepository.ts's toVendor().
+   */
+  certificateHolderName: string;
+  certificateHolderAddress: string;
   riskTier: "low" | "moderate" | "high";
   compliance: ComplianceItem[];
   limits: CoverageLimit[];
