@@ -1,14 +1,21 @@
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 
 import { isBackendConfigured } from "@/data/repository";
 import {
+  cancelUploadRequest,
   createUploadRequest,
+  listUploadRequestsForVendor,
   type CreateUploadRequestResult,
 } from "@/workflows/vendorUploadRequests";
+import { canCancelRequest } from "@/workflows/uploadTokens";
 
 /**
- * "Request updated certificate" action on the vendor detail page.
+ * "Request updated certificate" action on the vendor detail page, plus the
+ * outstanding-requests list a cancellation needs somewhere to live -
+ * without seeing what's open, there's nothing to cancel. Closes a known
+ * compromise: vendor_upload_requests.status has had 'cancelled' since
+ * Phase 1, but nothing ever set it.
  *
  * Renders nothing in demo mode - VendorDetailPage keeps its existing
  * "document requests, uploads and reviews are simulated" disclaimer for that
@@ -20,15 +27,35 @@ import {
  * able to copy the link and send it manually (Slack, a text, forwarding to a
  * broker) regardless of whether automated email is wired up.
  */
+
+function formatStatus(status: string): string {
+  return status.replace(/_/g, " ");
+}
+
 export function RequestDocumentsAction({ vendorId }: { vendorId: string }) {
+  const queryClient = useQueryClient();
   const [result, setResult] = useState<CreateUploadRequestResult | null>(null);
   const [copied, setCopied] = useState(false);
+
+  const requests = useQuery({
+    queryKey: ["upload-requests", vendorId],
+    queryFn: () => listUploadRequestsForVendor({ data: { vendorId } }),
+    enabled: isBackendConfigured(),
+  });
 
   const mutation = useMutation({
     mutationFn: () => createUploadRequest({ data: { vendorId, purpose: "renewal" } }),
     onSuccess: (data) => {
       setResult(data);
       setCopied(false);
+      void queryClient.invalidateQueries({ queryKey: ["upload-requests", vendorId] });
+    },
+  });
+
+  const cancel = useMutation({
+    mutationFn: (requestId: string) => cancelUploadRequest({ data: { requestId } }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["upload-requests", vendorId] });
     },
   });
 
@@ -88,6 +115,35 @@ export function RequestDocumentsAction({ vendorId }: { vendorId: string }) {
             </button>
           </div>
         </div>
+      ) : null}
+
+      {requests.data && requests.data.length > 0 ? (
+        <ul className="mt-3 space-y-1.5 border-t border-border pt-3">
+          {requests.data.map((req) => (
+            <li key={req.id} className="flex items-center justify-between gap-2 text-xs">
+              <span className="text-muted-foreground">
+                {formatStatus(req.status)} · requested{" "}
+                {new Date(req.createdAt).toLocaleDateString()}
+              </span>
+              {canCancelRequest(req.status) ? (
+                <button
+                  type="button"
+                  onClick={() => cancel.mutate(req.id)}
+                  disabled={cancel.isPending}
+                  className="focusable shrink-0 rounded-sm border border-border px-2 py-1 text-[11px] font-medium disabled:opacity-60"
+                >
+                  {cancel.isPending && cancel.variables === req.id ? "Cancelling…" : "Cancel"}
+                </button>
+              ) : null}
+            </li>
+          ))}
+        </ul>
+      ) : null}
+
+      {cancel.isError ? (
+        <p role="alert" className="mt-2 text-xs font-semibold text-destructive">
+          {cancel.error instanceof Error ? cancel.error.message : "Could not cancel the request."}
+        </p>
       ) : null}
     </div>
   );

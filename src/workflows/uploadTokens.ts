@@ -103,6 +103,16 @@ export function isExpired(expiresAt: string | Date, now: Date = new Date()): boo
 /** Statuses an upload request can be resolved or uploaded to from. Anything else is terminal or not-yet-sent. */
 const OPENABLE_STATUSES = new Set(["pending", "email_sent", "opened"]);
 const UPLOADABLE_STATUSES = new Set(["pending", "email_sent", "opened", "needs_review"]);
+/**
+ * Same members as OPENABLE_STATUSES today, but a distinct set on purpose:
+ * "the vendor can still open this link" and "an admin can still call this
+ * ask off" are different questions that happen to share an answer right
+ * now. Once the vendor has acted at all - even just uploading something
+ * that then needs review - the request has been fulfilled or is being
+ * worked, not something to cancel; the admin action there is reprocessing
+ * or the review screen, not this.
+ */
+const CANCELLABLE_STATUSES = new Set(["pending", "email_sent", "opened"]);
 
 export function canOpenRequest(status: string): boolean {
   return OPENABLE_STATUSES.has(status);
@@ -110,4 +120,8 @@ export function canOpenRequest(status: string): boolean {
 
 export function canUploadToRequest(status: string): boolean {
   return UPLOADABLE_STATUSES.has(status);
+}
+
+export function canCancelRequest(status: string): boolean {
+  return CANCELLABLE_STATUSES.has(status);
 }

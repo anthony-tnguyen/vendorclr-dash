@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   buildStoragePath,
+  canCancelRequest,
   canOpenRequest,
   canUploadToRequest,
   extensionForMimeType,
@@ -160,5 +161,23 @@ describe("status transitions", () => {
     expect(canUploadToRequest("completed")).toBe(false);
     expect(canUploadToRequest("cancelled")).toBe(false);
     expect(canUploadToRequest("expired")).toBe(false);
+  });
+
+  it("can only cancel a request the vendor has not acted on at all yet", () => {
+    expect(canCancelRequest("pending")).toBe(true);
+    expect(canCancelRequest("email_sent")).toBe(true);
+    expect(canCancelRequest("opened")).toBe(true);
+    // Once anything has been uploaded, the ask has been fulfilled or is
+    // being worked - not something left to call off.
+    for (const acted of [
+      "uploaded",
+      "processing",
+      "needs_review",
+      "completed",
+      "expired",
+      "cancelled",
+    ]) {
+      expect(canCancelRequest(acted)).toBe(false);
+    }
   });
 });

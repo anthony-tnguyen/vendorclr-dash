@@ -28,6 +28,7 @@ import type { ExtractedPolicy } from "./insuranceExtractionSchema";
 import {
   ALLOWED_UPLOAD_MIME_TYPES,
   buildStoragePath,
+  canCancelRequest,
   canOpenRequest,
   canUploadToRequest,
   generateUploadToken,
@@ -251,6 +252,97 @@ export const createUploadRequest = createServerFn({ method: "POST" })
       uploadUrl,
       email: { status: sendResult.status, to: vendorRow.contact_email },
     };
+  });
+
+// ---------------------------------------------------------------------------
+// listUploadRequestsForVendor / cancelUploadRequest - authenticated, RLS as
+// the calling admin. No service role anywhere here: vendor_upload_requests_
+// update already grants can_write_company() the UPDATE cancellation needs,
+// the same policy createUploadRequest()'s INSERT above already relies on.
+// ---------------------------------------------------------------------------
+
+export interface UploadRequestSummary {
+  id: string;
+  purpose: string;
+  status: string;
+  createdAt: string;
+  expiresAt: string;
+}
+
+/** Most recent 10, newest first - enough to show what's outstanding without an unbounded list on a vendor with a long history. */
+export const listUploadRequestsForVendor = createServerFn({ method: "GET" })
+  .validator(z.object({ vendorId: z.string().uuid() }))
+  .handler(async ({ data }): Promise<UploadRequestSummary[]> => {
+    const supabase = getRequestScopedClient();
+    const { data: rows, error } = await supabase
+      .from("vendor_upload_requests")
+      .select("id, purpose, status, created_at, expires_at")
+      .eq("vendor_id", data.vendorId)
+      .order("created_at", { ascending: false })
+      .limit(10);
+
+    if (error) throw new Error(error.message);
+
+    return (
+      (rows ?? []) as Array<{
+        id: string;
+        purpose: string;
+        status: string;
+        created_at: string;
+        expires_at: string;
+      }>
+    ).map((row) => ({
+      id: row.id,
+      purpose: row.purpose,
+      status: row.status,
+      createdAt: row.created_at,
+      expiresAt: row.expires_at,
+    }));
+  });
+
+const cancelUploadRequestSchema = z.object({ requestId: z.string().uuid() });
+
+/**
+ * Only valid from a status the vendor has not acted on at all yet
+ * (canCancelRequest() - pending/email_sent/opened). Re-checked here, not
+ * just in the UI that hides the button: the status could have moved (the
+ * vendor opened the link, or uploaded something) between the page loading
+ * and the click landing, and a cancel racing an upload must lose, not win.
+ */
+export const cancelUploadRequest = createServerFn({ method: "POST" })
+  .validator(cancelUploadRequestSchema)
+  .handler(async ({ data }): Promise<{ status: string }> => {
+    const supabase = getRequestScopedClient();
+
+    const { data: existing, error: fetchError } = await supabase
+      .from("vendor_upload_requests")
+      .select("id, status, company_id, vendor_id")
+      .eq("id", data.requestId)
+      .maybeSingle();
+
+    if (fetchError || !existing) throw new Error("Upload request not found.");
+    if (!canCancelRequest(existing.status)) {
+      throw new Error(
+        `This request can no longer be cancelled - its status is already "${existing.status}".`,
+      );
+    }
+
+    const { error: updateError } = await supabase
+      .from("vendor_upload_requests")
+      .update({ status: "cancelled" })
+      .eq("id", data.requestId);
+
+    if (updateError) throw new Error(updateError.message);
+
+    await supabase.from("audit_log").insert({
+      company_id: existing.company_id,
+      action: "upload_request_cancelled",
+      target_type: "vendor_upload_request",
+      target_id: existing.id,
+      detail: { vendorId: existing.vendor_id, previousStatus: existing.status },
+    });
+
+    return { status: "cancelled" };
   });
 
 // ---------------------------------------------------------------------------
