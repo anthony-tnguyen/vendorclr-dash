@@ -19,9 +19,9 @@ import type {
   AdminCompanyStatsView,
   CompanyReportRowView,
   CompanyRole,
+  ComplianceRequirementRow,
   LeadRow,
   VendorComplianceItemRow,
-  VendorCoverageLimitRow,
   VendorPolicyRow,
   VendorRow,
 } from "./db-types";
@@ -58,14 +58,12 @@ const NO_EXPIRY = "—";
 export interface VendorWithChildren extends VendorRow {
   vendor_policies: VendorPolicyRow[];
   vendor_compliance_items: VendorComplianceItemRow[];
-  vendor_coverage_limits: VendorCoverageLimitRow[];
 }
 
 const VENDOR_SELECT = `
   *,
   vendor_policies (*),
-  vendor_compliance_items (*),
-  vendor_coverage_limits (*)
+  vendor_compliance_items (*)
 `;
 
 function unwrap<T>(result: { data: T | null; error: { message: string } | null }): T {
@@ -110,17 +108,36 @@ export function toComplianceItems(rows: VendorComplianceItemRow[]): ComplianceIt
   });
 }
 
-export function toCoverageLimits(rows: VendorCoverageLimitRow[]): CoverageLimit[] {
-  return [...rows]
+/**
+ * Pairs each of the company's requirements with what this specific vendor
+ * actually carries, read live from their own active policies - never a
+ * second, independently-maintained number. A requirement with no matching
+ * active policy of its policy_type (the vendor doesn't carry that coverage
+ * at all, or only an expired/superseded one) carries 0, same as "missing"
+ * reads everywhere else in this schema; it is never silently omitted from
+ * the comparison just because there's nothing to show.
+ */
+export function toCoverageLimits(
+  requirements: ComplianceRequirementRow[],
+  policies: VendorPolicyRow[],
+): CoverageLimit[] {
+  const activeByType = new Map(
+    policies.filter((p) => p.status === "active").map((p) => [p.policy_type, p]),
+  );
+
+  return [...requirements]
     .sort((a, b) => a.sort_order - b.sort_order || a.label.localeCompare(b.label))
-    .map((row) => ({
-      label: row.label,
-      required: row.required_amount,
-      carried: row.carried_amount,
-    }));
+    .map((req) => {
+      const policy = activeByType.get(req.policy_type);
+      const carried = policy?.[req.limit_field] ?? 0;
+      return { label: req.label, required: req.required_amount, carried };
+    });
 }
 
-export function toVendor(row: VendorWithChildren): Vendor {
+export function toVendor(
+  row: VendorWithChildren,
+  requirements: ComplianceRequirementRow[],
+): Vendor {
   const policy = primaryPolicy(row.vendor_policies ?? []);
 
   return {
@@ -135,7 +152,7 @@ export function toVendor(row: VendorWithChildren): Vendor {
     expiresOn: policy?.expiration_date ?? NO_EXPIRY,
     riskTier: row.risk_tier,
     compliance: toComplianceItems(row.vendor_compliance_items ?? []),
-    limits: toCoverageLimits(row.vendor_coverage_limits ?? []),
+    limits: toCoverageLimits(requirements, row.vendor_policies ?? []),
   };
 }
 
@@ -183,6 +200,22 @@ export function createSupabaseRepository(
     return companyIdPromise;
   }
 
+  // Company-wide, not vendor-scoped (see migration 13's docblock) - fetched
+  // once per call rather than embedded per vendor row, since PostgREST can
+  // only auto-embed across a declared FK and compliance_requirements has
+  // none pointing at vendors. RLS already scopes this to the caller's own
+  // company/companies with no explicit filter, same as vendor_policies (*)
+  // above.
+  async function loadRequirements(): Promise<ComplianceRequirementRow[]> {
+    const supabase = clientFactory();
+    return unwrap(
+      await supabase
+        .from("compliance_requirements")
+        .select("*")
+        .order("sort_order", { ascending: true }),
+    );
+  }
+
   async function loadVendors(): Promise<VendorWithChildren[]> {
     const supabase = clientFactory();
     // Cast: the hand-written Database type declares no PostgREST relationships, so
@@ -214,12 +247,16 @@ export function createSupabaseRepository(
     };
 
     if (result.error) throw new Error(result.error.message);
-    return result.data ? toVendor(result.data) : null;
+    if (!result.data) return null;
+
+    const requirements = await loadRequirements();
+    return toVendor(result.data, requirements);
   }
 
   return {
     async listVendors() {
-      return (await loadVendors()).map(toVendor);
+      const [vendors, requirements] = await Promise.all([loadVendors(), loadRequirements()]);
+      return vendors.map((v) => toVendor(v, requirements));
     },
 
     getVendor: loadVendorById,
@@ -282,7 +319,10 @@ export function createSupabaseRepository(
     },
 
     async listOverviewMetrics(): Promise<OverviewMetric[]> {
-      const vendors = (await loadVendors()).map(toVendor);
+      // [] is fine here: only .project/.compliance are read below, neither
+      // of which toVendor() derives from requirements - no need to fetch
+      // compliance_requirements just to compute vendor counts and rail status.
+      const vendors = (await loadVendors()).map((v) => toVendor(v, []));
 
       const projects = new Set(vendors.map((v) => v.project));
       const compliant = vendors.filter((v) => v.compliance.every((c) => c.status === "compliant"));

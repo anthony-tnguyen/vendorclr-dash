@@ -6,6 +6,7 @@ import {
   isGeneralLiability,
   matchExtractedPolicy,
   type ExistingPolicySnapshot,
+  type RequirementSnapshot,
 } from "@/workflows/complianceEngine";
 import type { ExtractedPolicy } from "@/workflows/insuranceExtractionSchema";
 
@@ -90,6 +91,82 @@ describe("matchExtractedPolicy", () => {
   it("still renews when the existing policy has no expiration date on file to compare against", () => {
     const result = matchExtractedPolicy(policy(), existing({ expirationDate: null }));
     expect(result.kind).toBe("renew");
+  });
+
+  describe("company requirements (migration 13)", () => {
+    const requirement = (overrides: Partial<RequirementSnapshot> = {}): RequirementSnapshot => ({
+      label: "General liability / occurrence",
+      limitField: "each_occurrence",
+      requiredAmount: 2_000_000,
+      ...overrides,
+    });
+
+    it("still renews when every requirement is met", () => {
+      const result = matchExtractedPolicy(
+        policy({ limits: { each_occurrence: 2_000_000 } }),
+        existing(),
+        [requirement()],
+      );
+      expect(result.kind).toBe("renew");
+    });
+
+    it("routes to needs_review when the extracted limit is below what's required", () => {
+      const result = matchExtractedPolicy(
+        policy({ limits: { each_occurrence: 1_000_000 } }),
+        existing(),
+        [requirement()],
+      );
+      expect(result.kind).toBe("needs_review");
+      if (result.kind === "needs_review") {
+        expect(result.reason).toContain("General liability / occurrence");
+        expect(result.reason).toContain("$2,000,000");
+      }
+    });
+
+    it("treats a missing extracted limit as not meeting the requirement, not as passing", () => {
+      const result = matchExtractedPolicy(policy({ limits: {} }), existing(), [requirement()]);
+      expect(result.kind).toBe("needs_review");
+      if (result.kind === "needs_review") expect(result.reason).toContain("no amount");
+    });
+
+    it("checks every requirement, not just the first", () => {
+      const result = matchExtractedPolicy(
+        policy({ limits: { each_occurrence: 2_000_000, general_aggregate: 1_000_000 } }),
+        existing(),
+        [
+          requirement({ limitField: "each_occurrence", requiredAmount: 2_000_000 }),
+          requirement({
+            label: "General aggregate",
+            limitField: "general_aggregate",
+            requiredAmount: 4_000_000,
+          }),
+        ],
+      );
+      expect(result.kind).toBe("needs_review");
+      if (result.kind === "needs_review") expect(result.reason).toContain("General aggregate");
+    });
+
+    it("still checks requirements even when carrier/policy-number/date already passed cleanly", () => {
+      // Regression: a requirement shortfall must not be masked by every
+      // other check already having passed - this is specifically the "clean
+      // renewal that doesn't meet the limit" case migration 13 exists for.
+      const result = matchExtractedPolicy(
+        policy({ limits: { each_occurrence: 500_000 } }),
+        existing(),
+        [requirement()],
+      );
+      expect(result.kind).toBe("needs_review");
+    });
+
+    it("does not check requirements for new_coverage - it never auto-applies anyway", () => {
+      const result = matchExtractedPolicy(policy({ limits: {} }), null, [requirement()]);
+      expect(result).toEqual({ kind: "new_coverage" });
+    });
+
+    it("defaults to no requirements and behaves exactly as before when none are passed", () => {
+      const result = matchExtractedPolicy(policy(), existing());
+      expect(result.kind).toBe("renew");
+    });
   });
 });
 

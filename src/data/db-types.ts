@@ -101,13 +101,22 @@ export interface VendorComplianceItemRow {
   updated_at: string;
 }
 
-export interface VendorCoverageLimitRow {
+export type LimitField = "each_occurrence_limit" | "general_aggregate_limit";
+
+/**
+ * A company-wide coverage requirement - "every vendor must carry at least
+ * $X of Y" - not tied to any one vendor. carried_amount deliberately has no
+ * column here: it is read live from the vendor's own active vendor_policies
+ * row (see toCoverageLimits() in supabaseRepository.ts), not stored
+ * redundantly. Replaces vendor_coverage_limits (migration 13).
+ */
+export interface ComplianceRequirementRow {
   id: string;
   company_id: string;
-  vendor_id: string;
   label: string;
+  policy_type: PolicyType;
+  limit_field: LimitField;
   required_amount: number;
-  carried_amount: number;
   sort_order: number;
   created_at: string;
   updated_at: string;
@@ -271,10 +280,13 @@ export interface Database {
         Pick<VendorComplianceItemRow, "company_id" | "vendor_id" | "requirement_key"> &
           Partial<VendorComplianceItemRow>
       >;
-      vendor_coverage_limits: Table<
-        VendorCoverageLimitRow,
-        Pick<VendorCoverageLimitRow, "company_id" | "vendor_id" | "label"> &
-          Partial<VendorCoverageLimitRow>
+      compliance_requirements: Table<
+        ComplianceRequirementRow,
+        Pick<
+          ComplianceRequirementRow,
+          "company_id" | "label" | "policy_type" | "limit_field" | "required_amount"
+        > &
+          Partial<ComplianceRequirementRow>
       >;
       tasks: Table<TaskRow, Pick<TaskRow, "company_id" | "title"> & Partial<TaskRow>>;
       compliance_queue_items: Table<
