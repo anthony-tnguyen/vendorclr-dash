@@ -184,7 +184,14 @@ export interface ResolveReviewItemResult {
  * matchExtractedPolicy() gating which lines qualify. A human looking at the
  * whole certificate and deciding "yes, apply this" is exactly the override
  * that gate exists to defer to; there is no partial-approval UI here (see
- * "Known compromises" in supabase/README.md).
+ * "Known compromises" in supabase/README.md). This includes
+ * matchExtractedPolicy()'s company-requirements check (migration 13) - a
+ * human approving here can knowingly apply a certificate below what the
+ * company requires, same as they can knowingly apply one with a changed
+ * carrier; the requirement shortfall is still visible afterward on the
+ * vendor's own Coverage Limits table (toCoverageLimits() reads carried
+ * amounts live), it just doesn't block this screen's approve action the way
+ * it blocks the automated path's auto-apply.
  *
  * Values come from vendor_documents.parsed_data, re-read fresh from the
  * database inside this handler - never from anything the client sent. A

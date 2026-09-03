@@ -25,6 +25,21 @@ export interface ExistingPolicySnapshot {
   expirationDate: string | null;
 }
 
+/**
+ * One company-defined coverage requirement for a policy_type - "at least $X
+ * of each_occurrence/general_aggregate" - read from compliance_requirements
+ * (migration 13). limitField matches the key on ExtractedPolicy["limits"],
+ * not vendor_policies' column name (each_occurrence_limit ->
+ * each_occurrence) - the caller (fetchRequirementsByType() in
+ * vendorUploadRequests.ts) does that translation once, so this module never
+ * has to know vendor_policies' column names at all.
+ */
+export interface RequirementSnapshot {
+  label: string;
+  limitField: "each_occurrence" | "general_aggregate";
+  requiredAmount: number;
+}
+
 export type MatchOutcome =
   | { kind: "renew"; existingPolicyId: string }
   | { kind: "new_coverage" }
@@ -32,19 +47,25 @@ export type MatchOutcome =
 
 /**
  * The one deterministic rule this phase auto-applies: carrier matches,
- * policy number matches, and the new expiration date is strictly later than
- * the one on file. Everything else - a new carrier, a changed policy number,
- * a date that didn't move forward, an unparseable date, or simply no
- * existing policy of this type to compare against - requires a human
- * decision. `new_coverage` (first time this vendor has any policy of this
- * type) is deliberately its own outcome, not folded into `needs_review`: it
- * is not an error, but it is not a renewal either, and a caller may
- * reasonably want to treat "first ever" more leniently than "no match"
- * later without touching this function.
+ * policy number matches, the new expiration date is strictly later than the
+ * one on file, and the certificate meets every company-defined requirement
+ * for this policy_type (added in migration 13 - see the requirements loop at
+ * the end of this function). Everything else - a new carrier, a changed
+ * policy number, a date that didn't move forward, an unparseable date, a
+ * limit below what the company requires, or simply no existing policy of
+ * this type to compare against - requires a human decision. `new_coverage`
+ * (first time this vendor has any policy of this type) is deliberately its
+ * own outcome, not folded into `needs_review`: it is not an error, but it is
+ * not a renewal either, and a caller may reasonably want to treat "first
+ * ever" more leniently than "no match" later without touching this
+ * function. Requirements are never checked for `new_coverage` either - it
+ * never auto-applies regardless of amount, so there is nothing the check
+ * would change.
  */
 export function matchExtractedPolicy(
   extracted: ExtractedPolicy,
   existing: ExistingPolicySnapshot | null,
+  requirements: RequirementSnapshot[] = [],
 ): MatchOutcome {
   if (!existing) return { kind: "new_coverage" };
 
@@ -79,6 +100,25 @@ export function matchExtractedPolicy(
       kind: "needs_review",
       reason: `New expiration ${extracted.expiration_date} is not later than the ${existing.expirationDate} on file.`,
     };
+  }
+
+  // Runs last, after everything internally-consistent-with-what-was-on-file
+  // already passed: an otherwise-clean renewal that falls below a
+  // company-required limit still needs a human decision, it just gets a more
+  // specific reason than the generic ones above. A null/missing extracted
+  // amount is treated the same as "does not meet" - never silently passed,
+  // matching this schema's tri-state rule everywhere else (see
+  // computeComplianceItems() below).
+  for (const req of requirements) {
+    const carried = extracted.limits[req.limitField];
+    if (carried === null || carried === undefined || carried < req.requiredAmount) {
+      const shown =
+        carried === null || carried === undefined ? "no amount" : `$${carried.toLocaleString()}`;
+      return {
+        kind: "needs_review",
+        reason: `${req.label} requires at least $${req.requiredAmount.toLocaleString()}, certificate shows ${shown}.`,
+      };
+    }
   }
 
   return { kind: "renew", existingPolicyId: existing.id };

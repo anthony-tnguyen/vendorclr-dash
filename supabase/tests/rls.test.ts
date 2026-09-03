@@ -63,14 +63,14 @@ describe("cross-tenant reads", () => {
     expect(bob.map((r) => r.name)).toEqual(["Rival Sub"]);
   });
 
-  it("hides policies, compliance items and coverage limits across companies", async () => {
+  it("hides policies and compliance items across companies", async () => {
     await db.query(
       `insert into public.vendor_policies (company_id, vendor_id, policy_type, policy_number)
        select $1, id, 'general_liability', 'GL-SECRET' from public.vendors where company_id = $1`,
       [alicesCompany],
     );
 
-    for (const table of ["vendor_policies", "vendor_compliance_items", "vendor_coverage_limits"]) {
+    for (const table of ["vendor_policies", "vendor_compliance_items"]) {
       const rows = await asUser<{ n: number }>(
         db,
         BOB,
@@ -79,6 +79,23 @@ describe("cross-tenant reads", () => {
       );
       expect(rows[0]?.n, `${table} leaked across tenants`).toBe(0);
     }
+  });
+
+  it("hides another company's coverage requirements, company-wide as they are", async () => {
+    await db.query(
+      `insert into public.compliance_requirements
+         (company_id, label, policy_type, limit_field, required_amount)
+       values ($1, 'Secret requirement', 'general_liability', 'each_occurrence_limit', 2000000)`,
+      [alicesCompany],
+    );
+
+    const rows = await asUser<{ n: number }>(
+      db,
+      BOB,
+      `select count(*)::int n from public.compliance_requirements where company_id = $1`,
+      [alicesCompany],
+    );
+    expect(rows[0]?.n).toBe(0);
   });
 
   it("applies RLS through views, not just base tables", async () => {

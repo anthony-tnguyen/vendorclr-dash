@@ -9,6 +9,7 @@ import {
   isGeneralLiability,
   matchExtractedPolicy,
   type ExistingPolicySnapshot,
+  type RequirementSnapshot,
 } from "./complianceEngine";
 import { getDocumentExtractor, type ExtractDocumentResult } from "./documentExtraction";
 import { getEmailSender } from "./emailSender";
@@ -547,6 +548,50 @@ export async function fetchActivePoliciesByType(
   );
 }
 
+/** vendor_policies' column names -> ExtractedPolicy["limits"]'s key names - see RequirementSnapshot's docblock in complianceEngine.ts for why this translation lives here, not there. */
+const LIMIT_FIELD_TO_EXTRACTED_KEY: Record<string, RequirementSnapshot["limitField"]> = {
+  each_occurrence_limit: "each_occurrence",
+  general_aggregate_limit: "general_aggregate",
+};
+
+/**
+ * The company's coverage requirements (migration 13), grouped by
+ * policy_type - the "what does this company require" side of a match
+ * decision, company-wide rather than per-vendor (see the migration's
+ * docblock for why). Not exported for reuse by documentReview.ts on
+ * purpose: the human-review approve path deliberately does not check
+ * requirements - see resolveReviewItem()'s own docblock.
+ */
+async function fetchRequirementsByType(
+  supabase: SupabaseClient,
+  companyId: string,
+): Promise<Map<string, RequirementSnapshot[]>> {
+  const { data: requirements } = await supabase
+    .from("compliance_requirements")
+    .select("label, policy_type, limit_field, required_amount")
+    .eq("company_id", companyId);
+
+  const byType = new Map<string, RequirementSnapshot[]>();
+  for (const req of (requirements ?? []) as Array<{
+    label: string;
+    policy_type: string;
+    limit_field: string;
+    required_amount: number;
+  }>) {
+    const limitField = LIMIT_FIELD_TO_EXTRACTED_KEY[req.limit_field];
+    if (!limitField) continue; // Defensive only - the DB CHECK constraint already limits this to two values.
+    const snapshot: RequirementSnapshot = {
+      label: req.label,
+      limitField,
+      requiredAmount: req.required_amount,
+    };
+    const existing = byType.get(req.policy_type);
+    if (existing) existing.push(snapshot);
+    else byType.set(req.policy_type, [snapshot]);
+  }
+  return byType;
+}
+
 /**
  * Writes one classified extracted policy to vendor_policies via
  * apply_policy_renewal() - superseding existingPolicyId if given, inserting
@@ -631,10 +676,17 @@ async function applyComplianceEngine(
   );
   if (classified.length === 0) return { allMatched, appliedPolicyId, reasons };
 
-  const existingByType = await fetchActivePoliciesByType(supabase, vendorId);
+  const [existingByType, requirementsByType] = await Promise.all([
+    fetchActivePoliciesByType(supabase, vendorId),
+    fetchRequirementsByType(supabase, companyId),
+  ]);
 
   for (const extracted of classified) {
-    const outcome = matchExtractedPolicy(extracted, existingByType.get(extracted.type) ?? null);
+    const outcome = matchExtractedPolicy(
+      extracted,
+      existingByType.get(extracted.type) ?? null,
+      requirementsByType.get(extracted.type) ?? [],
+    );
 
     if (outcome.kind !== "renew") {
       allMatched = false;

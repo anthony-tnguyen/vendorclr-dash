@@ -8,8 +8,8 @@ import {
   type VendorWithChildren,
 } from "@/data/supabaseRepository";
 import type {
+  ComplianceRequirementRow,
   VendorComplianceItemRow,
-  VendorCoverageLimitRow,
   VendorPolicyRow,
 } from "@/data/db-types";
 
@@ -51,14 +51,14 @@ function item(overrides: Partial<VendorComplianceItemRow> = {}): VendorComplianc
   };
 }
 
-function limit(overrides: Partial<VendorCoverageLimitRow> = {}): VendorCoverageLimitRow {
+function requirement(overrides: Partial<ComplianceRequirementRow> = {}): ComplianceRequirementRow {
   return {
-    id: "cl-1",
+    id: "req-1",
     company_id: "co-1",
-    vendor_id: "vnd-1",
     label: "General liability / occurrence",
+    policy_type: "general_liability",
+    limit_field: "each_occurrence_limit",
     required_amount: 2_000_000,
-    carried_amount: 2_000_000,
     sort_order: 0,
     ...TIMESTAMPS,
     ...overrides,
@@ -80,7 +80,6 @@ function vendorRow(overrides: Partial<VendorWithChildren> = {}): VendorWithChild
     ...TIMESTAMPS,
     vendor_policies: [],
     vendor_compliance_items: [],
-    vendor_coverage_limits: [],
     ...overrides,
   };
 }
@@ -156,17 +155,40 @@ describe("toComplianceItems", () => {
 });
 
 describe("toCoverageLimits", () => {
-  it("orders by sort_order and preserves required vs carried", () => {
-    const limits = toCoverageLimits([
-      limit({ id: "b", label: "Excess liability", sort_order: 1, carried_amount: 0 }),
-      limit({ id: "a", label: "General liability / occurrence", sort_order: 0 }),
-    ]);
+  it("orders by sort_order and reads carried live from the vendor's active policy", () => {
+    const limits = toCoverageLimits(
+      [
+        requirement({ id: "b", label: "Excess liability", sort_order: 1, policy_type: "umbrella" }),
+        requirement({ id: "a", label: "General liability / occurrence", sort_order: 0 }),
+      ],
+      [policy({ policy_type: "general_liability", each_occurrence_limit: 2_000_000 })],
+    );
 
     expect(limits.map((l) => l.label)).toEqual([
       "General liability / occurrence",
       "Excess liability",
     ]);
+    // No umbrella policy on file at all - carried falls back to 0, not omitted.
     expect(limits[1]).toMatchObject({ required: 2_000_000, carried: 0 });
+    expect(limits[0]).toMatchObject({ required: 2_000_000, carried: 2_000_000 });
+  });
+
+  it("reads the requirement's own limit_field, not a fixed one", () => {
+    const limits = toCoverageLimits(
+      [requirement({ limit_field: "general_aggregate_limit", required_amount: 4_000_000 })],
+      [policy({ each_occurrence_limit: 2_000_000, general_aggregate_limit: 4_000_000 })],
+    );
+
+    expect(limits[0]).toMatchObject({ required: 4_000_000, carried: 4_000_000 });
+  });
+
+  it("ignores a superseded/expired policy of the right type - carried falls back to 0", () => {
+    const limits = toCoverageLimits(
+      [requirement()],
+      [policy({ status: "superseded", each_occurrence_limit: 2_000_000 })],
+    );
+
+    expect(limits[0]?.carried).toBe(0);
   });
 });
 
@@ -176,6 +198,7 @@ describe("toVendor", () => {
       vendorRow({
         vendor_policies: [policy({ policy_number: "GL-8841-2266", expiration_date: "2026-11-30" })],
       }),
+      [],
     );
 
     expect(vendor.policyNumber).toBe("GL-8841-2266");
@@ -183,7 +206,7 @@ describe("toVendor", () => {
   });
 
   it("uses the same placeholders as the demo repository when no policy exists", () => {
-    const vendor = toVendor(vendorRow());
+    const vendor = toVendor(vendorRow(), []);
 
     expect(vendor.policyNumber).toBe("PENDING");
     expect(vendor.expiresOn).toBe("—");
@@ -192,14 +215,21 @@ describe("toVendor", () => {
   it("reports a brand new vendor as entirely non-compliant", () => {
     // The rule the whole product depends on: a vendor record existing, or a
     // document existing, is never by itself evidence of compliance.
-    const vendor = toVendor(vendorRow());
+    const vendor = toVendor(vendorRow(), []);
 
     expect(vendor.compliance).toHaveLength(5);
     expect(vendor.compliance.every((c) => c.status === "missing")).toBe(true);
   });
 
   it("maps identity and contract fields onto the UI contract", () => {
-    const vendor = toVendor(vendorRow({ vendor_coverage_limits: [limit()] }));
+    const vendor = toVendor(
+      vendorRow({
+        vendor_policies: [
+          policy({ policy_type: "general_liability", each_occurrence_limit: 2_000_000 }),
+        ],
+      }),
+      [requirement()],
+    );
 
     expect(vendor).toMatchObject({
       id: "vnd-1",

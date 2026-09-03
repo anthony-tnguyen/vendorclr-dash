@@ -111,17 +111,21 @@ begin
     where vendor_id = v_delgado
       and requirement_key in ('coi', 'additionalInsured', 'renewal');
 
-  -- Coverage limits ---------------------------------------------------------
-  insert into public.vendor_coverage_limits
-    (company_id, vendor_id, label, required_amount, carried_amount, sort_order)
+  -- Coverage requirements -----------------------------------------------------
+  -- Company-wide, not per-vendor (migration 13): every sub Halstead engages
+  -- must meet the same four requirements. Carried amounts are no longer
+  -- seeded here at all - toCoverageLimits() in supabaseRepository.ts reads
+  -- them live from each vendor's own active vendor_policies row above, so
+  -- Delgado's lapsed GL policy correctly shows carried = 0 (an expired
+  -- policy is not "carried" coverage), not the stale 1,000,000 the old
+  -- vendor_coverage_limits row here used to claim.
+  insert into public.compliance_requirements
+    (company_id, label, policy_type, limit_field, required_amount, sort_order)
   values
-    (demo_company, v_corbett, 'General liability / occurrence', 2000000, 2000000, 0),
-    (demo_company, v_corbett, 'Excess liability', 10000000, 15000000, 1),
-    (demo_company, v_corbett, 'Workers compensation', 1000000, 1000000, 2),
-    (demo_company, v_rivera, 'General liability / occurrence', 2000000, 2000000, 0),
-    (demo_company, v_rivera, 'Auto liability', 1000000, 500000, 1),
-    (demo_company, v_delgado, 'General liability / occurrence', 2000000, 1000000, 0),
-    (demo_company, v_delgado, 'Excess liability', 5000000, 0, 1);
+    (demo_company, 'General liability / occurrence', 'general_liability', 'each_occurrence_limit', 2000000, 0),
+    (demo_company, 'Excess liability', 'umbrella', 'each_occurrence_limit', 10000000, 1),
+    (demo_company, 'Workers compensation', 'workers_compensation', 'each_occurrence_limit', 1000000, 2),
+    (demo_company, 'Auto liability', 'commercial_auto', 'each_occurrence_limit', 1000000, 3);
 
   -- Tasks and review queue ---------------------------------------------------
   insert into public.tasks (company_id, vendor_id, title, due_on, priority, status, owner)

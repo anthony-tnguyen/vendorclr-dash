@@ -23,7 +23,7 @@ Four phases so far:
 | Migration | Contents |
 |---|---|
 | `20260901000100_identity_and_tenancy.sql` | `profiles`, `companies`, `company_members`, `platform_admins`, the RLS helper functions, signup provisioning |
-| `20260901000200_vendor_domain.sql` | `vendors`, `vendor_policies`, `vendor_compliance_items`, `vendor_coverage_limits` |
+| `20260901000200_vendor_domain.sql` | `vendors`, `vendor_policies`, `vendor_compliance_items`, `vendor_coverage_limits` (dropped in migration 13) |
 | `20260901000300_tasks_queue_leads_and_views.sql` | `tasks`, `compliance_queue_items`, `leads`, and the report/admin views |
 | `20260901000400_vendor_upload_requests_and_documents.sql` | `vendor_upload_requests`, `vendor_documents`, `email_outbox`, the private `vendor-documents` storage bucket |
 | `20260902000100_security_and_performance_hardening.sql` | Fixes discovered by applying 1-4 to a real project and running Supabase's advisor — see [Security model](#security-model) |
@@ -33,6 +33,7 @@ Four phases so far:
 | `20260902000500_renewal_reminders.sql` | `policy_reminder_log`, `current_reminder_threshold()`, `policies_due_for_reminder`; widens `email_outbox.template` to add `renewal_reminder` |
 | `20260902000600_schedule_renewal_reminders.sql` | Enables `pg_cron`/`pg_net`, schedules a daily call into the `send-renewal-reminders` Edge Function — see [Renewal reminders](#renewal-reminders) |
 | `20260902000700_review_queue.sql` | Adds `document_id`, `resolution`, `resolution_note`, `resolved_at`, and a `'resolved'` state to `compliance_queue_items` — see [The review queue screen](#the-review-queue-screen) |
+| `20260902000800_compliance_requirements.sql` | Drops `vendor_coverage_limits`; adds `compliance_requirements` — see [Matching against coverage requirements](#matching-against-coverage-requirements) |
 
 The headline modelling change: **a vendor no longer owns one flat policy.**
 `Vendor.policyNumber` / `Vendor.expiresOn` in `src/data/contracts.ts` could hold
@@ -284,15 +285,17 @@ either. A certificate that explicitly says `false` also reads as `"missing"`:
 mean the requirement isn't satisfied yet, which is the only fact the rail
 needs to convey.
 
-**`vendor_coverage_limits.carried_amount` is deliberately not auto-updated
-here.** That table pairs `required_amount` (what a client needs) with
-`carried_amount` (what a vendor has) under a free-text `label` with no fixed
-vocabulary tying it to a `policy_type` - there is no reliable way to match an
-extracted `each_occurrence`/`general_aggregate` limit back to the right label
-row for a given vendor without guessing. `vendor_policies.each_occurrence_limit`/
-`general_aggregate_limit` *are* updated precisely, by `policy_type`, and are
-the correct source of truth for carried limits going forward. See
-[Known compromises](#known-compromises).
+**Carried coverage limits need nothing updated here at all**, unlike every
+other write in this section - `vendor_policies.each_occurrence_limit`/
+`general_aggregate_limit` are already updated precisely, by `policy_type`,
+by `applyOnePolicyLine()` above. `toCoverageLimits()`
+(`supabaseRepository.ts`) reads them from there live, matched against
+`compliance_requirements` by `policy_type` - see
+[Matching against coverage requirements](#matching-against-coverage-requirements).
+This used not to be true: `vendor_coverage_limits` paired `required_amount`
+with a `carried_amount` column under a free-text `label` with no fixed
+vocabulary tying it to a `policy_type`, so there was no reliable way to
+auto-update it - see migration 13.
 
 ### Notification emails
 
@@ -451,6 +454,48 @@ give a resolved item somewhere to go - `listQueue()` now excludes it, since
 the queue's own subtitle is "awaiting reviewer action," while the outcome
 stays on the row for anyone who opens it directly.
 
+### Matching against coverage requirements
+
+Migration 13 closes the last gap the compliance engine had left open since
+Phase 3: it could tell you whether a renewal was internally consistent with
+what was already on file, but never whether a vendor actually carried what
+the client *requires*. A clean renewal of an already-under-limit policy
+sailed through unchanged, forever.
+
+`compliance_requirements` is the missing half - what a company requires,
+company-wide (not per-vendor: "every sub must carry $2M GL" is a company
+policy, not a per-vendor fact; per-trade/per-contract tiering is real future
+work, see Known compromises), each row naming both a `policy_type` and which
+`vendor_policies` column (`limit_field`: `each_occurrence_limit` or
+`general_aggregate_limit`) it checks - the piece that makes a requirement
+machine-comparable against an extracted certificate for the first time,
+not just a second copy of a number a human already knew.
+
+Two places read it:
+
+- **`matchExtractedPolicy()`** (`complianceEngine.ts`) now takes the
+  requirements for the extracted policy's type as a third argument, and
+  checks them *last* - after carrier, policy number, and date have already
+  passed - so an otherwise-clean renewal that falls below a required limit
+  still gets a specific `needs_review` reason instead of auto-applying. A
+  missing/null extracted amount fails the check the same as an explicit
+  shortfall - never silently passed, the same tri-state rule
+  `computeComplianceItems()` already follows. `new_coverage` lines are never
+  checked - they never auto-apply regardless of amount, so there is nothing
+  the check would change. The review screen's approve action deliberately
+  bypasses this (see Known compromises) - a human override, same as it
+  overrides every other reason.
+- **`toCoverageLimits()`** (`supabaseRepository.ts`) is what a vendor's
+  detail page actually renders: for each of the company's requirements, the
+  vendor's own **active** policy of that `policy_type` supplies the carried
+  amount, read live - 0 if the vendor carries no active policy of that type
+  at all (including "only an expired one"). This is the same
+  `vendor_coverage_limits` UI, `CoverageLimit`, unchanged - only where the
+  numbers come from changed. `vendor_coverage_limits` itself is dropped, not
+  migrated: nothing ever wrote to it besides `supabase/seed.sql`'s sample
+  data, and its `carried_amount` column was a second, never-auto-updated
+  copy of a number `vendor_policies` already tracks precisely.
+
 ## Security model
 
 Tenancy is enforced in the database, not in React.
@@ -554,7 +599,10 @@ policies excluded) and cross-tenant RLS isolation, and
 project for instead; and (migration 12) `compliance_queue_items.document_id`
 setting to null rather than erroring when its document is deleted, and the
 resolved/resolution pairing constraint in both directions (a resolved item
-must carry a resolution, a non-resolved item must not). The harness stubs a minimal
+must carry a resolution, a non-resolved item must not); and (migration 13)
+`compliance_requirements`' RLS boundary (a `read_only` member cannot create
+one, a rival company cannot see one), its `policy_type`/`limit_field` CHECK
+constraints, and the one-label-per-company uniqueness. The harness stubs a minimal
 `storage.objects`/`storage.buckets` schema (PGlite has no `storage` schema of
 its own) — see `supabase/tests/harness.ts`.
 
@@ -567,8 +615,17 @@ key or network call needed) - not-configured, high/low confidence routing,
 markdown-fence stripping, invalid JSON, a thrown API error, and a model refusal.
 `src/tests/compliance-engine.test.ts` covers `matchExtractedPolicy()` and
 `computeComplianceItems()` - every match outcome, the deliberate `null` !=
-`"compliant"` handling, and that `lienWaiver` is never touched by a
-certificate-of-insurance extraction. `src/tests/email.test.ts` also covers the
+`"compliant"` handling, that `lienWaiver` is never touched by a
+certificate-of-insurance extraction, and (migration 13) the
+`compliance_requirements` gate specifically: a shortfall on an
+otherwise-clean renewal, a missing extracted amount treated as a shortfall
+rather than skipped, checking every requirement rather than stopping at the
+first, and that `new_coverage` is never gated at all since it never
+auto-applies regardless. `src/tests/supabase-repository.test.ts` covers
+`toCoverageLimits()` reading carried amounts live from a vendor's active
+policy, by the requirement's own `limit_field`, falling back to 0 for a
+missing/superseded/expired policy of the required type.
+`src/tests/email.test.ts` also covers the
 new `documentReceived`/`adminReviewNeeded` templates specifically for the
 property that matters most: the vendor-facing copy never leaks a
 matching-engine reason, while the admin-facing copy always includes it.
@@ -590,10 +647,14 @@ Deliberate, and worth revisiting as later phases grow on top of them:
 - **`vendors.trade` stores display strings** (`'Mechanical / HVAC'`) to match the
   `VendorTrade` union 1:1 with no mapping layer. Move to a lookup table before
   trade filtering or localisation.
-- **`vendor_coverage_limits` co-locates required and carried amounts.** Required
-  belongs on a per-company `compliance_requirements` table; carried belongs on
-  `vendor_policies`. They are together only because the current `CoverageLimit`
-  contract pairs them.
+- **`compliance_requirements` is company-wide, not trade/contract-tiered.**
+  Every vendor of a company shares the same required limits today - a real
+  construction GC compliance program often wants more (a $50M glazing job
+  probably wants a higher GL limit than a $200K one). Deliberately out of
+  scope for migration 13: the actual new capability that migration adds
+  (limits are machine-comparable at all, for the first time) stands on its
+  own without also solving per-vendor tiering in the same pass. See
+  [Matching against coverage requirements](#matching-against-coverage-requirements).
 - **`compliance_queue_items` is a real table**, now written to by
   `uploadDocumentForToken()`/`reprocessDocument()` as well as staff. A future
   pass should derive it from a real processing-jobs table and drop it.
@@ -622,18 +683,6 @@ Deliberate, and worth revisiting as later phases grow on top of them:
   `supabase gen types typescript --project-id <ref> > src/data/db-types.ts`, then
   add the generic back to `VendorClearClient` and drop the casts in
   `supabaseRepository.ts`.
-- **`vendor_coverage_limits.carried_amount` is not kept in sync with
-  `vendor_policies`.** A successful auto-renewal updates
-  `vendor_policies.each_occurrence_limit`/`general_aggregate_limit` precisely,
-  but the free-text `label` on `vendor_coverage_limits` (what the existing
-  Coverage Limits UI reads) has no fixed vocabulary tying it to a
-  `policy_type`, so there is no reliable way to auto-update it without
-  guessing which label row a given extracted limit belongs to. Split
-  `required_amount` onto a real `compliance_requirements` table and read
-  `carried_amount` live from `vendor_policies` instead of storing it
-  redundantly - see the `vendor_coverage_limits` compromise above, which this
-  sharpens now that one side of the pair (`vendor_policies`) is a live,
-  auto-updated source of truth and the other (`vendor_coverage_limits`) isn't.
 - **`notifyDocumentOutcome()` emails every company owner individually**,
   rather than one email with every recipient, or a digest. Fine at current
   scale (a company typically has one owner); revisit if a company with
@@ -660,6 +709,14 @@ Deliberate, and worth revisiting as later phases grow on top of them:
   per-line approval and editable fields once a common review reason becomes
   "the extraction is close but slightly wrong" rather than "the change
   itself needs a person's judgment."
+- **The review screen's approve does not check `compliance_requirements`.**
+  A reviewer can knowingly apply a certificate below what the company
+  requires - the same human-override reasoning as approving a changed
+  carrier. The shortfall is still visible afterward on the vendor's own
+  Coverage Limits table (carried amounts are read live), just not surfaced
+  *during* the review decision itself - would be a natural addition to the
+  review screen once it's clear reviewers want that context in the moment
+  rather than checking the vendor detail page separately after.
 
 ## What is still not built
 
@@ -670,14 +727,6 @@ confidence-scored JSON; and, when a deterministic match says it's safe, apply
 that JSON to `vendor_policies` and roll the compliance rail forward
 automatically. What's not built yet:
 
-- **Matching against what a client actually *requires*, not just what changed.**
-  The Phase 3 engine answers "is this a clean renewal of what was already on
-  file" - it does not yet check the result against a client's stated
-  requirements (a specific limit, additional-insured, a waiver). That
-  determination needs the `compliance_requirements` table flagged in
-  [Known compromises](#known-compromises); today `vendor_coverage_limits`
-  holds required amounts but nothing compares them against what a policy
-  actually carries.
 - **Hardening (Phase 4).** Audit log, an automated (not just manually-invoked)
   retry queue, email bounce handling, malware/file-content checks beyond
   mime-type and size, upload-request cancellation UI, admin review tools.
