@@ -28,6 +28,7 @@ describe("migrations", () => {
     const names = result.rows.map((r) => r.table_name).sort();
 
     expect(names).toEqual([
+      "audit_log",
       "companies",
       "company_members",
       "compliance_queue_items",

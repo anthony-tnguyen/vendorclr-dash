@@ -72,19 +72,27 @@ import {
 
 /**
  * Confirms the calling session belongs to VendorClear staff before a server
- * function drops from the request-scoped client to the service role.
- * is_platform_admin() runs through the request-scoped client so it is
- * decided by RLS/auth.uid() exactly as any other authenticated call would
- * be - this cannot be spoofed by a caller claiming to be an admin, only by
- * actually being one in platform_admins. Throws rather than returning a
+ * function drops from the request-scoped client to the service role, and
+ * returns that caller's own user id - needed to attribute an audit_log row
+ * (migration 14) to a real actor, since the service role client used for
+ * the actual work afterward has no bound session of its own for
+ * auth.uid() to resolve. Both RPCs run through the request-scoped client so
+ * they are decided by RLS/auth.uid() exactly as any other authenticated
+ * call would be - neither can be spoofed by a caller claiming to be an
+ * admin or claiming to be someone else. Throws rather than returning a
  * boolean: every caller of this wants "stop here" on failure, not a value to
  * remember to check. Exported for documentReview.ts, which needs the same
  * check before its own service-role reads/writes.
  */
-export async function assertPlatformAdmin(): Promise<void> {
+export async function assertPlatformAdmin(): Promise<string> {
   const supabase = getRequestScopedClient();
-  const { data: isAdmin, error } = await supabase.rpc("is_platform_admin");
-  if (error || !isAdmin) throw new Error("This action is limited to VendorClear staff accounts.");
+  const { data: isAdmin, error: adminError } = await supabase.rpc("is_platform_admin");
+  if (adminError || !isAdmin) {
+    throw new Error("This action is limited to VendorClear staff accounts.");
+  }
+  const { data: userId, error: idError } = await supabase.rpc("current_user_id");
+  if (idError || !userId) throw new Error("Could not identify the signed-in account.");
+  return userId;
 }
 
 function bareVendorUploadUrl(): string {
@@ -224,6 +232,19 @@ export const createUploadRequest = createServerFn({ method: "POST" })
         .update({ status: "email_sent" })
         .eq("id", request.id);
     }
+
+    // actor_id is left unset - it defaults to auth.uid() (migration 14),
+    // correct here because this insert runs on the request-scoped client:
+    // the caller IS the actor, a genuine company member, not staff acting on
+    // someone else's behalf the way resolveReviewItem()/reprocessDocument()
+    // do on the service role.
+    await supabase.from("audit_log").insert({
+      company_id: vendorRow.company_id,
+      action: "upload_request_created",
+      target_type: "vendor",
+      target_id: vendorRow.id,
+      detail: { requestId: request.id, purpose: data.purpose, emailStatus: sendResult.status },
+    });
 
     return {
       requestId: request.id,
@@ -724,6 +745,34 @@ async function applyComplianceEngine(
 }
 
 /**
+ * Every company owner's email, by company_id. Two queries, not a PostgREST
+ * embed: company_members and profiles both independently reference
+ * auth.users, with no FK between the two of them, so PostgREST has no
+ * relationship to embed through (`profiles ( email )` off company_members
+ * fails with PGRST200 - confirmed live, not a guess). Exported so anything
+ * else needing "this company's owners' emails" reaches for this instead of
+ * rediscovering the same mistake.
+ */
+export async function fetchOwnerEmails(
+  supabase: SupabaseClient,
+  companyId: string,
+): Promise<string[]> {
+  const { data: owners } = await supabase
+    .from("company_members")
+    .select("user_id")
+    .eq("company_id", companyId)
+    .eq("role", "owner");
+
+  const ownerUserIds = ((owners ?? []) as Array<{ user_id: string }>).map((o) => o.user_id);
+  if (ownerUserIds.length === 0) return [];
+
+  const { data: profiles } = await supabase.from("profiles").select("email").in("id", ownerUserIds);
+  return ((profiles ?? []) as Array<{ email: string }>)
+    .map((p) => p.email)
+    .filter((email): email is string => Boolean(email));
+}
+
+/**
  * Emails the vendor (always, whatever the outcome) and the company's owner(s)
  * (only when a human needs to act). Never throws - a bad send must not undo
  * the extraction/compliance-engine work that already committed, the same
@@ -788,17 +837,15 @@ async function notifyDocumentOutcome(
     }
 
     if (params.finalStatus === "needs_review" || params.finalStatus === "failed") {
-      const { data: owners } = await supabase
-        .from("company_members")
-        .select("profiles ( email )")
-        .eq("company_id", params.companyId)
-        .eq("role", "owner");
-
-      const ownerEmails = (
-        (owners ?? []) as unknown as Array<{ profiles: { email: string } | null }>
-      )
-        .map((row) => row.profiles?.email)
-        .filter((email): email is string => Boolean(email));
+      // Two steps, not a PostgREST embed (`profiles ( email )` off
+      // company_members): there is no FK from company_members to profiles -
+      // both independently reference auth.users - so PostgREST cannot embed
+      // one through the other. That embed shipped and silently never worked
+      // (confirmed live: PGRST200, "no relationship found"); the enclosing
+      // try/catch this whole block lives in swallowed the error every time,
+      // so admin_review_needed has never actually reached an owner. Fixed
+      // here - see fetchOwnerEmails() below.
+      const ownerEmails = await fetchOwnerEmails(supabase, params.companyId);
 
       if (ownerEmails.length > 0) {
         const sender = getEmailSender();
@@ -948,7 +995,7 @@ export interface ReprocessDocumentResult {
 export const reprocessDocument = createServerFn({ method: "POST" })
   .validator(reprocessDocumentSchema)
   .handler(async ({ data }): Promise<ReprocessDocumentResult> => {
-    await assertPlatformAdmin();
+    const actorId = await assertPlatformAdmin();
     const supabase = getServiceRoleClient();
 
     const { data: doc, error: docError } = await supabase
@@ -985,6 +1032,15 @@ export const reprocessDocument = createServerFn({ method: "POST" })
       documentFileName: doc.file_name,
       queueItemId: queueItem?.id ?? null,
       extraction,
+    });
+
+    await supabase.from("audit_log").insert({
+      company_id: doc.company_id,
+      actor_id: actorId,
+      action: "document_reprocessed",
+      target_type: "vendor_document",
+      target_id: doc.id,
+      detail: { extractionStatus: extraction.status },
     });
 
     return { status: extraction.status };
