@@ -7,25 +7,30 @@ const SAMPLE_INPUT = {
   mimeType: "application/pdf",
 };
 
-const HIGH_CONFIDENCE_EXTRACTION = {
-  document_type: "ACORD_25",
-  insured: { name: "Corbett Structural Steel", address: null },
-  producer: { name: "Acme Brokers" },
+/** Shape confirmed against the worker's actual source, read from the Cloudflare dashboard - see insuranceExtractionWorker.ts's docblock. */
+const WORKER_SUCCESS_RESPONSE = {
+  success: true,
+  version: "1.0",
+  named_insured: "Corbett Structural Steel",
+  producer_agent: "Acme Brokers",
+  certificate_holder: "Halstead Builders",
+  compliance_status: "PASS",
+  max_coverage: 2_000_000,
+  missing_endorsements: null,
   policies: [
     {
-      type: "general_liability",
-      carrier: "Travelers",
+      coverage_type: "Commercial General Liability",
+      carrier_name: "Travelers",
       policy_number: "GL-1",
       effective_date: "2025-11-30",
       expiration_date: "2026-11-30",
-      limits: { each_occurrence: 2_000_000, general_aggregate: 4_000_000 },
+      limit_each_occurrence: 2_000_000,
       additional_insured: true,
-      waiver_of_subrogation: true,
+      subrogation_waived: true,
+      status: "ACTIVE",
+      days_until_expiration: 90,
     },
   ],
-  certificate_holder: { name: "Halstead Builders", address: null },
-  overall_confidence: 0.95,
-  notes: null,
 };
 
 function jsonResponse(body: unknown, init: { status?: number } = {}) {
@@ -36,116 +41,116 @@ function jsonResponse(body: unknown, init: { status?: number } = {}) {
 }
 
 describe("createWorkerExtractor", () => {
-  it("sends the file as multipart/form-data with a bearer auth header", async () => {
-    let capturedUrl: unknown;
+  it("sends the file as multipart/form-data under field name 'pdfData'", async () => {
     let capturedInit: RequestInit | undefined;
-    const fetchImpl = vi.fn(async (url: unknown, init?: RequestInit) => {
-      capturedUrl = url;
+    const fetchImpl = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
       capturedInit = init;
-      return jsonResponse(HIGH_CONFIDENCE_EXTRACTION);
+      return jsonResponse(WORKER_SUCCESS_RESPONSE);
     });
 
-    await createWorkerExtractor("https://worker.example/extract", "secret-key", fetchImpl).extract(
+    await createWorkerExtractor("https://worker.example/", "secret-key", fetchImpl).extract(
       SAMPLE_INPUT,
     );
 
-    expect(capturedUrl).toBe("https://worker.example/extract");
     expect(capturedInit?.method).toBe("POST");
     expect((capturedInit?.headers as Record<string, string>)["Authorization"]).toBe(
       "Bearer secret-key",
     );
-    expect(capturedInit?.body).toBeInstanceOf(FormData);
     const form = capturedInit?.body as FormData;
-    expect(form.get("file")).toBeInstanceOf(Blob);
-    expect(form.get("mimeType")).toBe("application/pdf");
+    expect(form).toBeInstanceOf(FormData);
+    expect(form.get("pdfData")).toBeInstanceOf(Blob);
+    expect(form.get("file")).toBeNull();
   });
 
-  it("returns processed with the parsed data when the extraction is at the top level", async () => {
-    const fetchImpl = vi.fn(async () => jsonResponse(HIGH_CONFIDENCE_EXTRACTION));
+  it("maps the worker's real field names onto InsuranceExtractionSchema and always routes to needs_review", async () => {
+    const fetchImpl = vi.fn(async () => jsonResponse(WORKER_SUCCESS_RESPONSE));
 
     const result = await createWorkerExtractor("https://worker.example", "key", fetchImpl).extract(
       SAMPLE_INPUT,
     );
 
-    expect(result.status).toBe("processed");
-    expect(result.confidence).toBe(0.95);
-    expect(result.data?.policies[0]?.carrier).toBe("Travelers");
+    // Always needs_review, never processed - the worker reports no confidence of its own.
+    expect(result.status).toBe("needs_review");
     expect(result.error).toBeNull();
-  });
-
-  it("unwraps a { data: ... } envelope", async () => {
-    const fetchImpl = vi.fn(async () => jsonResponse({ data: HIGH_CONFIDENCE_EXTRACTION }));
-
-    const result = await createWorkerExtractor("https://worker.example", "key", fetchImpl).extract(
-      SAMPLE_INPUT,
-    );
-
-    expect(result.status).toBe("processed");
-    expect(result.data?.policies[0]?.carrier).toBe("Travelers");
-  });
-
-  it("unwraps a { result: ... } envelope", async () => {
-    const fetchImpl = vi.fn(async () => jsonResponse({ result: HIGH_CONFIDENCE_EXTRACTION }));
-
-    const result = await createWorkerExtractor("https://worker.example", "key", fetchImpl).extract(
-      SAMPLE_INPUT,
-    );
-
-    expect(result.status).toBe("processed");
-    expect(result.data?.policies[0]?.carrier).toBe("Travelers");
-  });
-
-  it("routes a low-confidence but schema-valid response to needs_review, not processed", async () => {
-    const lowConfidence = { ...HIGH_CONFIDENCE_EXTRACTION, overall_confidence: 0.3 };
-    const fetchImpl = vi.fn(async () => jsonResponse(lowConfidence));
-
-    const result = await createWorkerExtractor("https://worker.example", "key", fetchImpl).extract(
-      SAMPLE_INPUT,
-    );
-
-    expect(result.status).toBe("needs_review");
-    expect(result.confidence).toBe(0.3);
-    expect(result.data).not.toBeNull();
-  });
-
-  it("routes schema-invalid JSON to needs_review with a validation error, not a throw", async () => {
-    const fetchImpl = vi.fn(async () => jsonResponse({ nothing: "useful" }));
-
-    const result = await createWorkerExtractor("https://worker.example", "key", fetchImpl).extract(
-      SAMPLE_INPUT,
-    );
-
-    expect(result.status).toBe("needs_review");
-    expect(result.data).toBeNull();
-    expect(result.error).toBeTruthy();
-  });
-
-  it("normalizes a synonym policy-type string exactly like the Claude path does", async () => {
-    const raw = {
-      ...HIGH_CONFIDENCE_EXTRACTION,
-      policies: [
-        { ...HIGH_CONFIDENCE_EXTRACTION.policies[0], type: "Commercial General Liability" },
-      ],
-    };
-    const fetchImpl = vi.fn(async () => jsonResponse(raw));
-
-    const result = await createWorkerExtractor("https://worker.example", "key", fetchImpl).extract(
-      SAMPLE_INPUT,
-    );
-
-    expect(result.status).toBe("processed");
+    expect(result.data?.insured.name).toBe("Corbett Structural Steel");
+    expect(result.data?.producer.name).toBe("Acme Brokers");
+    expect(result.data?.certificate_holder.name).toBe("Halstead Builders");
     expect(result.data?.policies[0]?.type).toBe("general_liability");
+    expect(result.data?.policies[0]?.carrier).toBe("Travelers");
+    expect(result.data?.policies[0]?.policy_number).toBe("GL-1");
+    expect(result.data?.policies[0]?.limits.each_occurrence).toBe(2_000_000);
+    // The worker never extracts general_aggregate - always null, not omitted or guessed.
+    expect(result.data?.policies[0]?.limits.general_aggregate).toBeNull();
+    expect(result.data?.policies[0]?.additional_insured).toBe(true);
+    expect(result.data?.policies[0]?.waiver_of_subrogation).toBe(true);
   });
 
-  it("returns failed, not a thrown exception, on a non-2xx response", async () => {
-    const fetchImpl = vi.fn(async () => jsonResponse({ error: "boom" }, { status: 500 }));
+  it.each(["Automobile", "Umbrella", "Workers Compensation"])(
+    "normalizes the worker's own prompt example coverage_type %s",
+    async (coverageType) => {
+      const response = {
+        ...WORKER_SUCCESS_RESPONSE,
+        policies: [{ ...WORKER_SUCCESS_RESPONSE.policies[0], coverage_type: coverageType }],
+      };
+      const fetchImpl = vi.fn(async () => jsonResponse(response));
+
+      const result = await createWorkerExtractor(
+        "https://worker.example",
+        "key",
+        fetchImpl,
+      ).extract(SAMPLE_INPUT);
+
+      expect(result.data?.policies[0]?.type).not.toBeNull();
+    },
+  );
+
+  it("treats a 0 each_occurrence limit as not-determinable, not a real $0 limit", async () => {
+    const response = {
+      ...WORKER_SUCCESS_RESPONSE,
+      policies: [{ ...WORKER_SUCCESS_RESPONSE.policies[0], limit_each_occurrence: 0 }],
+    };
+    const fetchImpl = vi.fn(async () => jsonResponse(response));
+
+    const result = await createWorkerExtractor("https://worker.example", "key", fetchImpl).extract(
+      SAMPLE_INPUT,
+    );
+
+    expect(result.data?.policies[0]?.limits.each_occurrence).toBeNull();
+  });
+
+  it("folds missing_endorsements into notes for a reviewer, without acting on it", async () => {
+    const response = { ...WORKER_SUCCESS_RESPONSE, missing_endorsements: ["Workers Compensation"] };
+    const fetchImpl = vi.fn(async () => jsonResponse(response));
+
+    const result = await createWorkerExtractor("https://worker.example", "key", fetchImpl).extract(
+      SAMPLE_INPUT,
+    );
+
+    expect(result.data?.notes).toContain("Workers Compensation");
+  });
+
+  it("discards the worker's own compliance_status/max_coverage - not surfaced anywhere on the result", async () => {
+    const fetchImpl = vi.fn(async () => jsonResponse(WORKER_SUCCESS_RESPONSE));
+
+    const result = await createWorkerExtractor("https://worker.example", "key", fetchImpl).extract(
+      SAMPLE_INPUT,
+    );
+
+    expect(JSON.stringify(result)).not.toContain("PASS");
+    expect(JSON.stringify(result)).not.toContain("compliance_status");
+  });
+
+  it("returns failed, not a thrown exception, on { success: false, error } responses", async () => {
+    const fetchImpl = vi.fn(async () =>
+      jsonResponse({ success: false, error: "GCP Token Error: invalid_grant" }, { status: 500 }),
+    );
 
     const result = await createWorkerExtractor("https://worker.example", "key", fetchImpl).extract(
       SAMPLE_INPUT,
     );
 
     expect(result.status).toBe("failed");
-    expect(result.error).toContain("500");
+    expect(result.error).toContain("GCP Token Error");
   });
 
   it("returns failed when the response body is not valid JSON", async () => {
@@ -173,5 +178,17 @@ describe("createWorkerExtractor", () => {
 
     expect(result.status).toBe("failed");
     expect(result.error).toContain("network down");
+  });
+
+  it("does not crash on a malformed policies field - defaults to an empty array instead", async () => {
+    const response = { ...WORKER_SUCCESS_RESPONSE, policies: "not-an-array" };
+    const fetchImpl = vi.fn(async () => jsonResponse(response));
+
+    const result = await createWorkerExtractor("https://worker.example", "key", fetchImpl).extract(
+      SAMPLE_INPUT,
+    );
+
+    expect(result.status).toBe("needs_review");
+    expect(result.data?.policies).toEqual([]);
   });
 });

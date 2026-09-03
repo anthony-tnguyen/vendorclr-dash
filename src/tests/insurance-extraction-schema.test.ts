@@ -94,6 +94,13 @@ describe("normalizePolicyType", () => {
     expect(normalizePolicyType("Builder's Risk")).toBe("builders_risk");
   });
 
+  it("maps the Cloudflare Worker extractor's own prompt examples (Automobile, bare Umbrella)", () => {
+    // insuranceExtractionWorker.ts's coverage_type schema prompts its model with
+    // exactly these words - see that file's docblock.
+    expect(normalizePolicyType("Automobile")).toBe("commercial_auto");
+    expect(normalizePolicyType("Umbrella")).toBe("umbrella");
+  });
+
   it("is case-insensitive and trims whitespace", () => {
     expect(normalizePolicyType("  COMMERCIAL AUTO  ")).toBe("commercial_auto");
   });

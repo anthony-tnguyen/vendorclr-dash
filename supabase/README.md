@@ -178,28 +178,40 @@ interface and the same `InsuranceExtractionSchema` validation
 (`validateExtraction()`, shared so normalization/zod-checking never drifts
 between backends):
 
-1. A separately-deployed Cloudflare Worker (`createWorkerExtractor()`,
-   `src/workflows/insuranceExtractionWorker.ts`) when `COI_WORKER_URL` and
-   `COI_WORKER_API_KEY` are both set - the primary path once configured.
-   POSTs the file as `multipart/form-data` with `Authorization: Bearer
-   <key>`, expects a JSON response with the extraction either at the top
-   level or wrapped under `data`/`result`. **This wire contract was written
-   from a description of the worker, not confirmed against a live call** -
-   see the file's own docblock before relying on it in production.
-2. `createAnthropicExtractor()` (unchanged, `claude-opus-5`) when the worker
-   isn't configured but `ANTHROPIC_API_KEY` is - the only implementation
-   until this pass, kept as a fallback so an environment mid-migration to
-   the worker doesn't regress to unprocessed uploads if the worker is
-   unreachable.
-3. A stub returning `not_configured` when neither is set.
+1. A separately-deployed Cloudflare Worker ("vendor-clear-parser";
+   `createWorkerExtractor()`, `src/workflows/insuranceExtractionWorker.ts`)
+   for **PDF uploads only**, when `COI_WORKER_URL` and `COI_WORKER_API_KEY`
+   are both set. POSTs the file as `multipart/form-data` under field name
+   `pdfData` - confirmed against the worker's actual source (read directly
+   from the Cloudflare dashboard; it has never lived in this repo's git
+   history), not assumed. The worker's response shares almost no field names
+   with `InsuranceExtractionSchema` and reports no confidence score of its
+   own, so `insuranceExtractionWorker.ts` is a real translation layer, not a
+   thin adapter - see that file's docblock for the exact mapping and for why
+   a worker-sourced result always lands as `needs_review`, never
+   `processed`. Routed by `mimeType`, not by which backend is "primary": a
+   non-PDF upload skips the worker entirely and goes straight to (2), since
+   the worker hardcodes `mimeType: "application/pdf"` in its own call to its
+   model backend regardless of what was actually uploaded.
+2. `createAnthropicExtractor()` (unchanged, `claude-opus-5`) for everything
+   the worker doesn't handle - every input when `COI_WORKER_URL`/
+   `COI_WORKER_API_KEY` aren't set, or any non-PDF input when they are. Was
+   the only implementation until this pass; still the only one that handles
+   images at all.
+3. A stub returning `not_configured` when neither backend is set.
+
+**Known gap, not fixable from this side of the integration**: the worker
+currently checks no authentication at all - it calls its own (paid, Google
+Vertex AI) backend for any request, regardless of what `Authorization`
+header is sent. `COI_WORKER_API_KEY` is sent as a Bearer token so nothing
+here has to change once a real check exists, but until then that key
+provides no actual protection. See Known compromises.
 
 `retry-failed-documents` (the automated retry Edge Function, below) has
 **not** been updated to call the worker - it still calls Claude directly via
 its own Deno-ported copy of this same logic. Porting it is a deliberate
 follow-up, not an oversight: doing so doubles the size of this change for a
-secondary recovery path, and the two backends already disagreeing here is a
-smaller inconsistency than shipping the worker integration untested against
-its actual response shape.
+secondary recovery path.
 
 **No OCR, no `pdf-parse`.** The original design for this phase split text
 extraction and OCR into two steps with a fallback between them. Claude reads a
@@ -1056,6 +1068,34 @@ Deliberate, and worth revisiting as later phases grow on top of them:
   the deployed function. `RESEND_API_KEY` itself is also still unset, so
   no real email has gone out to bounce yet either - there is no live
   webhook to receive until both exist.
+- **The Cloudflare Worker COI parser (`vendor-clear-parser`) checks no
+  authentication at all.** Confirmed by reading its actual source (it has
+  never lived in this repo's git history - only in the Cloudflare
+  dashboard's own editor): the `fetch` handler goes straight from an
+  `OPTIONS`/health-check short-circuit to calling its own paid Google
+  Vertex AI backend on any `POST`, with no check of any header or
+  credential. `COI_WORKER_API_KEY` (`src/workflows/insuranceExtractionWorker.ts`)
+  is sent as a Bearer token so nothing on this side has to change once a
+  real check exists, but until then it provides no actual protection -
+  anyone who finds the worker's URL can run up its owner's GCP bill. Not
+  fixable from this repository; needs a header check added directly in the
+  worker's own (currently unversioned) source.
+- **The worker also hardcodes `mimeType: "application/pdf"`** in its own
+  call to Vertex AI regardless of what file was actually sent, so
+  `getDocumentExtractor()` only ever routes PDF uploads to it - a JPG/PNG
+  upload goes to the Claude fallback instead. Same reason as above: the
+  worker's source is not under this project's control to fix directly.
+- **The worker's own `compliance_status`/`max_coverage`/`missing_endorsements`
+  judgment is discarded, not used.** It computes "is this compliant" with no
+  knowledge of what a vendor already has on file - only this project's own
+  `matchExtractedPolicy()`/`computeComplianceItems()` (Phase 3) makes that
+  call. `missing_endorsements` is folded into the extraction's `notes` field
+  as context for a human reviewer only.
+- **A worker-sourced extraction never reaches `processed`, only
+  `needs_review`, no matter how complete it looks** - the worker reports no
+  confidence score of its own, and `overall_confidence` is never guessed on
+  its behalf. This is a deliberate, permanent property of this backend, not
+  a bug to fix later.
 
 ## What is still not built
 

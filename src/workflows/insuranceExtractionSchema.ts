@@ -111,6 +111,12 @@ const POLICY_TYPE_SYNONYMS: Record<string, PolicyType> = {
   "commercial auto liability": "commercial_auto",
   "auto liability": "commercial_auto",
   "business auto": "commercial_auto",
+  automobile: "commercial_auto",
+  // Bare "umbrella" is already the exact enum value, but normalizePolicyType()'s
+  // exact-match check is case-sensitive - the Cloudflare Worker extractor
+  // (insuranceExtractionWorker.ts) prompts its model with exactly "Umbrella" as
+  // an example coverage_type, so this entry is what actually catches it.
+  umbrella: "umbrella",
   "umbrella liability": "umbrella",
   "excess liability": "umbrella",
   "excess/umbrella liability": "umbrella",

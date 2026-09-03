@@ -12,24 +12,40 @@ import {
  * Document -> structured JSON, server-side only. Same pluggable-provider
  * shape as emailSender.ts, now three deep instead of two:
  *
- *   1. A Cloudflare Worker-backed implementation (createWorkerExtractor(),
- *      insuranceExtractionWorker.ts) when COI_WORKER_URL and
- *      COI_WORKER_API_KEY are both set - the primary path once configured.
+ *   1. A separately-deployed Cloudflare Worker ("vendor-clear-parser";
+ *      createWorkerExtractor(), insuranceExtractionWorker.ts) for PDF
+ *      uploads, when COI_WORKER_URL and COI_WORKER_API_KEY are both set -
+ *      the primary path once configured, but PDF-only: the worker
+ *      hardcodes `mimeType: "application/pdf"` in its own call to its
+ *      model backend regardless of what was actually uploaded (confirmed
+ *      by reading its source - it has never lived in this repo's git
+ *      history, only in the Cloudflare dashboard's own editor), so a
+ *      JPG/PNG upload is routed to (2)/(3) below instead of ever reaching
+ *      it. See insuranceExtractionWorker.ts's docblock for the full
+ *      mapping from its actual response shape to InsuranceExtractionSchema,
+ *      and for why a worker-sourced result always lands as needs_review -
+ *      it never reports a confidence score of its own.
  *   2. A real Anthropic-backed implementation (createAnthropicExtractor()
- *      below) when ANTHROPIC_API_KEY is set but the worker isn't -
- *      previously the only real implementation, kept as a fallback so an
- *      environment mid-migration to the worker (or one where the worker is
- *      temporarily unreachable) doesn't regress all the way to unprocessed
- *      uploads.
+ *      below) for anything the worker doesn't handle: every input when
+ *      COI_WORKER_URL/COI_WORKER_API_KEY aren't set, or a non-PDF input
+ *      when they are. Was the only real implementation before the worker
+ *      integration; still the only one that handles images at all.
  *   3. A stub that returns "not_configured" rather than throwing when
- *      neither is set, so a document still gets safely stored (Phase 1's
- *      upload path) even when extraction cannot run at all.
+ *      neither backend is set, so a document still gets safely stored
+ *      (Phase 1's upload path) even when extraction cannot run at all.
  *
  * Every implementation shares the same DocumentExtractor interface and the
  * same InsuranceExtractionSchema validation (validateExtraction() in
  * insuranceExtractionSchema.ts) - callers (uploadDocumentForToken(),
  * reprocessDocument() in vendorUploadRequests.ts) never know or care which
  * one actually ran.
+ *
+ * KNOWN GAP, not fixable from this side: the worker currently checks no
+ * authentication at all - any request reaches its (paid, Google Vertex AI)
+ * backend regardless of what Authorization header is sent. This file sends
+ * COI_WORKER_API_KEY as a Bearer token anyway so nothing here has to change
+ * once the worker adds a real check, but until it does, that key provides
+ * no actual protection - see supabase/README.md's Known compromises.
  *
  * Deliberately skips text-extraction-then-OCR-fallback for the Claude path.
  * Claude accepts the PDF or image directly as a document/image content
@@ -200,12 +216,25 @@ export function getDocumentExtractor(
   clientFactory: (apiKey: string) => Anthropic = (apiKey) => new Anthropic({ apiKey }),
   fetchImpl: typeof fetch = fetch,
 ): DocumentExtractor {
+  const anthropicApiKey = process.env["ANTHROPIC_API_KEY"]?.trim();
+  const fallback = anthropicApiKey
+    ? createAnthropicExtractor(clientFactory(anthropicApiKey))
+    : createStubExtractor();
+
   const workerUrl = process.env["COI_WORKER_URL"]?.trim();
   const workerApiKey = process.env["COI_WORKER_API_KEY"]?.trim();
-  if (workerUrl && workerApiKey) {
-    return createWorkerExtractor(workerUrl, workerApiKey, fetchImpl);
-  }
+  if (!workerUrl || !workerApiKey) return fallback;
 
-  const apiKey = process.env["ANTHROPIC_API_KEY"]?.trim();
-  return apiKey ? createAnthropicExtractor(clientFactory(apiKey)) : createStubExtractor();
+  const worker = createWorkerExtractor(workerUrl, workerApiKey, fetchImpl);
+  return {
+    // The worker only reliably handles PDFs - it hardcodes
+    // `mimeType: "application/pdf"` in its own call to Vertex AI regardless
+    // of what was actually uploaded (confirmed by reading its source; see
+    // insuranceExtractionWorker.ts's docblock), so a JPG/PNG upload would be
+    // silently mislabeled there. Route anything that isn't a PDF straight to
+    // the fallback instead of ever handing it to the worker.
+    extract(input) {
+      return input.mimeType === "application/pdf" ? worker.extract(input) : fallback.extract(input);
+    },
+  };
 }

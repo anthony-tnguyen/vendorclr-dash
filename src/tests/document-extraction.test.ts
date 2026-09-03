@@ -88,17 +88,44 @@ describe("getDocumentExtractor - worker precedence", () => {
     restore("COI_WORKER_API_KEY", ORIGINAL_WORKER_KEY);
   });
 
-  it("calls the worker instead of the Anthropic client when both are configured", async () => {
+  const WORKER_RESPONSE = {
+    success: true,
+    version: "1.0",
+    named_insured: "Corbett Structural Steel",
+    producer_agent: "Acme Brokers",
+    certificate_holder: "Halstead Builders",
+    compliance_status: "PASS",
+    max_coverage: 2_000_000,
+    missing_endorsements: null,
+    policies: [
+      {
+        coverage_type: "Commercial General Liability",
+        carrier_name: "Travelers",
+        policy_number: "GL-1",
+        effective_date: "2025-11-30",
+        expiration_date: "2026-11-30",
+        limit_each_occurrence: 2_000_000,
+        additional_insured: true,
+        subrogation_waived: true,
+        status: "ACTIVE",
+        days_until_expiration: 90,
+      },
+    ],
+  };
+
+  it("calls the worker instead of the Anthropic client for a PDF when both are configured", async () => {
     process.env["ANTHROPIC_API_KEY"] = "test-anthropic-key";
     process.env["COI_WORKER_URL"] = "https://worker.example/extract";
     process.env["COI_WORKER_API_KEY"] = "test-worker-key";
 
     const anthropicClient = mockClient(async () => {
-      throw new Error("the Anthropic client should never be called when the worker is configured");
+      throw new Error(
+        "the Anthropic client should never be called for a PDF when the worker is configured",
+      );
     });
     const workerFetch = vi.fn(
       async (_input: RequestInfo | URL, _init?: RequestInit) =>
-        new Response(JSON.stringify(HIGH_CONFIDENCE_EXTRACTION), {
+        new Response(JSON.stringify(WORKER_RESPONSE), {
           status: 200,
           headers: { "content-type": "application/json" },
         }),
@@ -110,6 +137,27 @@ describe("getDocumentExtractor - worker precedence", () => {
 
     expect(workerFetch).toHaveBeenCalledOnce();
     expect(workerFetch.mock.calls[0]?.[0]).toBe("https://worker.example/extract");
+    // Always needs_review - the worker reports no confidence of its own; see insuranceExtractionWorker.ts.
+    expect(result.status).toBe("needs_review");
+    expect(result.data?.policies[0]?.carrier).toBe("Travelers");
+  });
+
+  it("falls back to the Anthropic client for a non-PDF even when the worker is configured", async () => {
+    process.env["ANTHROPIC_API_KEY"] = "test-anthropic-key";
+    process.env["COI_WORKER_URL"] = "https://worker.example/extract";
+    process.env["COI_WORKER_API_KEY"] = "test-worker-key";
+
+    const client = mockClient(async () => textMessage(JSON.stringify(HIGH_CONFIDENCE_EXTRACTION)));
+    const workerFetch = vi.fn(async () => {
+      throw new Error("the worker should never be called for a non-PDF input");
+    });
+
+    const result = await getDocumentExtractor(() => client, workerFetch).extract({
+      ...SAMPLE_INPUT,
+      mimeType: "image/png",
+    });
+
+    expect(workerFetch).not.toHaveBeenCalled();
     expect(result.status).toBe("processed");
     expect(result.data?.policies[0]?.carrier).toBe("Travelers");
   });
