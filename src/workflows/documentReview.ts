@@ -35,6 +35,8 @@ export interface ReviewQueueItemDetail {
     resolution: "approved" | "rejected" | null;
     resolutionNote: string;
     resolvedAt: string | null;
+    /** From audit_log's review_resolved row for this item (migration 14) - null until resolved, or if no matching row exists (a resolution predating migration 14). */
+    resolvedByEmail: string | null;
     documentLabel: string;
     submittedOn: string;
   };
@@ -132,11 +134,39 @@ export const getReviewQueueItem = createServerFn({ method: "GET" })
 
     const existingByType = await fetchActivePoliciesByType(supabase, queueRow.vendor_id);
 
+    // Two steps, not a PostgREST embed: audit_log.actor_id references
+    // auth.users, and profiles independently references auth.users too -
+    // there is no FK from audit_log to profiles for PostgREST to embed
+    // through (see fetchOwnerEmails()'s docblock in vendorUploadRequests.ts
+    // for the confirmed-live failure this exact mistake produces elsewhere).
+    let resolvedByEmail: string | null = null;
+    if (queueRow.state === "resolved") {
+      const { data: auditRow } = await supabase
+        .from("audit_log")
+        .select("actor_id")
+        .eq("action", "review_resolved")
+        .eq("target_type", "compliance_queue_item")
+        .eq("target_id", queueRow.id)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (auditRow?.actor_id) {
+        const { data: actorProfile } = await supabase
+          .from("profiles")
+          .select("email")
+          .eq("id", auditRow.actor_id)
+          .maybeSingle();
+        resolvedByEmail = actorProfile?.email ?? null;
+      }
+    }
+
     return {
       queueItem: {
         id: queueRow.id,
         state: queueRow.state,
         resolution: queueRow.resolution,
+        resolvedByEmail,
         resolutionNote: queueRow.resolution_note,
         resolvedAt: queueRow.resolved_at,
         documentLabel: queueRow.document_label,
@@ -207,7 +237,7 @@ export interface ResolveReviewItemResult {
 export const resolveReviewItem = createServerFn({ method: "POST" })
   .validator(resolveReviewItemSchema)
   .handler(async ({ data }): Promise<ResolveReviewItemResult> => {
-    await assertPlatformAdmin();
+    const actorId = await assertPlatformAdmin();
     const supabase = getServiceRoleClient();
 
     const { data: queueRow, error: queueError } = await supabase
@@ -304,6 +334,18 @@ export const resolveReviewItem = createServerFn({ method: "POST" })
         resolved_at: new Date().toISOString(),
       })
       .eq("id", queueRow.id);
+
+    // On the service role, so actor_id's auth.uid() default would resolve
+    // to nothing - passed explicitly from assertPlatformAdmin()'s own
+    // RLS-checked lookup instead.
+    await supabase.from("audit_log").insert({
+      company_id: queueRow.company_id,
+      actor_id: actorId,
+      action: "review_resolved",
+      target_type: "compliance_queue_item",
+      target_id: queueRow.id,
+      detail: { decision: data.decision, appliedCount, errors, note: resolutionNote },
+    });
 
     return { decision: data.decision, appliedCount, errors };
   });

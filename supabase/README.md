@@ -34,6 +34,7 @@ Four phases so far:
 | `20260902000600_schedule_renewal_reminders.sql` | Enables `pg_cron`/`pg_net`, schedules a daily call into the `send-renewal-reminders` Edge Function — see [Renewal reminders](#renewal-reminders) |
 | `20260902000700_review_queue.sql` | Adds `document_id`, `resolution`, `resolution_note`, `resolved_at`, and a `'resolved'` state to `compliance_queue_items` — see [The review queue screen](#the-review-queue-screen) |
 | `20260902000800_compliance_requirements.sql` | Drops `vendor_coverage_limits`; adds `compliance_requirements` — see [Matching against coverage requirements](#matching-against-coverage-requirements) |
+| `20260902000900_audit_log.sql` | Adds `audit_log`, `current_user_id()` — see [Audit log](#audit-log) |
 
 The headline modelling change: **a vendor no longer owns one flat policy.**
 `Vendor.policyNumber` / `Vendor.expiresOn` in `src/data/contracts.ts` could hold
@@ -496,6 +497,62 @@ Two places read it:
   data, and its `carried_amount` column was a second, never-auto-updated
   copy of a number `vendor_policies` already tracks precisely.
 
+### Audit log
+
+The first piece of Phase 4 hardening: every prior phase either superseded a
+row (`vendor_policies` - a renewal keeps the old row with
+`status='superseded'` rather than overwriting it) or left an implicit trail
+in a workflow-specific table (`email_outbox`, `policy_reminder_log`).
+Neither answers "which staff member approved this, and when" for the two
+actions that most need it - a human review decision (`resolveReviewItem()`)
+and a manual retry (`reprocessDocument()`) - both of which run on the
+service role after `assertPlatformAdmin()`, so there was previously no
+record of *who* acted at all, only what happened and when.
+
+`audit_log` is deliberately scoped to the three server-function write paths
+that had no actor trail of their own - `upload_request_created`
+(`createUploadRequest()`), `review_resolved` (`resolveReviewItem()`),
+`document_reprocessed` (`reprocessDocument()`) - not every mutation in this
+schema; widen the `action`/`target_type` CHECK constraints as more actions
+need this rather than trying to cover everything in one pass (see Known
+compromises).
+
+**Attributing a service-role write to a real actor** needed its own small
+piece: `assertPlatformAdmin()` now returns the caller's own user id (a
+second RPC, `current_user_id()`) alongside its existing yes/no check, since
+`resolveReviewItem()`/`reprocessDocument()` proceed on the service role,
+which has no bound session for `auth.uid()` to resolve. `createUploadRequest()`
+needs none of this - it writes on the request-scoped client, where a `BEFORE
+INSERT` trigger (`set_audit_log_actor()`) fills `actor_id` from `auth.uid()`
+automatically whenever a caller leaves it unset. That trigger exists instead
+of a plain column default specifically because a plain `default auth.uid()`
+does not work here: `authenticated` has no `USAGE` on schema `auth` in this
+project (confirmed by the same "permission denied for schema auth" the
+harness reproduces for any direct, non-security-definer `auth.uid()`
+reference) - every other direct read of it already goes through a
+`security definer` wrapper (`current_company_ids()`, `is_platform_admin()`),
+and this trigger is that wrapper for a table default. `db:verify` caught
+this before it ever reached the live project - see
+`supabase/tests/audit-log.test.ts`.
+
+**A real, confirmed bug found and fixed while building this**: two existing
+PostgREST embedded selects - `company_members -> profiles ( email )` used by
+both `notifyDocumentOutcome()`'s admin-owner-email lookup and
+`listAccessGrants()` (the Access & Permissions screen) - have never worked.
+`company_members.user_id` and `profiles.id` both independently reference
+`auth.users`; neither table has a foreign key to the other, so PostgREST has
+no relationship to embed through. Confirmed live with a direct REST call
+(`PGRST200: Could not find a relationship between 'company_members' and
+'profiles'`), not a guess. `notifyDocumentOutcome()`'s version failed inside
+a try/catch that swallows every notification error on purpose (a bad send
+must never undo the extraction work that already committed) - so
+`admin_review_needed` has never actually reached a company owner.
+`listAccessGrants()`'s version had no such catch, so the Access &
+Permissions screen has never successfully loaded live data at all. Both
+fixed the same way: two queries (`company_members.user_id`, then
+`profiles` filtered `.in("id", ...)`) instead of one embed - see
+`fetchOwnerEmails()` in `vendorUploadRequests.ts`.
+
 ## Security model
 
 Tenancy is enforced in the database, not in React.
@@ -602,7 +659,14 @@ resolved/resolution pairing constraint in both directions (a resolved item
 must carry a resolution, a non-resolved item must not); and (migration 13)
 `compliance_requirements`' RLS boundary (a `read_only` member cannot create
 one, a rival company cannot see one), its `policy_type`/`limit_field` CHECK
-constraints, and the one-label-per-company uniqueness. The harness stubs a minimal
+constraints, and the one-label-per-company uniqueness; and (migration 14)
+`current_user_id()` returning the caller's own id (and null for a session
+with no JWT claims), the `set_audit_log_actor()` trigger filling `actor_id`
+from `auth.uid()` only when the caller left it unset, every `action`/
+`target_type` CHECK constraint, cross-tenant isolation, and - genuinely
+provable only at the RLS level, not by a thrown-error assertion - that an
+UPDATE or DELETE against `audit_log` with no policy for either matches zero
+rows rather than throwing. The harness stubs a minimal
 `storage.objects`/`storage.buckets` schema (PGlite has no `storage` schema of
 its own) — see `supabase/tests/harness.ts`.
 
@@ -717,6 +781,17 @@ Deliberate, and worth revisiting as later phases grow on top of them:
   *during* the review decision itself - would be a natural addition to the
   review screen once it's clear reviewers want that context in the moment
   rather than checking the vendor detail page separately after.
+- **`audit_log` covers three actions, not every mutation in this schema.**
+  Direct `vendor_policies`/`vendor_upload_requests`/etc. writes by a company
+  member through the normal dashboard flows leave no audit_log row - only
+  the three server functions named in [Audit log](#audit-log) do. Widen the
+  `action`/`target_type` CHECK constraints and add the corresponding insert
+  as more actions need this kind of trail, rather than trying to instrument
+  every write path in one pass.
+- **No screen reads `audit_log` as a list.** The review screen shows one
+  row's outcome (who resolved *this* item), which is the only place it's
+  wired in today - there is no company-wide or admin-wide "recent activity"
+  view yet.
 
 ## What is still not built
 
@@ -727,9 +802,10 @@ confidence-scored JSON; and, when a deterministic match says it's safe, apply
 that JSON to `vendor_policies` and roll the compliance rail forward
 automatically. What's not built yet:
 
-- **Hardening (Phase 4).** Audit log, an automated (not just manually-invoked)
+- **Hardening (Phase 4), remaining.** An automated (not just manually-invoked)
   retry queue, email bounce handling, malware/file-content checks beyond
-  mime-type and size, upload-request cancellation UI, admin review tools.
+  mime-type and size, upload-request cancellation UI. (Audit log shipped -
+  see [Audit log](#audit-log).)
 
 Nothing here claims otherwise: a `processed` extraction that fails
 `matchExtractedPolicy()` for even one coverage type on the certificate leaves

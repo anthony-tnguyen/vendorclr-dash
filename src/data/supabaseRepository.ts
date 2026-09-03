@@ -457,27 +457,52 @@ export function createSupabaseRepository(
 
     async listAccessGrants(): Promise<AccessGrant[]> {
       const supabase = clientFactory();
-      const rows = unwrap(
+      // Two queries, not a PostgREST embed (`profiles ( email, full_name )`
+      // off company_members): there is no FK from company_members to
+      // profiles - both independently reference auth.users - so PostgREST
+      // has no relationship to embed through. That embed would fail every
+      // call with PGRST200 ("no relationship found" - confirmed live, not a
+      // guess; see fetchOwnerEmails()'s docblock in vendorUploadRequests.ts
+      // for the same mistake caught elsewhere), which unwrap() turns into a
+      // thrown error - this screen has never successfully loaded live data.
+      const members = unwrap(
         await supabase
           .from("company_members")
-          .select("*, profiles ( email, full_name )")
+          .select("id, user_id, role, scope, last_active_at")
           .order("created_at", { ascending: true }),
-      ) as unknown as Array<{
+      ) as Array<{
         id: string;
+        user_id: string;
         role: CompanyRole;
         scope: string;
         last_active_at: string | null;
-        profiles: { email: string; full_name: string | null } | null;
       }>;
 
-      return rows.map((row) => ({
-        id: row.id,
-        person: row.profiles?.full_name ?? row.profiles?.email ?? "Pending invitation",
-        email: row.profiles?.email ?? "",
-        role: ROLE_LABELS[row.role],
-        scope: row.scope,
-        lastActiveOn: row.last_active_at ? row.last_active_at.slice(0, 10) : "Never",
-      }));
+      const userIds = [...new Set(members.map((m) => m.user_id))];
+      const profileRows =
+        userIds.length === 0
+          ? []
+          : unwrap(
+              await supabase.from("profiles").select("id, email, full_name").in("id", userIds),
+            );
+      const profileById = new Map(
+        (profileRows as Array<{ id: string; email: string; full_name: string | null }>).map((p) => [
+          p.id,
+          p,
+        ]),
+      );
+
+      return members.map((row) => {
+        const profile = profileById.get(row.user_id);
+        return {
+          id: row.id,
+          person: profile?.full_name ?? profile?.email ?? "Pending invitation",
+          email: profile?.email ?? "",
+          role: ROLE_LABELS[row.role],
+          scope: row.scope,
+          lastActiveOn: row.last_active_at ? row.last_active_at.slice(0, 10) : "Never",
+        };
+      });
     },
   };
 }

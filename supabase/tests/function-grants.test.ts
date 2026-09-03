@@ -49,6 +49,7 @@ describe("RLS-primitive functions: authenticated yes, anon no", () => {
     "public.can_write_company(uuid)",
     "public.shares_company_with(uuid)",
     "public.create_company_for_current_user(text, text)",
+    "public.current_user_id()",
   ];
 
   it.each(fns)("anon cannot execute %s", async (fn) => {
@@ -66,6 +67,7 @@ describe("trigger-only functions: no one calls these directly", () => {
     "public.assert_task_company_matches_vendor()",
     "public.handle_new_user()",
     "public.seed_vendor_compliance_items()",
+    "public.set_audit_log_actor()",
   ];
 
   it.each(fns)("anon cannot execute %s", async (fn) => {

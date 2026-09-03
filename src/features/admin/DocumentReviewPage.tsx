@@ -95,7 +95,10 @@ export function DocumentReviewPage({ queueItemId }: { queueItemId: string }) {
                 role="status"
                 className="rounded-sm border border-border bg-muted px-3 py-2 text-xs"
               >
-                Resolved as <strong>{data.queueItem.resolution}</strong> on{" "}
+                Resolved as <strong>{data.queueItem.resolution}</strong>
+                {data.queueItem.resolvedByEmail
+                  ? ` by ${data.queueItem.resolvedByEmail}`
+                  : ""} on{" "}
                 {data.queueItem.resolvedAt
                   ? new Date(data.queueItem.resolvedAt).toLocaleString()
                   : "an earlier date"}
