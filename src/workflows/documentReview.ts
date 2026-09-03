@@ -1,7 +1,10 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 
-import { getServiceRoleClient } from "@/lib/supabase/serverClient.server";
+async function getServiceRoleClient() {
+  const mod = await import("@/lib/supabase/serverClient.server");
+  return mod.getServiceRoleClient();
+}
 import { isGeneralLiability } from "./complianceEngine";
 import type { ExtractedPolicy, InsuranceExtraction } from "./insuranceExtractionSchema";
 import {
@@ -73,7 +76,7 @@ export const getReviewQueueItem = createServerFn({ method: "GET" })
   .validator(queueItemIdSchema)
   .handler(async ({ data }): Promise<ReviewQueueItemDetail> => {
     await assertPlatformAdmin();
-    const supabase = getServiceRoleClient();
+    const supabase = await getServiceRoleClient();
 
     const { data: queueRow, error: queueError } = await supabase
       .from("compliance_queue_items")
@@ -238,7 +241,7 @@ export const resolveReviewItem = createServerFn({ method: "POST" })
   .validator(resolveReviewItemSchema)
   .handler(async ({ data }): Promise<ResolveReviewItemResult> => {
     const actorId = await assertPlatformAdmin();
-    const supabase = getServiceRoleClient();
+    const supabase = await getServiceRoleClient();
 
     const { data: queueRow, error: queueError } = await supabase
       .from("compliance_queue_items")
