@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
+import { useSession } from "@/app/App";
 import { AppShell } from "@/components/shell/AppShell";
 import { ComplianceRail } from "@/components/compliance/ComplianceRail";
 import { EmptyState, ErrorState, LoadingState } from "@/components/states/AsyncState";
@@ -12,8 +13,24 @@ const currency = new Intl.NumberFormat("en-US", {
   maximumFractionDigits: 0,
 });
 
+const NO_CERTIFICATE_HOLDER = "Not on file";
+
+/**
+ * Loose, trimmed/case-insensitive comparison only - a genuine legal-name
+ * fuzzy-match (LLC suffixes, DBA names, punctuation) is a bigger feature
+ * than asked for here. This is a first-pass signal for a human to look
+ * twice at, never a hard compliance gate - the raw extracted text is always
+ * shown either way, so a false "doesn't match" costs a glance, not a
+ * wrong decision.
+ */
+function looksLikeMismatch(certificateHolderName: string, companyName: string): boolean {
+  if (certificateHolderName === NO_CERTIFICATE_HOLDER) return false;
+  return certificateHolderName.trim().toLowerCase() !== companyName.trim().toLowerCase();
+}
+
 export function VendorDetailPage({ vendorId }: { vendorId: string }) {
   const repo = getRepository();
+  const { companyName } = useSession();
   const vendor = useQuery({
     queryKey: ["vendor", vendorId],
     queryFn: () => repo.getVendor(vendorId),
@@ -136,6 +153,30 @@ export function VendorDetailPage({ vendorId }: { vendorId: string }) {
                 <div className="flex justify-between gap-4">
                   <dt className="text-muted-foreground">Contract value</dt>
                   <dd className="numeric text-xs">{currency.format(data.contractValue)}</dd>
+                </div>
+                <div className="flex justify-between gap-4">
+                  <dt className="pt-0.5 text-muted-foreground">Certificate holder</dt>
+                  <dd className="max-w-[70%] text-right text-xs">
+                    <span
+                      className={
+                        looksLikeMismatch(data.certificateHolderName, companyName)
+                          ? "font-semibold text-destructive"
+                          : "font-medium"
+                      }
+                    >
+                      {data.certificateHolderName}
+                    </span>
+                    {data.certificateHolderAddress !== NO_CERTIFICATE_HOLDER ? (
+                      <span className="block text-muted-foreground">
+                        {data.certificateHolderAddress}
+                      </span>
+                    ) : null}
+                    {looksLikeMismatch(data.certificateHolderName, companyName) ? (
+                      <span className="mt-1 block text-[11px] font-semibold text-destructive">
+                        Doesn't match "{companyName}" — check this vendor's certificate
+                      </span>
+                    ) : null}
+                  </dd>
                 </div>
                 <div className="flex justify-between gap-4">
                   <dt className="text-muted-foreground">Risk tier</dt>

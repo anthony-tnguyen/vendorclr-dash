@@ -40,6 +40,7 @@ Four phases so far:
 | `20260903000300_automated_retry_queue.sql` | Adds `vendor_documents.retry_count`/`next_retry_at`, `documents_due_for_retry` — see [Automated retry queue](#automated-retry-queue) |
 | `20260903000400_schedule_automated_retries.sql` | Schedules an hourly call into the `retry-failed-documents` Edge Function via `pg_cron`/`pg_net` — see [Automated retry queue](#automated-retry-queue) |
 | `20260903000500_email_bounce_handling.sql` | Widens `email_outbox.status`; adds `email_delivery_events` — see [Email bounce handling](#email-bounce-handling) |
+| `20260903000600_certificate_holder_on_file.sql` | Adds `vendor_policies.certificate_holder_name`/`certificate_holder_address`; widens `apply_policy_renewal()` to two more parameters — see [Certificate holder on file](#certificate-holder-on-file) |
 
 The headline modelling change: **a vendor no longer owns one flat policy.**
 `Vendor.policyNumber` / `Vendor.expiresOn` in `src/data/contracts.ts` could hold
@@ -723,6 +724,47 @@ An event that doesn't match a known `provider_message_id` (an email this
 app never sent, or one sent before this feature shipped) is acknowledged
 (`200`) but not recorded - there is genuinely nothing to attach it to.
 
+### Certificate holder on file
+
+Every certificate of insurance names a "certificate holder" at the bottom -
+typically whichever client/GC required the coverage. Extraction has
+captured this since Phase 2 (`InsuranceExtractionSchema`'s top-level
+`certificate_holder.name`/`address`), but until migration 20 it only ever
+lived inside `vendor_documents.parsed_data` - a per-document JSON blob
+nothing but the review screen ever read. A company auditing whether its own
+vendors actually named it correctly (right legal name, not some other
+client entirely, not a typo) had no way to see this without opening a
+document's raw JSON by hand.
+
+Denormalised onto `vendor_policies.certificate_holder_name`/
+`certificate_holder_address`, same reasoning `carrier_name`/`policy_number`
+already live there rather than only in `parsed_data`: this is a durable
+fact about "the current policy on file," not something to re-derive from a
+document blob on every read. Written by `apply_policy_renewal()` (widened
+to two more parameters) alongside everything else a renewal sets - both the
+automated match path and a human's review-screen approval go through that
+one function, so there's no second place this can drift out of sync with
+what was actually extracted.
+
+Surfaced in two places:
+
+- **The vendor detail page** (`VendorDetailPage.tsx`) - a "Certificate
+  holder" row in the Record panel, for every vendor, all the time, not just
+  ones sitting in the review queue.
+- **The review screen** (`DocumentReviewPage.tsx`) - the specific
+  document's extracted certificate holder, before a reviewer approves it.
+
+Both compare the extracted name against the signed-in company's own name
+(`looksLikeMismatch()`, duplicated in both files - see either one's
+docblock) and flag a visible mismatch. This is deliberately a loose,
+trimmed/case-insensitive string comparison, not a real legal-name
+fuzzy-match (LLC suffixes, DBA names, punctuation all count as a
+"mismatch") - see Known compromises. It is a first-pass signal for a human
+to look twice at, never a hard compliance gate: the raw extracted text is
+always shown regardless, and nothing here blocks approval or auto-apply.
+A false "doesn't match" costs a glance; a missed real mismatch is exactly
+what a human reviewer is there to catch.
+
 ## Security model
 
 Tenancy is enforced in the database, not in React.
@@ -1026,6 +1068,21 @@ Deliberate, and worth revisiting as later phases grow on top of them:
   the deployed function. `RESEND_API_KEY` itself is also still unset, so
   no real email has gone out to bounce yet either - there is no live
   webhook to receive until both exist.
+- **Certificate-holder mismatch detection is a loose string comparison,
+  not a real legal-name match.** `looksLikeMismatch()` (`VendorDetailPage.tsx`,
+  `DocumentReviewPage.tsx`) trims and lowercases before comparing - "Halstead
+  Builders" vs. "Halstead Builders, LLC" flags as a mismatch even though a
+  human would call that correct. Deliberately kept simple: it's a visible
+  prompt for a human to look twice, not a gate that blocks anything, so a
+  false positive costs a glance rather than a wrong decision. A real
+  fuzzy-match (legal suffixes, DBA names, punctuation-insensitive) would be
+  a meaningfully bigger feature than "surface what's already extracted."
+- **Existing `vendor_policies` rows created before migration 20 have no
+  certificate holder on file** - `certificate_holder_name`/`_address` are
+  null until that policy's next renewal runs back through
+  `apply_policy_renewal()`. The vendor detail page renders that as "Not on
+  file," the same as a vendor with no policy at all; there's no backfill
+  from `vendor_documents.parsed_data` for rows that predate this column.
 
 ## What is still not built
 

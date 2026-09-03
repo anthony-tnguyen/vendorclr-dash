@@ -736,6 +736,11 @@ async function fetchRequirementsByType(
  * automated match path (applyComplianceEngine, below) and the human-review
  * approval path (documentReview.ts) share; they differ only in *which*
  * lines they call this for; see the callers, not the docblock, for that.
+ *
+ * certificateHolder is the extraction's top-level certificate_holder field
+ * (migration 20), not part of the policy itself - a certificate names one
+ * certificate holder for the whole document, not one per coverage line, so
+ * every policy line applied from the same document gets the same value.
  */
 export async function applyOnePolicyLine(
   supabase: SupabaseClient,
@@ -744,9 +749,10 @@ export async function applyOnePolicyLine(
     vendorId: string;
     existingPolicyId: string | null;
     policy: ExtractedPolicy & { type: NonNullable<ExtractedPolicy["type"]> };
+    certificateHolder: { name: string | null; address: string | null };
   },
 ): Promise<{ newPolicyId: string } | { error: string }> {
-  const { companyId, vendorId, existingPolicyId, policy } = params;
+  const { companyId, vendorId, existingPolicyId, policy, certificateHolder } = params;
 
   const { data: newPolicyId, error: rpcError } = await supabase.rpc("apply_policy_renewal", {
     p_company_id: companyId,
@@ -761,6 +767,8 @@ export async function applyOnePolicyLine(
     p_general_aggregate_limit: policy.limits.general_aggregate ?? null,
     p_additional_insured: policy.additional_insured,
     p_waiver_of_subrogation: policy.waiver_of_subrogation,
+    p_certificate_holder_name: certificateHolder.name,
+    p_certificate_holder_address: certificateHolder.address,
   });
 
   if (rpcError || !newPolicyId) {
@@ -793,9 +801,14 @@ export async function applyOnePolicyLine(
 
 async function applyComplianceEngine(
   supabase: SupabaseClient,
-  params: { companyId: string; vendorId: string; policies: ExtractedPolicy[] },
+  params: {
+    companyId: string;
+    vendorId: string;
+    policies: ExtractedPolicy[];
+    certificateHolder: { name: string | null; address: string | null };
+  },
 ): Promise<{ allMatched: boolean; appliedPolicyId: string | null; reasons: string[] }> {
-  const { companyId, vendorId, policies } = params;
+  const { companyId, vendorId, policies, certificateHolder } = params;
   const reasons: string[] = [];
   let appliedPolicyId: string | null = null;
   let allMatched = true;
@@ -837,6 +850,7 @@ async function applyComplianceEngine(
       vendorId,
       existingPolicyId: outcome.existingPolicyId,
       policy: extracted,
+      certificateHolder,
     });
 
     if ("error" in result) {
@@ -1035,6 +1049,7 @@ async function applyExtractionResult(
       companyId,
       vendorId,
       policies: extraction.data.policies,
+      certificateHolder: extraction.data.certificate_holder,
     });
     appliedPolicyId = result.appliedPolicyId;
     if (!result.allMatched) {

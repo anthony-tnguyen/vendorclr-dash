@@ -83,6 +83,9 @@ export interface VendorPolicyRow {
   additional_insured: boolean | null;
   waiver_of_subrogation: boolean | null;
   primary_noncontributory: boolean | null;
+  /** From the extraction's certificate_holder.name that produced this row - who the certificate names as certificate holder. Null if extraction never ran or couldn't read one. */
+  certificate_holder_name: string | null;
+  certificate_holder_address: string | null;
   status: PolicyStatus;
   verification_status: VerificationStatus;
   created_at: string;

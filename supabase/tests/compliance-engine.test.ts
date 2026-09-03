@@ -81,7 +81,7 @@ describe("apply_policy_renewal - the write-role happy path", () => {
     const rows = await asUser<{ apply_policy_renewal: string }>(
       db,
       OWNER,
-      `select apply_policy_renewal($1,$2,$3,'general_liability','Travelers','GL-8841-2266','2026-11-30','2027-11-30',2000000,4000000,true,true)`,
+      `select apply_policy_renewal($1,$2,$3,'general_liability','Travelers','GL-8841-2266','2026-11-30','2027-11-30',2000000,4000000,true,true,'Halstead Builders','500 Harbor Point Way, Boston, MA 02110')`,
       [companyId, vendorId, before.id],
     );
     const newPolicyId = rows[0]?.apply_policy_renewal;
@@ -98,13 +98,20 @@ describe("apply_policy_renewal - the write-role happy path", () => {
       status: string;
       expiration_date: Date;
       verification_status: string;
+      certificate_holder_name: string;
+      certificate_holder_address: string;
     }>(
-      `select status, expiration_date, verification_status from public.vendor_policies where id = $1`,
+      `select status, expiration_date, verification_status, certificate_holder_name, certificate_holder_address
+       from public.vendor_policies where id = $1`,
       [newPolicyId],
     );
     expect(newRow.rows[0]?.status).toBe("active");
     expect(newRow.rows[0]?.verification_status).toBe("verified");
     expect(newRow.rows[0]?.expiration_date.toISOString().slice(0, 10)).toBe("2027-11-30");
+    expect(newRow.rows[0]?.certificate_holder_name).toBe("Halstead Builders");
+    expect(newRow.rows[0]?.certificate_holder_address).toBe(
+      "500 Harbor Point Way, Boston, MA 02110",
+    );
 
     // Exactly one active GL policy exists afterward - the partial unique
     // index this atomicity exists to protect.
@@ -116,6 +123,28 @@ describe("apply_policy_renewal - the write-role happy path", () => {
     expect(activeCount.rows[0]?.n).toBe(1);
   });
 
+  it("accepts null for both certificate-holder fields - not determinable is not an error", async () => {
+    const before = await activeGlPolicy();
+
+    const rows = await asUser<{ apply_policy_renewal: string }>(
+      db,
+      OWNER,
+      `select apply_policy_renewal($1,$2,$3,'general_liability','Travelers','GL-8841-2266','2026-11-30','2030-11-30',null,null,true,true,null,null)`,
+      [companyId, vendorId, before.id],
+    );
+    const newPolicyId = rows[0]?.apply_policy_renewal;
+
+    const newRow = await db.query<{
+      certificate_holder_name: string | null;
+      certificate_holder_address: string | null;
+    }>(
+      `select certificate_holder_name, certificate_holder_address from public.vendor_policies where id = $1`,
+      [newPolicyId],
+    );
+    expect(newRow.rows[0]?.certificate_holder_name).toBeNull();
+    expect(newRow.rows[0]?.certificate_holder_address).toBeNull();
+  });
+
   it("rolls back the whole call - old row stays active - when the insert violates a constraint", async () => {
     const before = await activeGlPolicy();
 
@@ -125,7 +154,7 @@ describe("apply_policy_renewal - the write-role happy path", () => {
         OWNER,
         // An out-of-range confidence-style bad value: this policy_type does
         // not exist in the CHECK constraint, so the INSERT fails.
-        `select apply_policy_renewal($1,$2,$3,'not_a_real_policy_type','Travelers','GL-8841-2266','2026-11-30','2027-11-30',null,null,true,true)`,
+        `select apply_policy_renewal($1,$2,$3,'not_a_real_policy_type','Travelers','GL-8841-2266','2026-11-30','2027-11-30',null,null,true,true,null,null)`,
         [companyId, vendorId, before.id],
       ),
     ).rejects.toThrow();
@@ -150,7 +179,7 @@ describe("apply_policy_renewal - RLS boundary (not security definer)", () => {
       asUser(
         db,
         READER,
-        `select apply_policy_renewal($1,$2,$3,'general_liability','Travelers','GL-8841-2266','2026-11-30','2028-11-30',null,null,true,true)`,
+        `select apply_policy_renewal($1,$2,$3,'general_liability','Travelers','GL-8841-2266','2026-11-30','2028-11-30',null,null,true,true,null,null)`,
         [companyId, vendorId, before.id],
       ),
     );
@@ -171,7 +200,7 @@ describe("apply_policy_renewal - RLS boundary (not security definer)", () => {
         RIVAL_OWNER,
         // Names Halstead's own company_id/vendor_id/policy_id from outside -
         // can_write_company(companyId) fails for the rival owner regardless.
-        `select apply_policy_renewal($1,$2,$3,'general_liability','Travelers','GL-8841-2266','2026-11-30','2029-11-30',null,null,true,true)`,
+        `select apply_policy_renewal($1,$2,$3,'general_liability','Travelers','GL-8841-2266','2026-11-30','2029-11-30',null,null,true,true,null,null)`,
         [companyId, vendorId, before.id],
       ),
     );
@@ -180,7 +209,9 @@ describe("apply_policy_renewal - RLS boundary (not security definer)", () => {
   it("anon cannot execute the function at all", async () => {
     const result = await db.query<{ can_exec: boolean }>(
       `select has_function_privilege('anon', $1::regprocedure, 'EXECUTE') as can_exec`,
-      ["public.apply_policy_renewal(uuid,uuid,uuid,text,text,text,date,date,int8,int8,bool,bool)"],
+      [
+        "public.apply_policy_renewal(uuid,uuid,uuid,text,text,text,date,date,int8,int8,bool,bool,text,text)",
+      ],
     );
     expect(result.rows[0]?.can_exec).toBe(false);
   });
