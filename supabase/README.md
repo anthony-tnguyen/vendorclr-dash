@@ -171,6 +171,36 @@ vendor_documents.parsed_data / extraction_confidence / processing_status set
 it: still awaiting a person's own review, not auto-approved.
 ```
 
+**The extraction backend is now pluggable, not just Claude.**
+`getDocumentExtractor()` (`src/workflows/documentExtraction.ts`) chooses
+between three implementations, all behind the same `DocumentExtractor`
+interface and the same `InsuranceExtractionSchema` validation
+(`validateExtraction()`, shared so normalization/zod-checking never drifts
+between backends):
+
+1. A separately-deployed Cloudflare Worker (`createWorkerExtractor()`,
+   `src/workflows/insuranceExtractionWorker.ts`) when `COI_WORKER_URL` and
+   `COI_WORKER_API_KEY` are both set - the primary path once configured.
+   POSTs the file as `multipart/form-data` with `Authorization: Bearer
+   <key>`, expects a JSON response with the extraction either at the top
+   level or wrapped under `data`/`result`. **This wire contract was written
+   from a description of the worker, not confirmed against a live call** -
+   see the file's own docblock before relying on it in production.
+2. `createAnthropicExtractor()` (unchanged, `claude-opus-5`) when the worker
+   isn't configured but `ANTHROPIC_API_KEY` is - the only implementation
+   until this pass, kept as a fallback so an environment mid-migration to
+   the worker doesn't regress to unprocessed uploads if the worker is
+   unreachable.
+3. A stub returning `not_configured` when neither is set.
+
+`retry-failed-documents` (the automated retry Edge Function, below) has
+**not** been updated to call the worker - it still calls Claude directly via
+its own Deno-ported copy of this same logic. Porting it is a deliberate
+follow-up, not an oversight: doing so doubles the size of this change for a
+secondary recovery path, and the two backends already disagreeing here is a
+smaller inconsistency than shipping the worker integration untested against
+its actual response shape.
+
 **No OCR, no `pdf-parse`.** The original design for this phase split text
 extraction and OCR into two steps with a fallback between them. Claude reads a
 PDF or image document block directly and handles a scanned certificate the

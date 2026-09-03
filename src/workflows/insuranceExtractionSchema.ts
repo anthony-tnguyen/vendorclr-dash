@@ -174,6 +174,29 @@ export interface ParseResult {
   error: string | null;
 }
 
+/**
+ * Normalizes and validates an already-parsed JSON value against
+ * InsuranceExtractionSchema - the shared second half of parseExtractionResponse()
+ * below (raw model text -> JSON.parse -> here) and of the Cloudflare Worker
+ * extractor's path (insuranceExtractionWorker.ts: an HTTP JSON response
+ * body, already an object, straight to here). Both DocumentExtractor
+ * backends run through exactly this same normalization (policy-type synonym
+ * mapping) and zod validation, so which one produced a given result never
+ * changes how strictly - or how leniently - it's checked.
+ */
+export function validateExtraction(raw: unknown): ParseResult {
+  const result = InsuranceExtractionSchema.safeParse(normalizeExtraction(raw));
+  if (!result.success) {
+    return {
+      success: false,
+      data: null,
+      error: result.error.issues.map((i) => i.message).join("; "),
+    };
+  }
+
+  return { success: true, data: result.data, error: null };
+}
+
 /** Parses, normalizes and validates model output text in one step. */
 export function parseExtractionResponse(text: string): ParseResult {
   let json: unknown;
@@ -187,14 +210,5 @@ export function parseExtractionResponse(text: string): ParseResult {
     };
   }
 
-  const result = InsuranceExtractionSchema.safeParse(normalizeExtraction(json));
-  if (!result.success) {
-    return {
-      success: false,
-      data: null,
-      error: result.error.issues.map((i) => i.message).join("; "),
-    };
-  }
-
-  return { success: true, data: result.data, error: null };
+  return validateExtraction(json);
 }

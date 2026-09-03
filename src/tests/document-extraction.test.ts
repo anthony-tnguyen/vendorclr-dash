@@ -56,6 +56,8 @@ describe("getDocumentExtractor - not configured", () => {
 
   it("returns not_configured and never throws when no API key is set", async () => {
     delete process.env["ANTHROPIC_API_KEY"];
+    delete process.env["COI_WORKER_URL"];
+    delete process.env["COI_WORKER_API_KEY"];
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
 
     const result = await getDocumentExtractor().extract(SAMPLE_INPUT);
@@ -68,6 +70,74 @@ describe("getDocumentExtractor - not configured", () => {
     });
     expect(warn).toHaveBeenCalled();
     warn.mockRestore();
+  });
+});
+
+describe("getDocumentExtractor - worker precedence", () => {
+  const ORIGINAL_ANTHROPIC = process.env["ANTHROPIC_API_KEY"];
+  const ORIGINAL_WORKER_URL = process.env["COI_WORKER_URL"];
+  const ORIGINAL_WORKER_KEY = process.env["COI_WORKER_API_KEY"];
+
+  afterEach(() => {
+    const restore = (name: string, original: string | undefined) => {
+      if (original === undefined) delete process.env[name];
+      else process.env[name] = original;
+    };
+    restore("ANTHROPIC_API_KEY", ORIGINAL_ANTHROPIC);
+    restore("COI_WORKER_URL", ORIGINAL_WORKER_URL);
+    restore("COI_WORKER_API_KEY", ORIGINAL_WORKER_KEY);
+  });
+
+  it("calls the worker instead of the Anthropic client when both are configured", async () => {
+    process.env["ANTHROPIC_API_KEY"] = "test-anthropic-key";
+    process.env["COI_WORKER_URL"] = "https://worker.example/extract";
+    process.env["COI_WORKER_API_KEY"] = "test-worker-key";
+
+    const anthropicClient = mockClient(async () => {
+      throw new Error("the Anthropic client should never be called when the worker is configured");
+    });
+    const workerFetch = vi.fn(
+      async (_input: RequestInfo | URL, _init?: RequestInit) =>
+        new Response(JSON.stringify(HIGH_CONFIDENCE_EXTRACTION), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
+    );
+
+    const result = await getDocumentExtractor(() => anthropicClient, workerFetch).extract(
+      SAMPLE_INPUT,
+    );
+
+    expect(workerFetch).toHaveBeenCalledOnce();
+    expect(workerFetch.mock.calls[0]?.[0]).toBe("https://worker.example/extract");
+    expect(result.status).toBe("processed");
+    expect(result.data?.policies[0]?.carrier).toBe("Travelers");
+  });
+
+  it("falls back to the Anthropic client when only ANTHROPIC_API_KEY is set", async () => {
+    process.env["ANTHROPIC_API_KEY"] = "test-anthropic-key";
+    delete process.env["COI_WORKER_URL"];
+    delete process.env["COI_WORKER_API_KEY"];
+
+    const client = mockClient(async () => textMessage(JSON.stringify(HIGH_CONFIDENCE_EXTRACTION)));
+
+    const result = await getDocumentExtractor(() => client).extract(SAMPLE_INPUT);
+
+    expect(result.status).toBe("processed");
+    expect(result.data?.policies[0]?.carrier).toBe("Travelers");
+  });
+
+  it("falls back to the Anthropic client when COI_WORKER_URL is set but COI_WORKER_API_KEY is not", async () => {
+    process.env["ANTHROPIC_API_KEY"] = "test-anthropic-key";
+    process.env["COI_WORKER_URL"] = "https://worker.example/extract";
+    delete process.env["COI_WORKER_API_KEY"];
+
+    const client = mockClient(async () => textMessage(JSON.stringify(HIGH_CONFIDENCE_EXTRACTION)));
+
+    const result = await getDocumentExtractor(() => client).extract(SAMPLE_INPUT);
+
+    expect(result.status).toBe("processed");
+    expect(result.data?.policies[0]?.carrier).toBe("Travelers");
   });
 });
 

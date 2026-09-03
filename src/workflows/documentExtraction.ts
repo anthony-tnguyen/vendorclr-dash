@@ -1,5 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 
+import { statusForConfidence } from "./extractionConfidence";
+import { createWorkerExtractor } from "./insuranceExtractionWorker";
 import {
   INSURANCE_EXTRACTION_JSON_SHAPE,
   parseExtractionResponse,
@@ -8,16 +10,32 @@ import {
 
 /**
  * Document -> structured JSON, server-side only. Same pluggable-provider
- * shape as emailSender.ts: a real Anthropic-backed implementation when
- * ANTHROPIC_API_KEY is set, otherwise a stub that returns "not_configured"
- * rather than throwing, so a document still gets safely stored (Phase 1's
- * upload path) even when extraction cannot run.
+ * shape as emailSender.ts, now three deep instead of two:
  *
- * Deliberately skips text-extraction-then-OCR-fallback. Claude accepts the
- * PDF or image directly as a document/image content block and reads scanned
- * and machine-generated certificates the same way - there is no separate OCR
- * step to fall back to, and no pdf-parse dependency to keep working across a
- * Cloudflare Workers deployment target.
+ *   1. A Cloudflare Worker-backed implementation (createWorkerExtractor(),
+ *      insuranceExtractionWorker.ts) when COI_WORKER_URL and
+ *      COI_WORKER_API_KEY are both set - the primary path once configured.
+ *   2. A real Anthropic-backed implementation (createAnthropicExtractor()
+ *      below) when ANTHROPIC_API_KEY is set but the worker isn't -
+ *      previously the only real implementation, kept as a fallback so an
+ *      environment mid-migration to the worker (or one where the worker is
+ *      temporarily unreachable) doesn't regress all the way to unprocessed
+ *      uploads.
+ *   3. A stub that returns "not_configured" rather than throwing when
+ *      neither is set, so a document still gets safely stored (Phase 1's
+ *      upload path) even when extraction cannot run at all.
+ *
+ * Every implementation shares the same DocumentExtractor interface and the
+ * same InsuranceExtractionSchema validation (validateExtraction() in
+ * insuranceExtractionSchema.ts) - callers (uploadDocumentForToken(),
+ * reprocessDocument() in vendorUploadRequests.ts) never know or care which
+ * one actually ran.
+ *
+ * Deliberately skips text-extraction-then-OCR-fallback for the Claude path.
+ * Claude accepts the PDF or image directly as a document/image content
+ * block and reads scanned and machine-generated certificates the same way -
+ * there is no separate OCR step to fall back to, and no pdf-parse
+ * dependency to keep working across a Cloudflare Workers deployment target.
  */
 
 export type ExtractionStatus = "processed" | "needs_review" | "failed" | "not_configured";
@@ -41,16 +59,6 @@ export interface DocumentExtractor {
 
 /** claude-opus-5 only, per this project's Anthropic API usage policy - never substituted for a cheaper model. */
 const MODEL = "claude-opus-5";
-
-/**
- * Below this confidence, a technically-valid extraction is still routed to
- * `needs_review` rather than `processed`. `processed` does not mean
- * "compliant" - see the migration comment on vendor_documents - but it does
- * mean "trustworthy enough that Phase 3 could reasonably act on it without a
- * human looking first." A hedge below this line should not carry that
- * implication.
- */
-const CONFIDENCE_NEEDS_REVIEW_BELOW = 0.6;
 
 const SYSTEM_PROMPT = `You extract structured data from certificates of insurance (typically ACORD 25 forms) for a construction vendor-compliance product.
 
@@ -98,10 +106,6 @@ function buildUserContent(
     documentBlock,
     { type: "text", text: "Extract this certificate of insurance into the JSON shape described." },
   ];
-}
-
-function statusForConfidence(confidence: number): "processed" | "needs_review" {
-  return confidence >= CONFIDENCE_NEEDS_REVIEW_BELOW ? "processed" : "needs_review";
 }
 
 // This SDK version supports native structured outputs
@@ -178,14 +182,15 @@ function createStubExtractor(): DocumentExtractor {
   return {
     async extract() {
       console.warn(
-        "[extraction stub] ANTHROPIC_API_KEY is not set - the document was stored but not processed. " +
-          "Set ANTHROPIC_API_KEY to enable extraction, or call reprocessDocument() once it is set.",
+        "[extraction stub] Neither COI_WORKER_URL/COI_WORKER_API_KEY nor ANTHROPIC_API_KEY is set - " +
+          "the document was stored but not processed. Set one of those, or call reprocessDocument() " +
+          "once it is set.",
       );
       return {
         status: "not_configured",
         data: null,
         confidence: null,
-        error: "Document extraction is not configured (ANTHROPIC_API_KEY unset).",
+        error: "Document extraction is not configured (no worker or ANTHROPIC_API_KEY set).",
       };
     },
   };
@@ -193,7 +198,14 @@ function createStubExtractor(): DocumentExtractor {
 
 export function getDocumentExtractor(
   clientFactory: (apiKey: string) => Anthropic = (apiKey) => new Anthropic({ apiKey }),
+  fetchImpl: typeof fetch = fetch,
 ): DocumentExtractor {
+  const workerUrl = process.env["COI_WORKER_URL"]?.trim();
+  const workerApiKey = process.env["COI_WORKER_API_KEY"]?.trim();
+  if (workerUrl && workerApiKey) {
+    return createWorkerExtractor(workerUrl, workerApiKey, fetchImpl);
+  }
+
   const apiKey = process.env["ANTHROPIC_API_KEY"]?.trim();
   return apiKey ? createAnthropicExtractor(clientFactory(apiKey)) : createStubExtractor();
 }
