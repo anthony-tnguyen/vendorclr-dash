@@ -56,6 +56,7 @@ create table public.audit_log (
 
 create index audit_log_company_idx on public.audit_log (company_id, created_at desc);
 create index audit_log_target_idx on public.audit_log (target_type, target_id);
+create index audit_log_actor_idx on public.audit_log (actor_id);
 
 -- A plain column default of `auth.uid()` cannot do this: authenticated has
 -- no USAGE on schema auth in this project (confirmed by the same
