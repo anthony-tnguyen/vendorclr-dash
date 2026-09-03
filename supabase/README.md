@@ -714,7 +714,10 @@ scanning takes toward a `'malicious'` verdict, for the same reason: an
 unset `RESEND_WEBHOOK_SECRET` or a failed signature check returns `401`
 immediately, because accepting an unverified call would let anyone forge a
 bounce or spam-complaint event against any company's `email_outbox` row.
-There is no gentler failure mode to fall back to here.
+There is no gentler failure mode to fall back to here. Confirmed live
+against the deployed function: with no secret configured (the current
+state - see Known compromises), every call is refused with
+`401 Webhook not configured`, never a silent pass-through.
 
 An event that doesn't match a known `provider_message_id` (an email this
 app never sent, or one sent before this feature shipped) is acknowledged
@@ -1011,12 +1014,18 @@ Deliberate, and worth revisiting as later phases grow on top of them:
   reads `email_outbox.status = 'bounced'`/`'complained'` to, say, flag the
   vendor's contact email as bad, create a task, or stop future automated
   sends to that address - `resend-webhook` only records what happened.
-- **`RESEND_WEBHOOK_SECRET` has no live value to verify against yet.**
-  Real verification was confirmed against Svix's own published test vector
-  (see [Email bounce handling](#email-bounce-handling)) and a live
-  signed-and-unsigned round trip against the deployed function, but no
-  actual Resend webhook has been configured to point at it - `RESEND_API_KEY`
-  itself is still unset, so no real email has gone out to bounce yet either.
+- **`RESEND_WEBHOOK_SECRET` is not set as a live Edge Function secret** -
+  the Supabase MCP connector used to build this project has no tool for
+  setting one, only for deploying function code, so this needs the
+  Supabase CLI or dashboard, done outside this session. Confirmed live
+  that the deployed function correctly refuses every call while it's
+  unset (`401 Webhook not configured`) - the fail-safe default works - but
+  the *signed* path (a real secret, a matching signature) is verified only
+  at the unit level so far (`src/tests/svix-signature.test.ts`, against
+  Svix's own published test vector), not yet as a live round trip through
+  the deployed function. `RESEND_API_KEY` itself is also still unset, so
+  no real email has gone out to bounce yet either - there is no live
+  webhook to receive until both exist.
 
 ## What is still not built
 
