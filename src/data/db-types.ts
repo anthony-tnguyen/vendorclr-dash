@@ -197,6 +197,10 @@ export interface VendorDocumentRow {
   extraction_confidence: number | null;
   /** Set when an earlier document for the same vendor shares this file's sha256. */
   duplicate_of_document_id: string | null;
+  /** VirusTotal hash lookup at upload time - see getMalwareScanner() in src/workflows/malwareScanner.ts. */
+  malware_scan_status: "clean" | "malicious" | "unknown" | "not_configured" | "error";
+  malware_scan_detail: string | null;
+  scanned_at: string | null;
   uploaded_at: string;
   processed_at: string | null;
   created_at: string;

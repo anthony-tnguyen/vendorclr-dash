@@ -199,6 +199,32 @@ describe("vendor_documents", () => {
     expect(compliance.rows[0]?.n).toBe(0);
   });
 
+  it("defaults malware_scan_status to not_configured, not null", async () => {
+    const doc = await db.query<{ id: string }>(
+      `insert into public.vendor_documents
+         (company_id, vendor_id, upload_request_id, storage_path, file_name, mime_type, file_size, sha256)
+       values ($1, $2, $3, 'company/x/vendor/y/documents/scan-default.pdf', 'coi.pdf', 'application/pdf', 100, repeat('c', 64))
+       returning id`,
+      [alicesCompany, alicesVendor, requestId],
+    );
+    const result = await db.query<{ malware_scan_status: string; scanned_at: string | null }>(
+      `select malware_scan_status, scanned_at from public.vendor_documents where id = $1`,
+      [doc.rows[0]!.id],
+    );
+    expect(result.rows[0]).toEqual({ malware_scan_status: "not_configured", scanned_at: null });
+  });
+
+  it("rejects a malware_scan_status outside the known set", async () => {
+    await expect(
+      db.query(
+        `insert into public.vendor_documents
+           (company_id, vendor_id, storage_path, file_name, mime_type, file_size, sha256, malware_scan_status)
+         values ($1, $2, 'company/x/vendor/y/documents/bad-scan-status.pdf', 'coi.pdf', 'application/pdf', 100, repeat('d', 64), 'infected')`,
+        [alicesCompany, alicesVendor],
+      ),
+    ).rejects.toThrow();
+  });
+
   it("rejects a file over the 25MB limit at the database, not just the client", async () => {
     await expect(
       db.query(

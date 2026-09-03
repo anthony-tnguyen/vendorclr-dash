@@ -13,6 +13,7 @@ import {
 } from "./complianceEngine";
 import { getDocumentExtractor, type ExtractDocumentResult } from "./documentExtraction";
 import { getEmailSender } from "./emailSender";
+import { getMalwareScanner } from "./malwareScanner";
 import {
   adminReviewNeededHtml,
   adminReviewNeededSubject,
@@ -68,7 +69,10 @@ import {
  * Extraction and matching failing never fails the upload itself - the vendor
  * still sees "thanks, we received your document" regardless; the file is
  * safely stored either way, and vendor_documents records what happened
- * separately.
+ * separately. The one exception is the malware scan (Phase 4,
+ * malwareScanner.ts), run before anything is written: a confirmed-malicious
+ * file is refused outright, not stored and flagged for later - see the
+ * comment at its call site in uploadDocumentForToken().
  */
 
 /**
@@ -483,6 +487,20 @@ export const uploadDocumentForToken = createServerFn({ method: "POST" })
     const bytes = await file.arrayBuffer();
     const sha256 = await hashFileBytes(bytes);
 
+    // The one integration in this project that blocks rather than degrades
+    // gracefully: every other provider (email, extraction) still lets the
+    // request through when unconfigured or failing, because nothing else
+    // in this app is unsafe to proceed without. A confirmed-malicious file
+    // is different - refused before anything is written, not stored and
+    // flagged for later. not_configured/unknown/error all still proceed;
+    // only a positive "malicious" result stops the upload.
+    const scanResult = await getMalwareScanner().scan(sha256);
+    if (scanResult.status === "malicious") {
+      throw new Error(
+        "This file was flagged by a malware scan and could not be uploaded. Contact support if you believe this is an error.",
+      );
+    }
+
     // documentId is generated before the object is written so the storage path
     // and the vendor_documents row it will be inserted under always agree -
     // never derived from the client-supplied file name.
@@ -531,6 +549,9 @@ export const uploadDocumentForToken = createServerFn({ method: "POST" })
       sha256,
       source: "vendor_portal",
       duplicate_of_document_id: existingDuplicate?.id ?? null,
+      malware_scan_status: scanResult.status,
+      malware_scan_detail: scanResult.detail,
+      scanned_at: new Date().toISOString(),
     });
 
     if (docError) throw new Error("Could not record the upload. Try again.");

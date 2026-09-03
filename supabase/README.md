@@ -36,6 +36,7 @@ Four phases so far:
 | `20260902000800_compliance_requirements.sql` | Drops `vendor_coverage_limits`; adds `compliance_requirements` — see [Matching against coverage requirements](#matching-against-coverage-requirements) |
 | `20260902000900_audit_log.sql` | Adds `audit_log`, `current_user_id()` — see [Audit log](#audit-log) |
 | `20260903000100_upload_request_cancellation.sql` | Widens `audit_log`'s `action`/`target_type` CHECK constraints for `upload_request_cancelled` — see [Cancelling an upload request](#cancelling-an-upload-request) |
+| `20260903000200_malware_scanning.sql` | Adds `malware_scan_status`/`malware_scan_detail`/`scanned_at` to `vendor_documents` — see [Malware scanning](#malware-scanning) |
 
 The headline modelling change: **a vendor no longer owns one flat policy.**
 `Vendor.policyNumber` / `Vendor.expiresOn` in `src/data/contracts.ts` could hold
@@ -584,6 +585,38 @@ outstanding, there is nothing to cancel. Returns the vendor's 10 most recent
 requests; `RequestDocumentsAction.tsx` (the vendor detail page) renders a
 Cancel button next to whichever ones `canCancelRequest()` says qualify.
 
+### Malware scanning
+
+The third piece of Phase 4 hardening: before this, an upload was checked
+only by `isAllowedUploadMimeType()` and a file-size CHECK constraint - both
+metadata a client fully controls, neither able to say anything about what
+is actually inside the bytes.
+
+`getMalwareScanner()` (`malwareScanner.ts`) is the same pluggable-provider
+shape as `emailSender.ts`/`documentExtraction.ts`: a real VirusTotal-backed
+lookup when `VIRUSTOTAL_API_KEY` is set, a stub reporting `not_configured`
+otherwise - never throwing either way. It is a **hash** lookup
+(`GET /files/{sha256}`), not a full upload-and-scan: `uploadDocumentForToken()`
+already computes `sha256` for duplicate detection, so wiring this in costs
+nothing extra at upload time, and VirusTotal's actual upload-and-scan
+endpoint is asynchronous (submit, then poll an analysis id) - it does not
+fit a synchronous upload response without either blocking the vendor for an
+unpredictable length of time or building a separate polling/webhook flow.
+
+The real limit that leaves: a hash VirusTotal has never analyzed before -
+true of most certificates, which are essentially unique per vendor and
+renewal - comes back `'unknown'`, deliberately distinct from `'clean'`
+(analyzed, zero engines flagged it). This catches a **reused** malicious
+file, not a **novel** one. See Known compromises.
+
+This is also the one integration in this project that *blocks* rather than
+degrading gracefully: every other provider still lets the request through
+when unconfigured or failing, because nothing else here is unsafe to
+proceed without. Only a confirmed `'malicious'` verdict refuses the upload
+outright, before anything is written to storage or the database -
+`'not_configured'`/`'unknown'`/`'error'` all still proceed, recorded on
+`vendor_documents.malware_scan_status` for anyone who wants to check later.
+
 ## Security model
 
 Tenancy is enforced in the database, not in React.
@@ -702,7 +735,9 @@ cancel their own company's outstanding request and the partial index that's
 excluded `'cancelled'` since Phase 1 actually reflects it, that a rival
 company's UPDATE matches zero rows rather than erroring (same shape as the
 `audit_log` case just above), and the widened `audit_log` CHECK constraints
-for `upload_request_cancelled`/`vendor_upload_request`. The harness stubs a minimal
+for `upload_request_cancelled`/`vendor_upload_request`; and (migration 16)
+`vendor_documents.malware_scan_status` defaulting to `'not_configured'`
+rather than null and rejecting a value outside its known set. The harness stubs a minimal
 `storage.objects`/`storage.buckets` schema (PGlite has no `storage` schema of
 its own) — see `supabase/tests/harness.ts`.
 
@@ -729,6 +764,11 @@ missing/superseded/expired policy of the required type.
 new `documentReceived`/`adminReviewNeeded` templates specifically for the
 property that matters most: the vendor-facing copy never leaks a
 matching-engine reason, while the admin-facing copy always includes it.
+`src/tests/malware-scanner.test.ts` covers `getMalwareScanner()` against a
+mocked `fetch` - not-configured, a 404 (unknown, not clean), clean, malicious
+on either `malicious` or `suspicious` alone, and both failure shapes
+(a non-2xx response and the network call itself rejecting) reporting `'error'`
+without throwing.
 
 `supabase/tests/function-grants.test.ts` asserts the exact anon/authenticated
 EXECUTE matrix on every RLS-primitive and trigger-only function — see the
@@ -828,6 +868,18 @@ Deliberate, and worth revisiting as later phases grow on top of them:
   row's outcome (who resolved *this* item), which is the only place it's
   wired in today - there is no company-wide or admin-wide "recent activity"
   view yet.
+- **The malware scan is a hash lookup, not full-content analysis of a novel
+  file.** VirusTotal has almost never seen a given certificate before -
+  each is essentially unique per vendor/renewal - so most uploads land on
+  `'unknown'`, not `'clean'`. This catches a *reused* malicious file, not a
+  *novel* one; full-content scanning would need VirusTotal's asynchronous
+  upload-and-analyze endpoint (or a different provider offering a
+  synchronous scan), a bigger integration than this pass reached for.
+- **No admin visibility into scan results beyond the raw column.** There is
+  no screen surfacing `malware_scan_status`/`malware_scan_detail` - only a
+  `'malicious'` verdict is currently acted on (it blocks the upload
+  outright); `'error'`/`'unknown'` results are recorded but not
+  highlighted anywhere for a person to notice.
 
 ## What is still not built
 
@@ -839,10 +891,10 @@ that JSON to `vendor_policies` and roll the compliance rail forward
 automatically. What's not built yet:
 
 - **Hardening (Phase 4), remaining.** An automated (not just manually-invoked)
-  retry queue, email bounce handling, malware/file-content checks beyond
-  mime-type and size. (Audit log and upload-request cancellation shipped -
-  see [Audit log](#audit-log) and
-  [Cancelling an upload request](#cancelling-an-upload-request).)
+  retry queue, email bounce handling. (Audit log, upload-request
+  cancellation, and malware scanning shipped - see [Audit log](#audit-log),
+  [Cancelling an upload request](#cancelling-an-upload-request), and
+  [Malware scanning](#malware-scanning).)
 
 Nothing here claims otherwise: a `processed` extraction that fails
 `matchExtractedPolicy()` for even one coverage type on the certificate leaves
