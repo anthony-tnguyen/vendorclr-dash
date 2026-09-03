@@ -68,6 +68,7 @@ describe("trigger-only functions: no one calls these directly", () => {
     "public.handle_new_user()",
     "public.seed_vendor_compliance_items()",
     "public.set_audit_log_actor()",
+    "public.assert_company_matches_email_outbox()",
   ];
 
   it.each(fns)("anon cannot execute %s", async (fn) => {

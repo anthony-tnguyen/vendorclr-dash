@@ -33,6 +33,7 @@ describe("migrations", () => {
       "company_members",
       "compliance_queue_items",
       "compliance_requirements",
+      "email_delivery_events",
       "email_outbox",
       "leads",
       "platform_admins",
