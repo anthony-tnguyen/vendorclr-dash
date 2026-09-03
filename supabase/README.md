@@ -39,6 +39,7 @@ Four phases so far:
 | `20260903000200_malware_scanning.sql` | Adds `malware_scan_status`/`malware_scan_detail`/`scanned_at` to `vendor_documents` — see [Malware scanning](#malware-scanning) |
 | `20260903000300_automated_retry_queue.sql` | Adds `vendor_documents.retry_count`/`next_retry_at`, `documents_due_for_retry` — see [Automated retry queue](#automated-retry-queue) |
 | `20260903000400_schedule_automated_retries.sql` | Schedules an hourly call into the `retry-failed-documents` Edge Function via `pg_cron`/`pg_net` — see [Automated retry queue](#automated-retry-queue) |
+| `20260903000500_email_bounce_handling.sql` | Widens `email_outbox.status`; adds `email_delivery_events` — see [Email bounce handling](#email-bounce-handling) |
 
 The headline modelling change: **a vendor no longer owns one flat policy.**
 `Vendor.policyNumber` / `Vendor.expiresOn` in `src/data/contracts.ts` could hold
@@ -664,6 +665,61 @@ database round trip finding documents this run could not possibly process)
 and touches nothing, so the next hourly run picks up exactly where this one
 left off once the key is set.
 
+### Email bounce handling
+
+The fifth and last piece of Phase 4 hardening - the item this README's own
+Known compromises used to flag by name: "split `email_outbox` once
+delivery-webhook data (opened/clicked/bounced) needs its own lifecycle."
+Before this, `email_outbox.status` answered "did we attempt to send this"
+(`queued`/`sent`/`failed`, set once by the app at send time) and nothing
+else - never "did it actually reach the vendor," "did it bounce," or "did
+they mark it spam."
+
+**`email_delivery_events`** is that split, done as an append-only log rather
+than more mutable columns: an email's post-send lifecycle is genuinely
+multi-event (sent, then later delivered, or sent then bounced, sometimes a
+delay before either), which a single status column can only ever show the
+latest of. `email_outbox.status` is still updated for delivery *outcome*
+events (`delivered`/`bounced`/`complained`) - a dashboard reading one row
+doesn't need to join for the common case - but the event log is the actual
+record; status is a derived summary, not the source of truth.
+
+**`supabase/functions/resend-webhook`** is a public HTTP endpoint - the
+first one in this project not gated by `verify_jwt`, because Resend has no
+Supabase session to attach a platform JWT to. Authenticity instead comes
+from Resend's own webhook signing scheme, which is actually Svix's (Resend
+delegates the cryptography to Svix and documents it by pointing there
+rather than restating it): `svix-id`/`svix-timestamp`/`svix-signature`
+headers, HMAC-SHA256 over `{id}.{timestamp}.{raw body}` with a
+`whsec_`-prefixed, base64-encoded secret (`RESEND_WEBHOOK_SECRET`). That
+algorithm was confirmed against Svix's own published test vector before
+writing a line of the verification code - see
+`src/tests/svix-signature.test.ts`, which checks the exact vector, several
+tamper cases (wrong body, wrong secret, wrong id, an unmatched signature, an
+unrecognized version prefix), the multi-signature secret-rotation case, and
+the replay-protection timestamp window - not deployed-and-hoped-for.
+
+`verifySvixSignature()` (`svixSignature.ts`) is a rare case in this codebase:
+the *same* file, byte-for-byte, runs in both the Node app (where it is
+actually unit-tested, `src/workflows/svixSignature.ts`) and the Edge
+Function, because it uses nothing but `atob`/`btoa`/`crypto.subtle` -
+identical globals in both runtimes. Every other cross-runtime port in this
+project (`uploadTokens.ts`, `insuranceExtractionSchema.ts`) needed at least
+an `npm:`/`jsr:` specifier swap; this one needed none, so real unit tests
+against the real algorithm were possible in a way they weren't for those.
+
+**This is also the one endpoint in this project that refuses outright rather
+than degrading gracefully when unconfigured** - the same posture malware
+scanning takes toward a `'malicious'` verdict, for the same reason: an
+unset `RESEND_WEBHOOK_SECRET` or a failed signature check returns `401`
+immediately, because accepting an unverified call would let anyone forge a
+bounce or spam-complaint event against any company's `email_outbox` row.
+There is no gentler failure mode to fall back to here.
+
+An event that doesn't match a known `provider_message_id` (an email this
+app never sent, or one sent before this feature shipped) is acknowledged
+(`200`) but not recorded - there is genuinely nothing to attach it to.
+
 ## Security model
 
 Tenancy is enforced in the database, not in React.
@@ -790,7 +846,13 @@ rather than null and rejecting a value outside its known set; and
 excluded, every non-`'failed'` `processing_status` excluded regardless of
 `retry_count`/`next_retry_at`) and cross-tenant RLS isolation - see
 [Automated retry queue](#automated-retry-queue) for what migration 18
-needs the live project for instead. The harness stubs a minimal
+needs the live project for instead; and (migration 19) the widened
+`email_outbox.status` CHECK, every `email_delivery_events.event_type`
+CHECK, the `assert_company_matches_email_outbox()` integrity trigger firing
+on a mismatched `company_id` regardless of caller/role, and cross-tenant
+RLS isolation on the events table. `svixSignature.ts`'s cryptography is
+covered separately, at the unit level - see
+[Email bounce handling](#email-bounce-handling). The harness stubs a minimal
 `storage.objects`/`storage.buckets` schema (PGlite has no `storage` schema of
 its own) — see `supabase/tests/harness.ts`.
 
@@ -864,13 +926,10 @@ Deliberate, and worth revisiting as later phases grow on top of them:
   uploads in flight.
 - **One company per user.** `resolveCompanyId()` takes the oldest membership.
   Multi-company users need a company switcher in the session context first.
-- **`email_outbox` is one table**, not the `email_events` / `email_deliveries`
-  split a fuller design calls for. One row per send attempt answers "did this go
-  out" for Phase 1; split it once delivery-webhook data (opened/clicked/bounced)
-  needs its own lifecycle.
-- **No token revocation or resend UI.** `vendor_upload_requests.status` already
-  has `cancelled`, and a new request can simply be created, but there is no
-  admin control to cancel an outstanding one yet.
+- **No resend UI.** Cancelling an outstanding request is now built (see
+  [Cancelling an upload request](#cancelling-an-upload-request)), but there
+  is no one-click "resend" - an admin who wants a fresh link has to cancel
+  the old request and create a new one as two separate actions.
 - **`db-types.ts` is hand-written**, and the client is intentionally not
   parameterised with it. Run
   `supabase gen types typescript --project-id <ref> > src/data/db-types.ts`, then
@@ -944,24 +1003,45 @@ Deliberate, and worth revisiting as later phases grow on top of them:
   `retry_count`/`next_retry_at`, or which documents have exhausted their 5
   automated attempts and are now waiting on a person via
   `reprocessDocument()`.
+- **No admin visibility into email delivery/bounce status.** `email_delivery_events`
+  and the widened `email_outbox.status` are written correctly, but no
+  screen surfaces them - an admin cannot yet see "this renewal request
+  bounced" without querying the database directly.
+- **A bounce/complaint does not trigger any follow-up action.** Nothing
+  reads `email_outbox.status = 'bounced'`/`'complained'` to, say, flag the
+  vendor's contact email as bad, create a task, or stop future automated
+  sends to that address - `resend-webhook` only records what happened.
+- **`RESEND_WEBHOOK_SECRET` has no live value to verify against yet.**
+  Real verification was confirmed against Svix's own published test vector
+  (see [Email bounce handling](#email-bounce-handling)) and a live
+  signed-and-unsigned round trip against the deployed function, but no
+  actual Resend webhook has been configured to point at it - `RESEND_API_KEY`
+  itself is still unset, so no real email has gone out to bounce yet either.
 
 ## What is still not built
 
-Phases 0-3 give vendors and policies a real, tenant-scoped home; close the
-outbound half of the loop (request → email → magic link → upload → visible in the
-compliance queue); turn an uploaded certificate into structured,
-confidence-scored JSON; and, when a deterministic match says it's safe, apply
-that JSON to `vendor_policies` and roll the compliance rail forward
-automatically. What's not built yet:
+Phases 0-3 gave vendors and policies a real, tenant-scoped home; closed the
+outbound half of the loop (request → email → magic link → upload → visible in
+the compliance queue); turned an uploaded certificate into structured,
+confidence-scored JSON; and, when a deterministic match says it's safe,
+applied that JSON to `vendor_policies` and rolled the compliance rail forward
+automatically. Phase 4 hardened all of it: an audit log
+([Audit log](#audit-log)), the ability to cancel an outstanding request
+([Cancelling an upload request](#cancelling-an-upload-request)), malware
+scanning on every upload ([Malware scanning](#malware-scanning)), an
+automated retry queue for failed extraction
+([Automated retry queue](#automated-retry-queue)), and delivery/bounce
+tracking on outbound email ([Email bounce handling](#email-bounce-handling)).
 
-- **Hardening (Phase 4), remaining.** Email bounce handling - needs a
-  configured `RESEND_API_KEY` and a webhook receiver, neither of which
-  exists yet, to build against anything real. (Audit log, upload-request
-  cancellation, malware scanning, and an automated retry queue shipped -
-  see [Audit log](#audit-log),
-  [Cancelling an upload request](#cancelling-an-upload-request),
-  [Malware scanning](#malware-scanning), and
-  [Automated retry queue](#automated-retry-queue).)
+Every item originally planned across Phases 0-4 is built. That is not the
+same claim as "nothing is left" - see [Known compromises](#known-compromises)
+for the real, ongoing list of deliberate simplifications each phase left
+behind on purpose (narrower scope than a fuller design would have, not
+missing functionality): live provider keys still unset
+(`RESEND_API_KEY`/`ANTHROPIC_API_KEY`/`VIRUSTOTAL_API_KEY`/
+`RESEND_WEBHOOK_SECRET` - everything gracefully degrades until each is
+configured), company-wide (not per-trade) coverage requirements, no
+per-line review-screen editing, and the others listed there.
 
 Nothing here claims otherwise: a `processed` extraction that fails
 `matchExtractedPolicy()` for even one coverage type on the certificate leaves
