@@ -121,6 +121,7 @@ const DEFAULT_GRANTS = `
  */
 export const SKIPPED_IN_PGLITE: readonly string[] = [
   "20260902000600_schedule_renewal_reminders.sql",
+  "20260903000400_schedule_automated_retries.sql",
 ];
 
 export function migrationFiles(): string[] {

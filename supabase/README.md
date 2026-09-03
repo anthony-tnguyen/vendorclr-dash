@@ -37,6 +37,8 @@ Four phases so far:
 | `20260902000900_audit_log.sql` | Adds `audit_log`, `current_user_id()` — see [Audit log](#audit-log) |
 | `20260903000100_upload_request_cancellation.sql` | Widens `audit_log`'s `action`/`target_type` CHECK constraints for `upload_request_cancelled` — see [Cancelling an upload request](#cancelling-an-upload-request) |
 | `20260903000200_malware_scanning.sql` | Adds `malware_scan_status`/`malware_scan_detail`/`scanned_at` to `vendor_documents` — see [Malware scanning](#malware-scanning) |
+| `20260903000300_automated_retry_queue.sql` | Adds `vendor_documents.retry_count`/`next_retry_at`, `documents_due_for_retry` — see [Automated retry queue](#automated-retry-queue) |
+| `20260903000400_schedule_automated_retries.sql` | Schedules an hourly call into the `retry-failed-documents` Edge Function via `pg_cron`/`pg_net` — see [Automated retry queue](#automated-retry-queue) |
 
 The headline modelling change: **a vendor no longer owns one flat policy.**
 `Vendor.policyNumber` / `Vendor.expiresOn` in `src/data/contracts.ts` could hold
@@ -617,6 +619,51 @@ outright, before anything is written to storage or the database -
 `'not_configured'`/`'unknown'`/`'error'` all still proceed, recorded on
 `vendor_documents.malware_scan_status` for anyone who wants to check later.
 
+### Automated retry queue
+
+The fourth piece of Phase 4 hardening. `reprocessDocument()` has been the
+only way to retry a `'failed'` document since Phase 2 - an admin has to
+notice a document sitting in the queue and click a button. Nothing
+automated re-attempted extraction on its own.
+
+Same split as [Renewal reminders](#renewal-reminders), same reason:
+detection is plain SQL (`documents_due_for_retry`, migration 17), fully
+covered by `db:verify`; scheduling and the actual retry need the real
+stack (`pg_cron`/`pg_net` -> the `retry-failed-documents` Edge Function),
+verified against the live project instead. `documents_due_for_retry`
+surfaces a `'failed'` document that hasn't hit the retry cap, isn't still
+on backoff cooldown, and whose linked `compliance_queue_items` row isn't
+already `'resolved'` - if a human already looked at this exact document and
+chose reject, retrying it forever afterward would be wasted work, not a
+service (`resolveReviewItem()`'s reject path leaves
+`vendor_documents.processing_status` untouched, so a `'failed'` document
+with an already-rejected queue item is a real case, not a hypothetical
+one).
+
+**Deliberately conservative**, more so than the reminders Edge Function: a
+successful automated retry is *always* written as `'needs_review'`, never
+`'processed'` - `'processed'` means more here than "confidently extracted."
+In the original upload path (`applyExtractionResult()`), it means
+confidently extracted *and* cleanly applied to `vendor_policies` by
+`applyComplianceEngine()`. Porting that matching/writing logic to Deno
+would be a much bigger duplication than the small, pure-function ports this
+needs (the extraction schema and the Anthropic call itself); recovering the
+*data* automatically and letting a person decide through the review screen
+already built for exactly this (`documentReview.ts`) is the whole job here.
+`retry_count`/`next_retry_at` are written *only* by this automated path,
+never by `reprocessDocument()` - they track an automated budget distinct
+from a human's own patience manually retrying; see migration 17's
+docblock for the full reasoning. Bounded at 5 attempts with widening
+backoff (1h, 4h, 12h, 24h, 48h) rather than retried forever: a document
+still failing after 5 automated attempts most likely has a real,
+non-transient problem an automated retry cannot fix by trying again.
+
+If `ANTHROPIC_API_KEY` is unset, the Edge Function skips the entire run
+(not a per-document `not_configured` result - there is no point spending a
+database round trip finding documents this run could not possibly process)
+and touches nothing, so the next hourly run picks up exactly where this one
+left off once the key is set.
+
 ## Security model
 
 Tenancy is enforced in the database, not in React.
@@ -737,7 +784,13 @@ company's UPDATE matches zero rows rather than erroring (same shape as the
 `audit_log` case just above), and the widened `audit_log` CHECK constraints
 for `upload_request_cancelled`/`vendor_upload_request`; and (migration 16)
 `vendor_documents.malware_scan_status` defaulting to `'not_configured'`
-rather than null and rejecting a value outside its known set. The harness stubs a minimal
+rather than null and rejecting a value outside its known set; and
+(migration 17) `documents_due_for_retry`'s filtering (`retry_count` cap,
+`next_retry_at` cooldown in both directions, already-resolved queue items
+excluded, every non-`'failed'` `processing_status` excluded regardless of
+`retry_count`/`next_retry_at`) and cross-tenant RLS isolation - see
+[Automated retry queue](#automated-retry-queue) for what migration 18
+needs the live project for instead. The harness stubs a minimal
 `storage.objects`/`storage.buckets` schema (PGlite has no `storage` schema of
 its own) — see `supabase/tests/harness.ts`.
 
@@ -880,6 +933,17 @@ Deliberate, and worth revisiting as later phases grow on top of them:
   `'malicious'` verdict is currently acted on (it blocks the upload
   outright); `'error'`/`'unknown'` results are recorded but not
   highlighted anywhere for a person to notice.
+- **A successful automated retry never re-runs compliance matching**, even
+  when the recovered extraction would have matched cleanly against what's
+  on file. Every recovered document lands as `'needs_review'` and needs a
+  person to approve it through the review screen, exactly as if it had
+  failed to match automatically the first time - a deliberate, documented
+  simplification (see [Automated retry queue](#automated-retry-queue)), not
+  an oversight.
+- **No admin visibility into the retry budget.** There is no screen showing
+  `retry_count`/`next_retry_at`, or which documents have exhausted their 5
+  automated attempts and are now waiting on a person via
+  `reprocessDocument()`.
 
 ## What is still not built
 
@@ -890,11 +954,14 @@ confidence-scored JSON; and, when a deterministic match says it's safe, apply
 that JSON to `vendor_policies` and roll the compliance rail forward
 automatically. What's not built yet:
 
-- **Hardening (Phase 4), remaining.** An automated (not just manually-invoked)
-  retry queue, email bounce handling. (Audit log, upload-request
-  cancellation, and malware scanning shipped - see [Audit log](#audit-log),
-  [Cancelling an upload request](#cancelling-an-upload-request), and
-  [Malware scanning](#malware-scanning).)
+- **Hardening (Phase 4), remaining.** Email bounce handling - needs a
+  configured `RESEND_API_KEY` and a webhook receiver, neither of which
+  exists yet, to build against anything real. (Audit log, upload-request
+  cancellation, malware scanning, and an automated retry queue shipped -
+  see [Audit log](#audit-log),
+  [Cancelling an upload request](#cancelling-an-upload-request),
+  [Malware scanning](#malware-scanning), and
+  [Automated retry queue](#automated-retry-queue).)
 
 Nothing here claims otherwise: a `processed` extraction that fails
 `matchExtractedPolicy()` for even one coverage type on the certificate leaves
