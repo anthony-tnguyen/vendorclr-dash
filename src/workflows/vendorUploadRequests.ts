@@ -2,7 +2,19 @@ import { createServerFn } from "@tanstack/react-start";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { z } from "zod";
 
-import { getRequestScopedClient, getServiceRoleClient } from "@/lib/supabase/serverClient.server";
+/**
+ * Loaded lazily inside handlers: a static import of the *.server module puts
+ * it in the client import graph (this file is imported by React components),
+ * which the build's import protection rejects.
+ */
+async function getRequestScopedClient() {
+  const mod = await import("@/lib/supabase/serverClient.server");
+  return mod.getRequestScopedClient();
+}
+async function getServiceRoleClient() {
+  const mod = await import("@/lib/supabase/serverClient.server");
+  return mod.getServiceRoleClient();
+}
 import {
   computeComplianceItems,
   hasUnclassifiedPolicy,
@@ -90,7 +102,7 @@ import {
  * check before its own service-role reads/writes.
  */
 export async function assertPlatformAdmin(): Promise<string> {
-  const supabase = getRequestScopedClient();
+  const supabase = await getRequestScopedClient();
   const { data: isAdmin, error: adminError } = await supabase.rpc("is_platform_admin");
   if (adminError || !isAdmin) {
     throw new Error("This action is limited to VendorClear staff accounts.");
@@ -130,7 +142,7 @@ export interface CreateUploadRequestResult {
 export const createUploadRequest = createServerFn({ method: "POST" })
   .validator(createUploadRequestSchema)
   .handler(async ({ data }): Promise<CreateUploadRequestResult> => {
-    const supabase = getRequestScopedClient();
+    const supabase = await getRequestScopedClient();
 
     const { data: vendor, error: vendorError } = await supabase
       .from("vendors")
@@ -277,7 +289,7 @@ export interface UploadRequestSummary {
 export const listUploadRequestsForVendor = createServerFn({ method: "GET" })
   .validator(z.object({ vendorId: z.string().uuid() }))
   .handler(async ({ data }): Promise<UploadRequestSummary[]> => {
-    const supabase = getRequestScopedClient();
+    const supabase = await getRequestScopedClient();
     const { data: rows, error } = await supabase
       .from("vendor_upload_requests")
       .select("id, purpose, status, created_at, expires_at")
@@ -316,7 +328,7 @@ const cancelUploadRequestSchema = z.object({ requestId: z.string().uuid() });
 export const cancelUploadRequest = createServerFn({ method: "POST" })
   .validator(cancelUploadRequestSchema)
   .handler(async ({ data }): Promise<{ status: string }> => {
-    const supabase = getRequestScopedClient();
+    const supabase = await getRequestScopedClient();
 
     const { data: existing, error: fetchError } = await supabase
       .from("vendor_upload_requests")
@@ -375,7 +387,7 @@ const INVALID_TOKEN_MESSAGE = "This link is no longer valid. Ask your contact to
 export const resolveUploadToken = createServerFn({ method: "GET" })
   .validator(resolveUploadTokenSchema)
   .handler(async ({ data }): Promise<ResolvedUploadRequest> => {
-    const supabase = getServiceRoleClient();
+    const supabase = await getServiceRoleClient();
     const tokenHash = await hashToken(data.token);
 
     const { data: request } = await supabase
@@ -460,7 +472,7 @@ export const uploadDocumentForToken = createServerFn({ method: "POST" })
       throw new Error(`File must be under ${Math.floor(MAX_UPLOAD_BYTES / (1024 * 1024))}MB.`);
     }
 
-    const supabase = getServiceRoleClient();
+    const supabase = await getServiceRoleClient();
     const tokenHash = await hashToken(token);
 
     const { data: request } = await supabase
@@ -1124,7 +1136,7 @@ export const reprocessDocument = createServerFn({ method: "POST" })
   .validator(reprocessDocumentSchema)
   .handler(async ({ data }): Promise<ReprocessDocumentResult> => {
     const actorId = await assertPlatformAdmin();
-    const supabase = getServiceRoleClient();
+    const supabase = await getServiceRoleClient();
 
     const { data: doc, error: docError } = await supabase
       .from("vendor_documents")
