@@ -7,12 +7,12 @@ export const Route = createFileRoute("/login")({
       { title: "Sign in — VendorClear" },
       {
         name: "description",
-        content: "Demo sign-in screen for the VendorClear construction vendor compliance console.",
+        content: "Sign in to the VendorClear construction vendor compliance console.",
       },
       { property: "og:title", content: "Sign in — VendorClear" },
       {
         property: "og:description",
-        content: "Demo sign-in for VendorClear compliance operations.",
+        content: "Sign in for VendorClear compliance operations.",
       },
     ],
   }),

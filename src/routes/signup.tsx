@@ -7,12 +7,12 @@ export const Route = createFileRoute("/signup")({
       { title: "Create account — VendorClear" },
       {
         name: "description",
-        content: "Demo account creation for VendorClear subcontractor compliance tracking.",
+        content: "Create an account for VendorClear subcontractor compliance tracking.",
       },
       { property: "og:title", content: "Create account — VendorClear" },
       {
         property: "og:description",
-        content: "Demo account creation for VendorClear compliance tracking.",
+        content: "Create an account for VendorClear compliance tracking.",
       },
     ],
   }),
