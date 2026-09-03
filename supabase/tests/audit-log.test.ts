@@ -98,6 +98,19 @@ describe("audit_log", () => {
     ).rejects.toThrow();
   });
 
+  it("accepts upload_request_cancelled / vendor_upload_request, added in migration 15", async () => {
+    const rows = await db.query<{ action: string; target_type: string }>(
+      `insert into public.audit_log (company_id, action, target_type, target_id)
+       values ($1, 'upload_request_cancelled', 'vendor_upload_request', $2)
+       returning action, target_type`,
+      [companyId, vendorId],
+    );
+    expect(rows.rows[0]).toEqual({
+      action: "upload_request_cancelled",
+      target_type: "vendor_upload_request",
+    });
+  });
+
   it("refuses a read_only member writing", async () => {
     await expectDeniedByRls(() =>
       asUser(

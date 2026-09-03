@@ -35,6 +35,7 @@ Four phases so far:
 | `20260902000700_review_queue.sql` | Adds `document_id`, `resolution`, `resolution_note`, `resolved_at`, and a `'resolved'` state to `compliance_queue_items` — see [The review queue screen](#the-review-queue-screen) |
 | `20260902000800_compliance_requirements.sql` | Drops `vendor_coverage_limits`; adds `compliance_requirements` — see [Matching against coverage requirements](#matching-against-coverage-requirements) |
 | `20260902000900_audit_log.sql` | Adds `audit_log`, `current_user_id()` — see [Audit log](#audit-log) |
+| `20260903000100_upload_request_cancellation.sql` | Widens `audit_log`'s `action`/`target_type` CHECK constraints for `upload_request_cancelled` — see [Cancelling an upload request](#cancelling-an-upload-request) |
 
 The headline modelling change: **a vendor no longer owns one flat policy.**
 `Vendor.policyNumber` / `Vendor.expiresOn` in `src/data/contracts.ts` could hold
@@ -553,6 +554,36 @@ fixed the same way: two queries (`company_members.user_id`, then
 `profiles` filtered `.in("id", ...)`) instead of one embed - see
 `fetchOwnerEmails()` in `vendorUploadRequests.ts`.
 
+### Cancelling an upload request
+
+The second piece of Phase 4 hardening, and the smallest kind of gap this
+project has closed so far: `vendor_upload_requests.status` has allowed
+`'cancelled'` since migration 4 (Phase 1), and
+`vendor_upload_requests_open_idx` has excluded it from "still open" queries
+for just as long - the schema was built expecting this from day one, but no
+code ever set it, and there was no admin control to call off an outstanding
+request.
+
+`cancelUploadRequest()` (`vendorUploadRequests.ts`) is that missing write.
+No new table, no new RLS policy: `vendor_upload_requests_update` already
+grants `can_write_company()` the UPDATE this needs, the same policy
+`createUploadRequest()`'s INSERT already relies on - this runs entirely on
+the request-scoped client, no service role anywhere. Only valid from a
+status the vendor hasn't acted on at all yet
+(`canCancelRequest()` in `uploadTokens.ts` - `pending`/`email_sent`/`opened`,
+deliberately the same members as `canOpenRequest()`'s set today, but named
+separately since "the vendor can still open this link" and "an admin can
+still call this off" are different questions that only happen to share an
+answer right now) - re-checked server-side, not just hidden by the UI, since
+the status could move between the page loading and the click landing.
+Logged to `audit_log` as `upload_request_cancelled` /
+`vendor_upload_request` (migration 15 widens both CHECK constraints for it).
+
+`listUploadRequestsForVendor()` is the other half - without seeing what's
+outstanding, there is nothing to cancel. Returns the vendor's 10 most recent
+requests; `RequestDocumentsAction.tsx` (the vendor detail page) renders a
+Cancel button next to whichever ones `canCancelRequest()` says qualify.
+
 ## Security model
 
 Tenancy is enforced in the database, not in React.
@@ -666,7 +697,12 @@ from `auth.uid()` only when the caller left it unset, every `action`/
 `target_type` CHECK constraint, cross-tenant isolation, and - genuinely
 provable only at the RLS level, not by a thrown-error assertion - that an
 UPDATE or DELETE against `audit_log` with no policy for either matches zero
-rows rather than throwing. The harness stubs a minimal
+rows rather than throwing; and (migration 15) that a write-role member can
+cancel their own company's outstanding request and the partial index that's
+excluded `'cancelled'` since Phase 1 actually reflects it, that a rival
+company's UPDATE matches zero rows rather than erroring (same shape as the
+`audit_log` case just above), and the widened `audit_log` CHECK constraints
+for `upload_request_cancelled`/`vendor_upload_request`. The harness stubs a minimal
 `storage.objects`/`storage.buckets` schema (PGlite has no `storage` schema of
 its own) — see `supabase/tests/harness.ts`.
 
@@ -804,8 +840,9 @@ automatically. What's not built yet:
 
 - **Hardening (Phase 4), remaining.** An automated (not just manually-invoked)
   retry queue, email bounce handling, malware/file-content checks beyond
-  mime-type and size, upload-request cancellation UI. (Audit log shipped -
-  see [Audit log](#audit-log).)
+  mime-type and size. (Audit log and upload-request cancellation shipped -
+  see [Audit log](#audit-log) and
+  [Cancelling an upload request](#cancelling-an-upload-request).)
 
 Nothing here claims otherwise: a `processed` extraction that fails
 `matchExtractedPolicy()` for even one coverage type on the certificate leaves

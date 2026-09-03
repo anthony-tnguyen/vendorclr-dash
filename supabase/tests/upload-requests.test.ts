@@ -88,6 +88,71 @@ describe("vendor_upload_requests", () => {
     ).rejects.toThrow();
   });
 
+  it("lets a write-role member cancel an outstanding request they can write to", async () => {
+    const created = await asUser<{ id: string }>(
+      db,
+      ALICE,
+      `insert into public.vendor_upload_requests (company_id, vendor_id, token_hash, expires_at)
+       values ($1, $2, 'cancel-me-hash', now() + interval '14 days') returning id`,
+      [alicesCompany, alicesVendor],
+    );
+    const requestId = created[0]!.id;
+
+    const updated = await asUser<{ status: string }>(
+      db,
+      ALICE,
+      `update public.vendor_upload_requests set status = 'cancelled' where id = $1 returning status`,
+      [requestId],
+    );
+    expect(updated[0]?.status).toBe("cancelled");
+
+    // The partial index this exercises has excluded 'cancelled' since
+    // migration 4 (Phase 1) - dormant until now, since nothing ever set the
+    // status to actually land a row outside it. Confirms it does.
+    const stillOpen = await db.query<{ n: number }>(
+      `select count(*)::int n from public.vendor_upload_requests
+       where id = $1 and expires_at > now()`,
+      [requestId],
+    );
+    // Sanity: the row still exists and hasn't expired by date - only its
+    // status moved it out of "open."
+    expect(stillOpen.rows[0]?.n).toBe(1);
+
+    const indexRows = await db.query<{ n: number }>(
+      `select count(*)::int n from public.vendor_upload_requests
+       where id = $1 and status not in ('completed', 'expired', 'cancelled')`,
+      [requestId],
+    );
+    expect(indexRows.rows[0]?.n).toBe(0);
+  });
+
+  it("refuses a rival company's owner cancelling it", async () => {
+    const created = await asUser<{ id: string }>(
+      db,
+      ALICE,
+      `insert into public.vendor_upload_requests (company_id, vendor_id, token_hash, expires_at)
+       values ($1, $2, 'rival-cancel-hash', now() + interval '14 days') returning id`,
+      [alicesCompany, alicesVendor],
+    );
+    const requestId = created[0]!.id;
+
+    await asUser(
+      db,
+      BOB,
+      `update public.vendor_upload_requests set status = 'cancelled' where id = $1`,
+      [requestId],
+    );
+
+    // Not expectDeniedByRls(): can_write_company()'s USING clause simply
+    // hides the row from BOB, so the UPDATE matches zero rows and succeeds
+    // without error - the real assertion is that ALICE's row is untouched.
+    const after = await db.query<{ status: string }>(
+      `select status from public.vendor_upload_requests where id = $1`,
+      [requestId],
+    );
+    expect(after.rows[0]?.status).toBe("pending");
+  });
+
   it("rejects a request whose company_id does not match its vendor", async () => {
     await expect(
       db.query(
