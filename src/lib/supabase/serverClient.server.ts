@@ -64,16 +64,21 @@ export function getRequestScopedClient(): SupabaseClient {
 
 export function getServiceRoleClient(): SupabaseClient {
   assertServerOnly("getServiceRoleClient");
-  const url = readSupabaseEnv()?.url;
-  // This project uses a custom name because the secret store reserves the
-  // SUPABASE_ prefix for managed connections. It must never be VITE_-prefixed:
-  // VITE_ values ship to the browser bundle.
+  // These use custom names because the secret store reserves the SUPABASE_
+  // prefix for managed connections. Neither may be VITE_-prefixed: VITE_
+  // values are build-time browser configuration, while this privileged client
+  // must be configured directly by the server runtime.
+  const url = process.env["VENDORCLEAR_SUPABASE_URL"]?.trim();
   const key = process.env["VENDORCLEAR_SERVICE_ROLE_KEY"]?.trim();
 
-  if (!url || !key) {
+  if (!url) {
     throw new Error(
-      "VENDORCLEAR_SERVICE_ROLE_KEY (and VITE_SUPABASE_URL) must both be set to use the vendor " +
-        "upload portal server functions.",
+      "VENDORCLEAR_SUPABASE_URL must be set to use the vendor upload portal server functions.",
+    );
+  }
+  if (!key) {
+    throw new Error(
+      "VENDORCLEAR_SERVICE_ROLE_KEY must be set to use the vendor upload portal server functions.",
     );
   }
 
