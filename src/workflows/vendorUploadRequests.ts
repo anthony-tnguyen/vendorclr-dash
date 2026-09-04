@@ -88,7 +88,7 @@ import {
  */
 
 /**
- * Confirms the calling session belongs to VendorClear staff before a server
+ * Confirms the calling session belongs to VendorClr staff before a server
  * function drops from the request-scoped client to the service role, and
  * returns that caller's own user id - needed to attribute an audit_log row
  * (migration 14) to a real actor, since the service role client used for
@@ -105,7 +105,7 @@ export async function assertPlatformAdmin(): Promise<string> {
   const supabase = await getRequestScopedClient();
   const { data: isAdmin, error: adminError } = await supabase.rpc("is_platform_admin");
   if (adminError || !isAdmin) {
-    throw new Error("This action is limited to VendorClear staff accounts.");
+    throw new Error("This action is limited to VendorClr staff accounts.");
   }
   const { data: userId, error: idError } = await supabase.rpc("current_user_id");
   if (idError || !userId) throw new Error("Could not identify the signed-in account.");
@@ -1120,7 +1120,7 @@ export interface ReprocessDocumentResult {
  * claim was sufficient. That was wrong: the only screen that can ever call
  * this (the admin Compliance Queue / review screen, AdminGuard-gated on
  * `role === "admin"`) is staff-only, and `can_write_company()` grants write
- * access by *company membership*, which VendorClear staff reviewing a
+ * access by *company membership*, which VendorClr staff reviewing a
  * customer's documents do not have. `vendor_documents_update`,
  * `compliance_queue_items_write`, and `apply_policy_renewal()` (deliberately
  * not security definer) all gate on `can_write_company()`/company

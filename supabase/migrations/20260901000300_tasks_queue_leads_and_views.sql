@@ -91,7 +91,7 @@ create trigger compliance_queue_items_company_matches_vendor
   for each row execute function public.assert_company_matches_vendor();
 
 -- ---------------------------------------------------------------------------
--- leads - VendorClear's own pipeline, not customer data
+-- leads - VendorClr's own pipeline, not customer data
 -- ---------------------------------------------------------------------------
 
 create table public.leads (

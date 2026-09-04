@@ -4,13 +4,13 @@ import { OverviewPage } from "@/features/overview/OverviewPage";
 export const Route = createFileRoute("/dashboard/")({
   head: () => ({
     meta: [
-      { title: "Program overview — VendorClear" },
+      { title: "Program overview — VendorClr" },
       {
         name: "description",
         content:
           "Compliance posture across construction projects: COI, endorsements, lien waivers and renewals.",
       },
-      { property: "og:title", content: "Program overview — VendorClear" },
+      { property: "og:title", content: "Program overview — VendorClr" },
       {
         property: "og:description",
         content: "Compliance posture across active construction projects.",

@@ -25,7 +25,7 @@ import {
  * Both functions run on the service role after assertPlatformAdmin(): see
  * that function's docblock and the one on getServiceRoleClient() in
  * serverClient.server.ts for why - can_write_company() is company-
- * membership-only, and VendorClear staff reviewing a customer's document
+ * membership-only, and VendorClr staff reviewing a customer's document
  * have none.
  */
 

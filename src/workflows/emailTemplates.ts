@@ -48,7 +48,7 @@ export function renewalRequestText(input: RenewalRequestEmailInput): string {
   return [
     greeting,
     "",
-    `${input.companyName} uses VendorClear to keep vendor insurance records current, and needs an updated certificate of insurance from ${input.vendorName}.`,
+    `${input.companyName} uses VendorClr to keep vendor insurance records current, and needs an updated certificate of insurance from ${input.vendorName}.`,
     "",
     "Here's what we currently have on file:",
     policyLines,
@@ -81,10 +81,10 @@ export function renewalRequestHtml(input: RenewalRequestEmailInput): string {
 
   return `
     <div style="font-family:Arial,sans-serif;color:#0F172A;max-width:560px;">
-      <p style="font-weight:700;">VendorClear</p>
+      <p style="font-weight:700;">VendorClr</p>
       <p>${greeting}</p>
       <p>
-        ${escapeHtml(input.companyName)} uses VendorClear to keep vendor insurance records
+        ${escapeHtml(input.companyName)} uses VendorClr to keep vendor insurance records
         current, and needs an updated certificate of insurance from
         ${escapeHtml(input.vendorName)}.
       </p>
@@ -172,7 +172,7 @@ export function documentReceivedHtml(input: DocumentReceivedEmailInput): string 
     : "Hello,";
   return `
     <div style="font-family:Arial,sans-serif;color:#0F172A;max-width:560px;">
-      <p style="font-weight:700;">VendorClear</p>
+      <p style="font-weight:700;">VendorClr</p>
       <p>${greeting}</p>
       <p>${escapeHtml(documentOutcomeCopy(input.outcome).body)}</p>
       <p style="color:#475569;font-size:12px;">- ${escapeHtml(input.companyName)}</p>
@@ -216,7 +216,7 @@ export function adminReviewNeededHtml(input: AdminReviewNeededEmailInput): strin
     : "No specific reason was recorded - check the Compliance Queue for details.";
   return `
     <div style="font-family:Arial,sans-serif;color:#0F172A;max-width:560px;">
-      <p style="font-weight:700;">VendorClear</p>
+      <p style="font-weight:700;">VendorClr</p>
       <p>
         ${escapeHtml(input.vendorName)} uploaded "${escapeHtml(input.documentFileName)}",
         but it could not be applied automatically.

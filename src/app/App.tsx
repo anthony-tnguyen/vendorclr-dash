@@ -27,7 +27,7 @@ export interface Session {
   mode: SessionMode;
   status: SessionStatus;
   role: DemoRole;
-  /** No-op unless the signed-in user is VendorClear staff. */
+  /** No-op unless the signed-in user is VendorClr staff. */
   setRole: (role: DemoRole) => void;
   canSwitchRole: boolean;
   personName: string;
@@ -64,8 +64,8 @@ function useDemoSessionValue(): Session {
       role,
       setRole,
       canSwitchRole: true,
-      personName: role === "admin" ? "VendorClear Operations" : "Rosa Sandoval",
-      companyName: role === "admin" ? "VendorClear Internal" : "Halstead Builders",
+      personName: role === "admin" ? "VendorClr Operations" : "Rosa Sandoval",
+      companyName: role === "admin" ? "VendorClr Internal" : "Halstead Builders",
       userId: null,
       signOut: async () => {},
     }),

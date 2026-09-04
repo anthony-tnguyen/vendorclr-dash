@@ -39,7 +39,7 @@ const RESEND_ENDPOINT = "https://api.resend.com/emails";
 // (resend.com/domains) - confirmed live against this exact function that
 // the bare vendorclr.com is NOT verified and fails every send with "The
 // <domain> domain is not verified".
-const FROM_ADDRESS = "VendorClear <onboarding@compliance.vendorclr.com>";
+const FROM_ADDRESS = "VendorClr <onboarding@compliance.vendorclr.com>";
 
 interface DueRow {
   policy_id: string;

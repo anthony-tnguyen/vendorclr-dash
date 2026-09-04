@@ -25,7 +25,7 @@ import type {
   VendorPolicyRow,
   VendorRow,
 } from "./db-types";
-import { getSupabaseClient, type VendorClearClient } from "@/lib/supabase/client";
+import { getSupabaseClient, type VendorClrClient } from "@/lib/supabase/client";
 
 /**
  * Supabase-backed DashboardRepository.
@@ -164,7 +164,7 @@ function isoDate(value: string | null): string {
 }
 
 export function createSupabaseRepository(
-  clientFactory: () => VendorClearClient = getSupabaseClient,
+  clientFactory: () => VendorClrClient = getSupabaseClient,
 ): DashboardRepository {
   let companyIdPromise: Promise<string> | null = null;
 

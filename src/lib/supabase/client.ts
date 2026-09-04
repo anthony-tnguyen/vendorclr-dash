@@ -13,9 +13,9 @@ import { readSupabaseEnv } from "./env";
  * types in src/data/db-types.ts instead, which is honest about where the guarantee
  * comes from. Add the generic back once `supabase gen types` output is committed.
  */
-export type VendorClearClient = SupabaseClient;
+export type VendorClrClient = SupabaseClient;
 
-let client: VendorClearClient | null = null;
+let client: VendorClrClient | null = null;
 
 /**
  * Browser Supabase client, created once per tab.
@@ -29,7 +29,7 @@ let client: VendorClearClient | null = null;
  * silent "renders empty on the server" bug into a loud one. Repository methods run
  * from react-query on the client, so this is not reached during server render.
  */
-export function getSupabaseClient(): VendorClearClient {
+export function getSupabaseClient(): VendorClrClient {
   if (typeof window === "undefined") {
     throw new Error(
       "getSupabaseClient() was called during server rendering. Phase 0 loads data from " +
