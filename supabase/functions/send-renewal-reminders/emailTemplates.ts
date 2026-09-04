@@ -59,7 +59,7 @@ export function renewalReminderHtml(input: RenewalReminderEmailInput): string {
     : "Hello,";
   return `
     <div style="font-family:Arial,sans-serif;color:#0F172A;max-width:560px;">
-      <p style="font-weight:700;">VendorClear</p>
+      <p style="font-weight:700;">VendorClr</p>
       <p>${greeting}</p>
       <p>
         ${escapeHtml(input.companyName)}'s records show ${escapeHtml(input.vendorName)}'s general

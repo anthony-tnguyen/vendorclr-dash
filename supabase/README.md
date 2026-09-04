@@ -978,7 +978,7 @@ Deliberate, and worth revisiting as later phases grow on top of them:
 - **`db-types.ts` is hand-written**, and the client is intentionally not
   parameterised with it. Run
   `supabase gen types typescript --project-id <ref> > src/data/db-types.ts`, then
-  add the generic back to `VendorClearClient` and drop the casts in
+  add the generic back to `VendorClrClient` and drop the casts in
   `supabaseRepository.ts`.
 - **`notifyDocumentOutcome()` emails every company owner individually**,
   rather than one email with every recipient, or a digest. Fine at current

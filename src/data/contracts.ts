@@ -1,5 +1,5 @@
 /**
- * Typed contracts for the VendorClear demo.
+ * Typed contracts for the VendorClr demo.
  *
  * DEMO-ONLY: every behavior described here is served from an in-memory
  * repository. Nothing is persisted, emailed, uploaded, reviewed or exported.

@@ -4,9 +4,9 @@ import { ReportsPage } from "@/features/reports/ReportsPage";
 export const Route = createFileRoute("/dashboard/reports")({
   head: () => ({
     meta: [
-      { title: "Reports — VendorClear" },
+      { title: "Reports — VendorClr" },
       { name: "description", content: "Project level compliance rollup for the current period." },
-      { property: "og:title", content: "Reports — VendorClear" },
+      { property: "og:title", content: "Reports — VendorClr" },
       { property: "og:description", content: "Project level compliance rollup." },
     ],
   }),

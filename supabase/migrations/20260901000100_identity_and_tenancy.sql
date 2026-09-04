@@ -54,7 +54,7 @@ create table public.company_members (
 create index company_members_user_id_idx on public.company_members (user_id);
 create index company_members_company_id_idx on public.company_members (company_id);
 
--- VendorClear staff. Deliberately a table rather than a JWT claim so access can be
+-- VendorClr staff. Deliberately a table rather than a JWT claim so access can be
 -- revoked immediately instead of at the next token refresh.
 create table public.platform_admins (
   user_id    uuid primary key references auth.users (id) on delete cascade,
