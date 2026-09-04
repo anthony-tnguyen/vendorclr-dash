@@ -31,8 +31,8 @@ export interface EmailSender {
 
 const RESEND_ENDPOINT = "https://api.resend.com/emails";
 
-/** VendorClear's default From address until a customer-specific sender is configurable. Domain must be verified in Resend (resend.com/domains) or every send fails. */
-const FROM_ADDRESS = "VendorClear <onboarding@vendorclr.com>";
+/** VendorClear's default From address until a customer-specific sender is configurable. compliance.vendorclr.com is the subdomain actually verified in Resend (resend.com/domains) - the bare vendorclr.com is not, and every send fails against a domain Resend hasn't verified. */
+const FROM_ADDRESS = "VendorClear <onboarding@compliance.vendorclr.com>";
 
 function createResendSender(apiKey: string, fetchImpl: typeof fetch): EmailSender {
   return {

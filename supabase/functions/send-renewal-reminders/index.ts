@@ -35,10 +35,11 @@ import { generateUploadToken, hashToken, newExpiryDate } from "./uploadTokens.ts
  */
 
 const RESEND_ENDPOINT = "https://api.resend.com/emails";
-// Domain must be verified in Resend (resend.com/domains) or every send fails
-// with "The <domain> domain is not verified" - confirmed live against this
-// exact function before this was fixed to the real domain.
-const FROM_ADDRESS = "VendorClear <onboarding@vendorclr.com>";
+// compliance.vendorclr.com is the subdomain actually verified in Resend
+// (resend.com/domains) - confirmed live against this exact function that
+// the bare vendorclr.com is NOT verified and fails every send with "The
+// <domain> domain is not verified".
+const FROM_ADDRESS = "VendorClear <onboarding@compliance.vendorclr.com>";
 
 interface DueRow {
   policy_id: string;
