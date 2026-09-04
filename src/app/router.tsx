@@ -21,6 +21,7 @@ export const routes = {
   adminCompliance: "/dashboard/admin/compliance",
   adminLeads: "/dashboard/admin/leads",
   adminAccess: "/dashboard/admin/access",
+  help: "/dashboard/help",
 } as const;
 
 export interface NavItem {
@@ -35,6 +36,7 @@ export const customerNav = [
   { label: "Tasks", to: routes.tasks, description: "Open compliance follow-ups" },
   { label: "Reports", to: routes.reports, description: "Project level compliance reporting" },
   { label: "Settings", to: routes.settings, description: "Requirement defaults and contacts" },
+  { label: "Help", to: routes.help, description: "FAQ and how VendorClr works" },
 ] as const satisfies readonly NavItem[];
 
 export const adminNav = [
@@ -47,4 +49,5 @@ export const adminNav = [
   },
   { label: "Leads", to: routes.adminLeads, description: "Inbound pipeline" },
   { label: "Access", to: routes.adminAccess, description: "Role and scope management" },
+  { label: "Help", to: routes.help, description: "FAQ and how VendorClr works" },
 ] as const satisfies readonly NavItem[];

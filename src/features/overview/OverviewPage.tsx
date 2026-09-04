@@ -155,7 +155,7 @@ export function OverviewPage() {
                           {vendor.trade} · {vendor.project}
                         </span>
                         <span className="mt-2 block text-sm text-foreground">
-                          {COMPLIANCE_LABELS[exception.type]}{" "}
+                          {COMPLIANCE_LABELS[exception.key]}{" "}
                           <span className="text-muted-foreground">
                             · {STATUS_LABELS[exception.status]}
                           </span>
@@ -196,7 +196,7 @@ export function OverviewPage() {
                         Blocking item
                       </dt>
                       <dd className="mt-1 font-medium text-foreground">
-                        {COMPLIANCE_LABELS[selectedException.type]}
+                        {COMPLIANCE_LABELS[selectedException.key]}
                       </dd>
                     </div>
                     <div>
