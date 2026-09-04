@@ -140,17 +140,18 @@ export function OverviewPage() {
                   const exception = primaryException(vendor)!;
                   const active = vendor.id === selectedVendor?.id;
                   return (
-                    <button
+                    <div
                       key={vendor.id}
-                      type="button"
-                      aria-label={`Inspect ${vendor.name}`}
-                      onClick={() => setSelectedVendorId(vendor.id)}
-                      className={`focusable grid w-full gap-2 border-b border-border px-4 py-4 text-left transition-colors last:border-b-0 md:grid-cols-[minmax(0,1fr)_8rem_12rem] md:items-center md:gap-4 ${active ? "bg-primary/5" : "hover:bg-muted/70"}`}
+                      className={`grid w-full gap-2 border-b border-border px-4 py-4 text-left transition-colors last:border-b-0 md:grid-cols-[minmax(0,1fr)_8rem_12rem] md:items-center md:gap-4 ${active ? "bg-primary/5" : "hover:bg-muted/70"}`}
                     >
                       <span className="min-w-0">
-                        <span className="block truncate text-sm font-semibold text-foreground">
+                        <Link
+                          to="/dashboard/vendors/$vendorId"
+                          params={{ vendorId: vendor.id }}
+                          className="focusable block truncate text-sm font-semibold text-foreground underline-offset-4 hover:text-primary hover:underline"
+                        >
                           {vendor.name}
-                        </span>
+                        </Link>
                         <span className="mt-1 block text-xs text-muted-foreground">
                           {vendor.trade} · {vendor.project}
                         </span>
@@ -160,6 +161,14 @@ export function OverviewPage() {
                             · {STATUS_LABELS[exception.status]}
                           </span>
                         </span>
+                        <button
+                          type="button"
+                          aria-label={`Inspect ${vendor.name}`}
+                          onClick={() => setSelectedVendorId(vendor.id)}
+                          className="focusable mt-3 inline-flex text-xs font-semibold text-primary underline underline-offset-4"
+                        >
+                          Inspect details
+                        </button>
                       </span>
                       <span className="text-xs font-semibold uppercase tracking-[0.12em] text-destructive">
                         {exception.status}
@@ -169,7 +178,7 @@ export function OverviewPage() {
                         vendorName={vendor.name}
                         className="mt-1 md:mt-0"
                       />
-                    </button>
+                    </div>
                   );
                 })}
               </div>

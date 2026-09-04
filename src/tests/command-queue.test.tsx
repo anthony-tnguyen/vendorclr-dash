@@ -21,6 +21,10 @@ describe("command-queue dashboards", () => {
 
     expect(await screen.findByRole("heading", { name: "Needs action now" })).toBeInTheDocument();
     expect((await screen.findAllByText("Delgado Concrete Works")).length).toBeGreaterThan(0);
+    expect(await screen.findByRole("link", { name: "Delgado Concrete Works" })).toHaveAttribute(
+      "href",
+      "/dashboard/vendors/vnd-1177",
+    );
     expect(screen.getByRole("heading", { name: "Resolution inspector" })).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Inspect Rivera Electrical Contractors" }));
