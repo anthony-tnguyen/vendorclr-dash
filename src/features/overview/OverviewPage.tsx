@@ -1,49 +1,92 @@
+import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { AppShell } from "@/components/shell/AppShell";
 import { ComplianceRail } from "@/components/compliance/ComplianceRail";
-import { EmptyState, ErrorState, LoadingState, StateGallery } from "@/components/states/AsyncState";
+import { EmptyState, ErrorState, LoadingState } from "@/components/states/AsyncState";
+import {
+  COMPLIANCE_LABELS,
+  STATUS_LABELS,
+  type ComplianceStatus,
+  type Vendor,
+} from "@/data/contracts";
 import { getRepository } from "@/data/repository";
+
+const statusRank: Record<ComplianceStatus, number> = {
+  expired: 5,
+  missing: 4,
+  pending: 3,
+  expiring: 2,
+  compliant: 0,
+};
+
+function primaryException(vendor: Vendor) {
+  return [...vendor.compliance]
+    .filter((item) => item.status !== "compliant")
+    .sort((a, b) => statusRank[b.status] - statusRank[a.status])[0];
+}
 
 export function OverviewPage() {
   const repo = getRepository();
   const metrics = useQuery({ queryKey: ["metrics"], queryFn: () => repo.listOverviewMetrics() });
   const vendors = useQuery({ queryKey: ["vendors"], queryFn: () => repo.listVendors() });
-
-  const attention = (vendors.data ?? []).filter((v) =>
-    v.compliance.some((c) => c.status !== "compliant"),
+  const [selectedVendorId, setSelectedVendorId] = useState<string>();
+  const attention = useMemo(
+    () =>
+      (vendors.data ?? [])
+        .filter(primaryException)
+        .sort(
+          (a, b) =>
+            statusRank[primaryException(b)?.status ?? "compliant"] -
+            statusRank[primaryException(a)?.status ?? "compliant"],
+        ),
+    [vendors.data],
   );
+  const selectedVendor = attention.find((vendor) => vendor.id === selectedVendorId) ?? attention[0];
+  const selectedException = selectedVendor ? primaryException(selectedVendor) : undefined;
 
   return (
     <AppShell
-      title="Program overview"
-      subtitle="Compliance posture across active construction projects. Demo data only."
+      title="Command center"
+      subtitle="The exceptions most likely to hold up vendor approval, ranked for action."
     >
-      <div className="space-y-6">
+      <div className="space-y-8">
         <section aria-labelledby="metrics-heading">
-          <h2 id="metrics-heading" className="text-sm font-semibold text-foreground">
-            Current position
-          </h2>
+          <div className="flex items-end justify-between gap-4">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                Program signal
+              </p>
+              <h2 id="metrics-heading" className="mt-1 text-lg font-semibold text-foreground">
+                Current position
+              </h2>
+            </div>
+            <p className="hidden max-w-sm text-right text-xs text-muted-foreground sm:block">
+              Counts reflect the latest submitted vendor documentation in this demo workspace.
+            </p>
+          </div>
           {metrics.isLoading ? (
-            <div className="mt-3">
+            <div className="mt-4">
               <LoadingState label="Loading program metrics" rows={2} />
             </div>
           ) : metrics.isError ? (
-            <div className="mt-3">
+            <div className="mt-4">
               <ErrorState
                 description="Demo metrics failed to load."
                 onRetry={() => void metrics.refetch()}
               />
             </div>
           ) : (
-            <dl className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-              {(metrics.data ?? []).map((m) => (
-                <div key={m.id} className="rounded-md border border-border bg-card p-4">
-                  <dt className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                    {m.label}
+            <dl className="mt-4 grid divide-y divide-border border-y border-border sm:grid-cols-2 sm:divide-x sm:divide-y-0 xl:grid-cols-4">
+              {(metrics.data ?? []).map((metric) => (
+                <div key={metric.id} className="py-4 sm:px-4 sm:first:pl-0 xl:py-5">
+                  <dt className="text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground">
+                    {metric.label}
                   </dt>
-                  <dd className="numeric mt-1 text-2xl font-semibold text-foreground">{m.value}</dd>
-                  <p className="mt-1 text-xs text-muted-foreground">{m.detail}</p>
+                  <dd className="numeric mt-2 text-3xl font-semibold tracking-tight text-foreground">
+                    {metric.value}
+                  </dd>
+                  <p className="mt-1 text-xs text-muted-foreground">{metric.detail}</p>
                 </div>
               ))}
             </dl>
@@ -51,60 +94,140 @@ export function OverviewPage() {
         </section>
 
         <section aria-labelledby="attention-heading">
-          <div className="flex items-center justify-between">
-            <h2 id="attention-heading" className="text-sm font-semibold text-foreground">
-              Vendors needing attention
-            </h2>
+          <div className="flex items-end justify-between gap-4">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                Action queue
+              </p>
+              <h2 id="attention-heading" className="mt-1 text-lg font-semibold text-foreground">
+                Needs action now
+              </h2>
+            </div>
             <Link
               to="/dashboard/vendors"
-              className="focusable text-sm font-medium text-primary underline"
+              className="focusable text-sm font-semibold text-primary underline underline-offset-4"
             >
-              View all vendors
+              View vendor register
             </Link>
           </div>
-          <div className="mt-3 space-y-2">
-            {vendors.isLoading ? (
+          {vendors.isLoading ? (
+            <div className="mt-4">
               <LoadingState label="Loading vendor compliance" />
-            ) : vendors.isError ? (
+            </div>
+          ) : vendors.isError ? (
+            <div className="mt-4">
               <ErrorState
                 description="Demo vendor list failed to load."
                 onRetry={() => void vendors.refetch()}
               />
-            ) : attention.length === 0 ? (
+            </div>
+          ) : attention.length === 0 ? (
+            <div className="mt-4">
               <EmptyState
                 title="No exceptions open"
                 description="Every tracked requirement is current across your roster."
               />
-            ) : (
-              attention.map((vendor) => (
-                <article
-                  key={vendor.id}
-                  className="rounded-md border border-border bg-card p-3 sm:flex sm:items-center sm:justify-between sm:gap-4"
-                >
-                  <div className="min-w-0">
-                    <Link
-                      to="/dashboard/vendors/$vendorId"
-                      params={{ vendorId: vendor.id }}
-                      className="focusable text-sm font-semibold text-foreground underline-offset-2 hover:underline"
+            </div>
+          ) : (
+            <div className="mt-4 grid gap-6 xl:grid-cols-[minmax(0,1fr)_22rem]">
+              <div className="border-y border-border">
+                <div className="hidden grid-cols-[minmax(0,1fr)_8rem_12rem] gap-4 border-b border-border px-4 py-3 text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground md:grid">
+                  <span>Vendor and blocker</span>
+                  <span>Priority</span>
+                  <span>Compliance rail</span>
+                </div>
+                {attention.map((vendor) => {
+                  const exception = primaryException(vendor)!;
+                  const active = vendor.id === selectedVendor?.id;
+                  return (
+                    <button
+                      key={vendor.id}
+                      type="button"
+                      aria-label={`Inspect ${vendor.name}`}
+                      onClick={() => setSelectedVendorId(vendor.id)}
+                      className={`focusable grid w-full gap-2 border-b border-border px-4 py-4 text-left transition-colors last:border-b-0 md:grid-cols-[minmax(0,1fr)_8rem_12rem] md:items-center md:gap-4 ${active ? "bg-primary/5" : "hover:bg-muted/70"}`}
                     >
-                      {vendor.name}
-                    </Link>
-                    <p className="text-xs text-muted-foreground">
-                      {vendor.trade} · {vendor.project}
+                      <span className="min-w-0">
+                        <span className="block truncate text-sm font-semibold text-foreground">
+                          {vendor.name}
+                        </span>
+                        <span className="mt-1 block text-xs text-muted-foreground">
+                          {vendor.trade} · {vendor.project}
+                        </span>
+                        <span className="mt-2 block text-sm text-foreground">
+                          {COMPLIANCE_LABELS[exception.type]}{" "}
+                          <span className="text-muted-foreground">
+                            · {STATUS_LABELS[exception.status]}
+                          </span>
+                        </span>
+                      </span>
+                      <span className="text-xs font-semibold uppercase tracking-[0.12em] text-destructive">
+                        {exception.status}
+                      </span>
+                      <ComplianceRail
+                        items={vendor.compliance}
+                        vendorName={vendor.name}
+                        className="mt-1 md:mt-0"
+                      />
+                    </button>
+                  );
+                })}
+              </div>
+              {selectedVendor && selectedException ? (
+                <aside
+                  aria-label="Resolution inspector"
+                  className="border border-border bg-card p-5 xl:sticky xl:top-6 xl:self-start"
+                >
+                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                    Selected exception
+                  </p>
+                  <h2 className="mt-2 text-lg font-semibold text-foreground">
+                    Resolution inspector
+                  </h2>
+                  <div className="mt-5 border-y border-border py-4">
+                    <p className="text-base font-semibold text-foreground">{selectedVendor.name}</p>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      {selectedVendor.trade} · {selectedVendor.project}
                     </p>
                   </div>
-                  <ComplianceRail
-                    items={vendor.compliance}
-                    vendorName={vendor.name}
-                    className="mt-2 sm:mt-0"
-                  />
-                </article>
-              ))
-            )}
-          </div>
+                  <dl className="mt-5 space-y-4 text-sm">
+                    <div>
+                      <dt className="text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground">
+                        Blocking item
+                      </dt>
+                      <dd className="mt-1 font-medium text-foreground">
+                        {COMPLIANCE_LABELS[selectedException.type]}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt className="text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground">
+                        Current status
+                      </dt>
+                      <dd className="mt-1 font-medium capitalize text-destructive">
+                        {STATUS_LABELS[selectedException.status]}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt className="text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground">
+                        Next action
+                      </dt>
+                      <dd className="mt-1 text-foreground">
+                        Request a corrected submission and confirm the document is complete.
+                      </dd>
+                    </div>
+                  </dl>
+                  <Link
+                    to="/dashboard/vendors/$vendorId"
+                    params={{ vendorId: selectedVendor.id }}
+                    className="focusable mt-6 inline-flex text-sm font-semibold text-primary underline underline-offset-4"
+                  >
+                    Open vendor record
+                  </Link>
+                </aside>
+              ) : null}
+            </div>
+          )}
         </section>
-
-        <StateGallery />
       </div>
     </AppShell>
   );

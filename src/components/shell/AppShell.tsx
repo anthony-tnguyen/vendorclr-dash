@@ -114,6 +114,8 @@ export interface AppShellProps {
 
 export function AppShell({ title, subtitle, actions, children }: AppShellProps) {
   const { personName, companyName, role, mode } = useSession();
+  const navigation = role === "admin" ? adminNav : customerNav;
+  const navigationTitle = role === "admin" ? "Operations" : "Workspace";
 
   return (
     <div className="min-h-screen bg-background">
@@ -134,8 +136,7 @@ export function AppShell({ title, subtitle, actions, children }: AppShellProps) 
             </span>
           </div>
           <nav aria-label="Dashboard sections" className="space-y-4 px-1 pb-4">
-            <NavList title="Customer" items={customerNav} />
-            <NavList title="Administrator" items={adminNav} />
+            <NavList title={navigationTitle} items={navigation} />
           </nav>
           <div className="px-3 pb-6">
             <SessionPanel />
