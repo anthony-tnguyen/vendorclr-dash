@@ -165,7 +165,7 @@ export function AppShell({ title, subtitle, actions, children }: AppShellProps) 
           <footer className="border-t border-border px-4 py-4 text-xs text-muted-foreground sm:px-6">
             {mode === "demo"
               ? "Demo environment. Uploads, emails, reviews and exports are simulated in memory and are never persisted or sent."
-              : "Document upload, extraction and renewal email are not built yet. Vendor and policy records are live."}
+              : "Vendor records, document upload, extraction, review and renewal email are all live."}
           </footer>
         </div>
       </div>
