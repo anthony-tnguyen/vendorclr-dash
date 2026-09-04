@@ -21,7 +21,7 @@ export function AdminGuard({ children }: { children: ReactNode }) {
         description={
           mode === "demo"
             ? "This administrator view is hidden for the Customer demo role. Switch the demo role to Administrator in the sidebar to preview it. Demo mode only — no real permissions are involved."
-            : "This administrator view is limited to VendorClear staff accounts."
+            : "This administrator view is limited to VendorClr staff accounts."
         }
       />
     );

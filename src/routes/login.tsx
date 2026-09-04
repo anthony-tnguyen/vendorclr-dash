@@ -4,15 +4,15 @@ import { LoginPage } from "@/features/auth/AuthPages";
 export const Route = createFileRoute("/login")({
   head: () => ({
     meta: [
-      { title: "Sign in — VendorClear" },
+      { title: "Sign in — VendorClr" },
       {
         name: "description",
-        content: "Sign in to the VendorClear construction vendor compliance console.",
+        content: "Demo sign-in screen for the VendorClr construction vendor compliance console.",
       },
-      { property: "og:title", content: "Sign in — VendorClear" },
+      { property: "og:title", content: "Sign in — VendorClr" },
       {
         property: "og:description",
-        content: "Sign in for VendorClear compliance operations.",
+        content: "Demo sign-in for VendorClr compliance operations.",
       },
     ],
   }),

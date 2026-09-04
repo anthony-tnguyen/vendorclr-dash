@@ -4,12 +4,12 @@ import { VendorDetailPage } from "@/features/vendors/VendorDetailPage";
 export const Route = createFileRoute("/dashboard/vendors/$vendorId")({
   head: () => ({
     meta: [
-      { title: "Vendor detail — VendorClear" },
+      { title: "Vendor detail — VendorClr" },
       {
         name: "description",
         content: "Vendor compliance record: rail status, coverage limits, policy and contacts.",
       },
-      { property: "og:title", content: "Vendor detail — VendorClear" },
+      { property: "og:title", content: "Vendor detail — VendorClr" },
       { property: "og:description", content: "Vendor compliance record and coverage limits." },
     ],
   }),

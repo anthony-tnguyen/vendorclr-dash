@@ -2,7 +2,19 @@ import { createServerFn } from "@tanstack/react-start";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { z } from "zod";
 
-import { getRequestScopedClient, getServiceRoleClient } from "@/lib/supabase/serverClient.server";
+/**
+ * Loaded lazily inside handlers: a static import of the *.server module puts
+ * it in the client import graph (this file is imported by React components),
+ * which the build's import protection rejects.
+ */
+async function getRequestScopedClient() {
+  const mod = await import("@/lib/supabase/serverClient.server");
+  return mod.getRequestScopedClient();
+}
+async function getServiceRoleClient() {
+  const mod = await import("@/lib/supabase/serverClient.server");
+  return mod.getServiceRoleClient();
+}
 import {
   computeComplianceItems,
   hasUnclassifiedPolicy,
@@ -76,7 +88,7 @@ import {
  */
 
 /**
- * Confirms the calling session belongs to VendorClear staff before a server
+ * Confirms the calling session belongs to VendorClr staff before a server
  * function drops from the request-scoped client to the service role, and
  * returns that caller's own user id - needed to attribute an audit_log row
  * (migration 14) to a real actor, since the service role client used for
@@ -90,10 +102,10 @@ import {
  * check before its own service-role reads/writes.
  */
 export async function assertPlatformAdmin(): Promise<string> {
-  const supabase = getRequestScopedClient();
+  const supabase = await getRequestScopedClient();
   const { data: isAdmin, error: adminError } = await supabase.rpc("is_platform_admin");
   if (adminError || !isAdmin) {
-    throw new Error("This action is limited to VendorClear staff accounts.");
+    throw new Error("This action is limited to VendorClr staff accounts.");
   }
   const { data: userId, error: idError } = await supabase.rpc("current_user_id");
   if (idError || !userId) throw new Error("Could not identify the signed-in account.");
@@ -130,7 +142,7 @@ export interface CreateUploadRequestResult {
 export const createUploadRequest = createServerFn({ method: "POST" })
   .validator(createUploadRequestSchema)
   .handler(async ({ data }): Promise<CreateUploadRequestResult> => {
-    const supabase = getRequestScopedClient();
+    const supabase = await getRequestScopedClient();
 
     const { data: vendor, error: vendorError } = await supabase
       .from("vendors")
@@ -277,7 +289,7 @@ export interface UploadRequestSummary {
 export const listUploadRequestsForVendor = createServerFn({ method: "GET" })
   .validator(z.object({ vendorId: z.string().uuid() }))
   .handler(async ({ data }): Promise<UploadRequestSummary[]> => {
-    const supabase = getRequestScopedClient();
+    const supabase = await getRequestScopedClient();
     const { data: rows, error } = await supabase
       .from("vendor_upload_requests")
       .select("id, purpose, status, created_at, expires_at")
@@ -316,7 +328,7 @@ const cancelUploadRequestSchema = z.object({ requestId: z.string().uuid() });
 export const cancelUploadRequest = createServerFn({ method: "POST" })
   .validator(cancelUploadRequestSchema)
   .handler(async ({ data }): Promise<{ status: string }> => {
-    const supabase = getRequestScopedClient();
+    const supabase = await getRequestScopedClient();
 
     const { data: existing, error: fetchError } = await supabase
       .from("vendor_upload_requests")
@@ -375,7 +387,7 @@ const INVALID_TOKEN_MESSAGE = "This link is no longer valid. Ask your contact to
 export const resolveUploadToken = createServerFn({ method: "GET" })
   .validator(resolveUploadTokenSchema)
   .handler(async ({ data }): Promise<ResolvedUploadRequest> => {
-    const supabase = getServiceRoleClient();
+    const supabase = await getServiceRoleClient();
     const tokenHash = await hashToken(data.token);
 
     const { data: request } = await supabase
@@ -460,7 +472,7 @@ export const uploadDocumentForToken = createServerFn({ method: "POST" })
       throw new Error(`File must be under ${Math.floor(MAX_UPLOAD_BYTES / (1024 * 1024))}MB.`);
     }
 
-    const supabase = getServiceRoleClient();
+    const supabase = await getServiceRoleClient();
     const tokenHash = await hashToken(token);
 
     const { data: request } = await supabase
@@ -736,6 +748,11 @@ async function fetchRequirementsByType(
  * automated match path (applyComplianceEngine, below) and the human-review
  * approval path (documentReview.ts) share; they differ only in *which*
  * lines they call this for; see the callers, not the docblock, for that.
+ *
+ * certificateHolder is the extraction's top-level certificate_holder field
+ * (migration 20), not part of the policy itself - a certificate names one
+ * certificate holder for the whole document, not one per coverage line, so
+ * every policy line applied from the same document gets the same value.
  */
 export async function applyOnePolicyLine(
   supabase: SupabaseClient,
@@ -744,9 +761,10 @@ export async function applyOnePolicyLine(
     vendorId: string;
     existingPolicyId: string | null;
     policy: ExtractedPolicy & { type: NonNullable<ExtractedPolicy["type"]> };
+    certificateHolder: { name: string | null; address: string | null };
   },
 ): Promise<{ newPolicyId: string } | { error: string }> {
-  const { companyId, vendorId, existingPolicyId, policy } = params;
+  const { companyId, vendorId, existingPolicyId, policy, certificateHolder } = params;
 
   const { data: newPolicyId, error: rpcError } = await supabase.rpc("apply_policy_renewal", {
     p_company_id: companyId,
@@ -761,6 +779,8 @@ export async function applyOnePolicyLine(
     p_general_aggregate_limit: policy.limits.general_aggregate ?? null,
     p_additional_insured: policy.additional_insured,
     p_waiver_of_subrogation: policy.waiver_of_subrogation,
+    p_certificate_holder_name: certificateHolder.name,
+    p_certificate_holder_address: certificateHolder.address,
   });
 
   if (rpcError || !newPolicyId) {
@@ -793,9 +813,14 @@ export async function applyOnePolicyLine(
 
 async function applyComplianceEngine(
   supabase: SupabaseClient,
-  params: { companyId: string; vendorId: string; policies: ExtractedPolicy[] },
+  params: {
+    companyId: string;
+    vendorId: string;
+    policies: ExtractedPolicy[];
+    certificateHolder: { name: string | null; address: string | null };
+  },
 ): Promise<{ allMatched: boolean; appliedPolicyId: string | null; reasons: string[] }> {
-  const { companyId, vendorId, policies } = params;
+  const { companyId, vendorId, policies, certificateHolder } = params;
   const reasons: string[] = [];
   let appliedPolicyId: string | null = null;
   let allMatched = true;
@@ -837,6 +862,7 @@ async function applyComplianceEngine(
       vendorId,
       existingPolicyId: outcome.existingPolicyId,
       policy: extracted,
+      certificateHolder,
     });
 
     if ("error" in result) {
@@ -1035,6 +1061,7 @@ async function applyExtractionResult(
       companyId,
       vendorId,
       policies: extraction.data.policies,
+      certificateHolder: extraction.data.certificate_holder,
     });
     appliedPolicyId = result.appliedPolicyId;
     if (!result.allMatched) {
@@ -1093,7 +1120,7 @@ export interface ReprocessDocumentResult {
  * claim was sufficient. That was wrong: the only screen that can ever call
  * this (the admin Compliance Queue / review screen, AdminGuard-gated on
  * `role === "admin"`) is staff-only, and `can_write_company()` grants write
- * access by *company membership*, which VendorClear staff reviewing a
+ * access by *company membership*, which VendorClr staff reviewing a
  * customer's documents do not have. `vendor_documents_update`,
  * `compliance_queue_items_write`, and `apply_policy_renewal()` (deliberately
  * not security definer) all gate on `can_write_company()`/company
@@ -1109,7 +1136,7 @@ export const reprocessDocument = createServerFn({ method: "POST" })
   .validator(reprocessDocumentSchema)
   .handler(async ({ data }): Promise<ReprocessDocumentResult> => {
     const actorId = await assertPlatformAdmin();
-    const supabase = getServiceRoleClient();
+    const supabase = await getServiceRoleClient();
 
     const { data: doc, error: docError } = await supabase
       .from("vendor_documents")

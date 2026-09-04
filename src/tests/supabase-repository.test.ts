@@ -30,6 +30,8 @@ function policy(overrides: Partial<VendorPolicyRow> = {}): VendorPolicyRow {
     additional_insured: null,
     waiver_of_subrogation: null,
     primary_noncontributory: null,
+    certificate_holder_name: null,
+    certificate_holder_address: null,
     status: "active",
     verification_status: "unverified",
     ...TIMESTAMPS,
@@ -205,11 +207,44 @@ describe("toVendor", () => {
     expect(vendor.expiresOn).toBe("2026-11-30");
   });
 
+  it("surfaces the primary policy's certificate holder for a client to check against their own name", () => {
+    const vendor = toVendor(
+      vendorRow({
+        vendor_policies: [
+          policy({
+            certificate_holder_name: "Halstead Builders",
+            certificate_holder_address: "500 Harbor Point Way, Boston, MA 02110",
+          }),
+        ],
+      }),
+      [],
+    );
+
+    expect(vendor.certificateHolderName).toBe("Halstead Builders");
+    expect(vendor.certificateHolderAddress).toBe("500 Harbor Point Way, Boston, MA 02110");
+  });
+
   it("uses the same placeholders as the demo repository when no policy exists", () => {
     const vendor = toVendor(vendorRow(), []);
 
     expect(vendor.policyNumber).toBe("PENDING");
     expect(vendor.expiresOn).toBe("—");
+    expect(vendor.certificateHolderName).toBe("Not on file");
+    expect(vendor.certificateHolderAddress).toBe("Not on file");
+  });
+
+  it("falls back to 'Not on file' when a policy exists but extraction never read a certificate holder", () => {
+    const vendor = toVendor(
+      vendorRow({
+        vendor_policies: [
+          policy({ certificate_holder_name: null, certificate_holder_address: null }),
+        ],
+      }),
+      [],
+    );
+
+    expect(vendor.certificateHolderName).toBe("Not on file");
+    expect(vendor.certificateHolderAddress).toBe("Not on file");
   });
 
   it("reports a brand new vendor as entirely non-compliant", () => {

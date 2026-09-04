@@ -32,6 +32,18 @@ function formatBool(value: boolean | null): string {
   return "Not confirmed";
 }
 
+/**
+ * Same loose, trimmed/case-insensitive comparison as VendorDetailPage.tsx's
+ * copy - a first-pass signal for a reviewer to look twice at, never a hard
+ * gate; the raw extracted text is always shown regardless. Duplicated
+ * rather than shared for a 2-line helper - if the comparison rule ever gets
+ * more sophisticated, check both copies.
+ */
+function looksLikeMismatch(certificateHolderName: string | null, companyName: string): boolean {
+  if (!certificateHolderName) return false;
+  return certificateHolderName.trim().toLowerCase() !== companyName.trim().toLowerCase();
+}
+
 export function DocumentReviewPage({ queueItemId }: { queueItemId: string }) {
   const queryClient = useQueryClient();
   const [note, setNote] = useState("");
@@ -173,6 +185,40 @@ export function DocumentReviewPage({ queueItemId }: { queueItemId: string }) {
             {data.document?.parsedData ? (
               <section className="rounded-md border border-border bg-card p-4">
                 <h2 className="text-sm font-semibold text-foreground">Extracted vs. on file</h2>
+
+                <div className="mt-3 rounded-sm border border-border bg-muted px-3 py-2">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    Certificate holder
+                  </p>
+                  <p
+                    className={
+                      looksLikeMismatch(
+                        data.document.parsedData.certificate_holder.name,
+                        data.vendor.companyName,
+                      )
+                        ? "text-sm font-semibold text-destructive"
+                        : "text-sm font-medium"
+                    }
+                  >
+                    {data.document.parsedData.certificate_holder.name ??
+                      "Not readable on this certificate"}
+                  </p>
+                  {data.document.parsedData.certificate_holder.address ? (
+                    <p className="text-xs text-muted-foreground">
+                      {data.document.parsedData.certificate_holder.address}
+                    </p>
+                  ) : null}
+                  {looksLikeMismatch(
+                    data.document.parsedData.certificate_holder.name,
+                    data.vendor.companyName,
+                  ) ? (
+                    <p className="mt-1 text-xs font-semibold text-destructive">
+                      Doesn't match "{data.vendor.companyName}" — confirm this is correct before
+                      approving
+                    </p>
+                  ) : null}
+                </div>
+
                 <div className="mt-3 overflow-x-auto">
                   <table className="w-full min-w-[640px] text-left text-sm">
                     <caption className="sr-only">

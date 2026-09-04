@@ -49,7 +49,7 @@ beforeAll(async () => {
     [alicesCompany, READER],
   );
 
-  // VendorClear staff.
+  // VendorClr staff.
   await signUp(db, { id: STAFF, email: "staff@vendorclear.test" });
   await db.query(`insert into public.platform_admins (user_id) values ($1)`, [STAFF]);
 }, 60_000);

@@ -1,7 +1,10 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 
-import { getServiceRoleClient } from "@/lib/supabase/serverClient.server";
+async function getServiceRoleClient() {
+  const mod = await import("@/lib/supabase/serverClient.server");
+  return mod.getServiceRoleClient();
+}
 import { isGeneralLiability } from "./complianceEngine";
 import type { ExtractedPolicy, InsuranceExtraction } from "./insuranceExtractionSchema";
 import {
@@ -22,7 +25,7 @@ import {
  * Both functions run on the service role after assertPlatformAdmin(): see
  * that function's docblock and the one on getServiceRoleClient() in
  * serverClient.server.ts for why - can_write_company() is company-
- * membership-only, and VendorClear staff reviewing a customer's document
+ * membership-only, and VendorClr staff reviewing a customer's document
  * have none.
  */
 
@@ -73,7 +76,7 @@ export const getReviewQueueItem = createServerFn({ method: "GET" })
   .validator(queueItemIdSchema)
   .handler(async ({ data }): Promise<ReviewQueueItemDetail> => {
     await assertPlatformAdmin();
-    const supabase = getServiceRoleClient();
+    const supabase = await getServiceRoleClient();
 
     const { data: queueRow, error: queueError } = await supabase
       .from("compliance_queue_items")
@@ -238,7 +241,7 @@ export const resolveReviewItem = createServerFn({ method: "POST" })
   .validator(resolveReviewItemSchema)
   .handler(async ({ data }): Promise<ResolveReviewItemResult> => {
     const actorId = await assertPlatformAdmin();
-    const supabase = getServiceRoleClient();
+    const supabase = await getServiceRoleClient();
 
     const { data: queueRow, error: queueError } = await supabase
       .from("compliance_queue_items")
@@ -289,6 +292,7 @@ export const resolveReviewItem = createServerFn({ method: "POST" })
           vendorId: queueRow.vendor_id,
           existingPolicyId: existing?.id ?? null,
           policy,
+          certificateHolder: parsed?.certificate_holder ?? { name: null, address: null },
         });
 
         if ("error" in result) {

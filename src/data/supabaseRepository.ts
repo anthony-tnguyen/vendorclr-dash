@@ -25,7 +25,7 @@ import type {
   VendorPolicyRow,
   VendorRow,
 } from "./db-types";
-import { getSupabaseClient, type VendorClearClient } from "@/lib/supabase/client";
+import { getSupabaseClient, type VendorClrClient } from "@/lib/supabase/client";
 
 /**
  * Supabase-backed DashboardRepository.
@@ -54,6 +54,7 @@ const ROLE_LABELS: Record<CompanyRole, AccessGrant["role"]> = {
 /** Matches the placeholders createVendor() uses in the demo repository. */
 const NO_POLICY_NUMBER = "PENDING";
 const NO_EXPIRY = "—";
+const NO_CERTIFICATE_HOLDER = "Not on file";
 
 export interface VendorWithChildren extends VendorRow {
   vendor_policies: VendorPolicyRow[];
@@ -150,6 +151,8 @@ export function toVendor(
     contactEmail: row.contact_email,
     policyNumber: policy?.policy_number || NO_POLICY_NUMBER,
     expiresOn: policy?.expiration_date ?? NO_EXPIRY,
+    certificateHolderName: policy?.certificate_holder_name || NO_CERTIFICATE_HOLDER,
+    certificateHolderAddress: policy?.certificate_holder_address || NO_CERTIFICATE_HOLDER,
     riskTier: row.risk_tier,
     compliance: toComplianceItems(row.vendor_compliance_items ?? []),
     limits: toCoverageLimits(requirements, row.vendor_policies ?? []),
@@ -161,7 +164,7 @@ function isoDate(value: string | null): string {
 }
 
 export function createSupabaseRepository(
-  clientFactory: () => VendorClearClient = getSupabaseClient,
+  clientFactory: () => VendorClrClient = getSupabaseClient,
 ): DashboardRepository {
   let companyIdPromise: Promise<string> | null = null;
 

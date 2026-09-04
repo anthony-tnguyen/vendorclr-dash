@@ -4,15 +4,15 @@ import { SignupPage } from "@/features/auth/AuthPages";
 export const Route = createFileRoute("/signup")({
   head: () => ({
     meta: [
-      { title: "Create account — VendorClear" },
+      { title: "Create account — VendorClr" },
       {
         name: "description",
-        content: "Create an account for VendorClear subcontractor compliance tracking.",
+        content: "Demo account creation for VendorClr subcontractor compliance tracking.",
       },
-      { property: "og:title", content: "Create account — VendorClear" },
+      { property: "og:title", content: "Create account — VendorClr" },
       {
         property: "og:description",
-        content: "Create an account for VendorClear compliance tracking.",
+        content: "Demo account creation for VendorClr compliance tracking.",
       },
     ],
   }),

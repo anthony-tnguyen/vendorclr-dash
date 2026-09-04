@@ -78,13 +78,13 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "VendorClear Dashboard" },
+      { title: "VendorClr Dashboard" },
       {
         name: "description",
         content:
           "Construction vendor compliance operations console for COI, endorsements, lien waivers and renewals.",
       },
-      { property: "og:title", content: "VendorClear Dashboard" },
+      { property: "og:title", content: "VendorClr Dashboard" },
       {
         property: "og:description",
         content: "Construction vendor compliance operations console.",
@@ -98,7 +98,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
         rel: "stylesheet",
         href: appCss,
       },
-      { rel: "icon", href: "/favicon.ico", type: "image/x-icon" },
+      { rel: "icon", type: "image/png", href: "/favicon.png" },
       { rel: "preconnect", href: "https://fonts.googleapis.com" },
       { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "anonymous" },
       {

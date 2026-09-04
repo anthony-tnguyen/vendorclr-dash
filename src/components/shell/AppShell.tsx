@@ -114,6 +114,8 @@ export interface AppShellProps {
 
 export function AppShell({ title, subtitle, actions, children }: AppShellProps) {
   const { personName, companyName, role, mode } = useSession();
+  const navigation = role === "admin" ? adminNav : customerNav;
+  const navigationTitle = role === "admin" ? "Operations" : "Workspace";
 
   return (
     <div className="min-h-screen bg-background">
@@ -126,20 +128,15 @@ export function AppShell({ title, subtitle, actions, children }: AppShellProps) 
       <div className="lg:flex">
         <aside className="bg-sidebar text-sidebar-foreground lg:min-h-screen lg:w-64 lg:shrink-0">
           <div className="flex items-center justify-between px-4 py-4">
-            <Link
-              to="/dashboard"
-              className="focusable text-sm font-bold tracking-tight text-sidebar-foreground"
-              aria-label="VendorClear dashboard home"
-            >
-              VendorClear
+            <Link to="/dashboard" className="focusable" aria-label="VendorClr dashboard home">
+              <img src="/vendorclr-logo-white.svg" alt="VendorClr" className="h-5 w-auto" />
             </Link>
             <span className="numeric rounded-sm border border-sidebar-border px-1.5 py-0.5 text-[10px] uppercase text-sidebar-foreground/70">
               {role === "admin" ? "ADMIN" : "CUSTOMER"}
             </span>
           </div>
           <nav aria-label="Dashboard sections" className="space-y-4 px-1 pb-4">
-            <NavList title="Customer" items={customerNav} />
-            <NavList title="Administrator" items={adminNav} />
+            <NavList title={navigationTitle} items={navigation} />
           </nav>
           <div className="px-3 pb-6">
             <SessionPanel />

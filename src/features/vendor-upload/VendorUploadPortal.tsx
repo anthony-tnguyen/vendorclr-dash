@@ -16,7 +16,7 @@ import {
  * Deliberately not the same DocumentUpload path the authenticated dashboard
  * uses: that component builds its storage path from `user.id`, and an
  * external vendor has no such session. Everything here goes through the
- * token-based server functions instead - no VendorClear account, no login.
+ * token-based server functions instead - no VendorClr account, no login.
  */
 
 function formatPolicyTypeLabel(policyType: string): string {
@@ -189,7 +189,7 @@ export function VendorUploadPortal({ token }: { token: string }) {
   return (
     <div className="flex min-h-screen justify-center bg-background px-4 py-10">
       <div className="w-full max-w-lg">
-        <p className="text-sm font-bold tracking-tight text-foreground">VendorClear</p>
+        <img src="/vendorclr-logo-black.svg" alt="VendorClr" className="h-5 w-auto" />
 
         {query.isLoading ? (
           <div className="mt-3">
@@ -212,7 +212,7 @@ export function VendorUploadPortal({ token }: { token: string }) {
               {query.data.vendorName}
             </h1>
             <p className="mt-1 text-sm text-muted-foreground">
-              {query.data.companyName} uses VendorClear to keep vendor insurance records current.
+              {query.data.companyName} uses VendorClr to keep vendor insurance records current.
             </p>
 
             <h2 className="mt-5 text-sm font-semibold text-foreground">
