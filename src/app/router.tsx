@@ -30,7 +30,7 @@ export interface NavItem {
 }
 
 export const customerNav = [
-  { label: "Overview", to: routes.dashboard, description: "Program compliance summary" },
+  { label: "Command center", to: routes.dashboard, description: "Compliance priorities and KPIs" },
   { label: "Vendors", to: routes.vendors, description: "Vendor roster and compliance rail" },
   { label: "Tasks", to: routes.tasks, description: "Open compliance follow-ups" },
   { label: "Reports", to: routes.reports, description: "Project level compliance reporting" },
@@ -38,7 +38,7 @@ export const customerNav = [
 ] as const satisfies readonly NavItem[];
 
 export const adminNav = [
-  { label: "Admin overview", to: routes.adminOverview, description: "Platform operations summary" },
+  { label: "Review queue", to: routes.adminOverview, description: "Priority document decisions" },
   { label: "Companies", to: routes.adminCompanies, description: "Customer accounts" },
   {
     label: "Compliance queue",

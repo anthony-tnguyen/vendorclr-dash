@@ -36,14 +36,14 @@ describe("authenticated-demo route behavior", () => {
     expect(screen.getByText(/does not authenticate anyone/i)).toBeInTheDocument();
   });
 
-  it("renders overview metrics and a vendor needing attention", async () => {
+  it("renders command-center metrics and a vendor needing attention", async () => {
     await renderRoute("/dashboard");
 
     expect(
-      await screen.findByRole("heading", { level: 1, name: "Program overview" }),
+      await screen.findByRole("heading", { level: 1, name: "Command center" }),
     ).toBeInTheDocument();
     expect(await screen.findByText("Vendors tracked")).toBeInTheDocument();
-    expect(await screen.findByText("Delgado Concrete Works")).toBeInTheDocument();
+    expect((await screen.findAllByText("Delgado Concrete Works")).length).toBeGreaterThan(0);
   });
 
   it("renders the vendor roster with a compliance rail per vendor", async () => {
