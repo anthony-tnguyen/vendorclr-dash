@@ -167,9 +167,9 @@ export const COMPLIANCE_LABELS: Record<ComplianceKey, string> = {
 
 export const COMPLIANCE_SHORT: Record<ComplianceKey, string> = {
   coi: "COI",
-  additionalInsured: "AI",
+  additionalInsured: "Add Ins",
   waiverOfSubrogation: "WOS",
-  lienWaiver: "LW",
+  lienWaiver: "Lien Waiver",
   renewal: "REN",
 };
 
