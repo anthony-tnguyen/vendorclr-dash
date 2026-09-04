@@ -65,13 +65,14 @@ export function getRequestScopedClient(): SupabaseClient {
 export function getServiceRoleClient(): SupabaseClient {
   assertServerOnly("getServiceRoleClient");
   const url = readSupabaseEnv()?.url;
-  // Deliberately NOT VITE_-prefixed: a VITE_ var ships to the browser bundle,
-  // and this key must never reach it.
-  const key = process.env["SUPABASE_SERVICE_ROLE_KEY"]?.trim();
+  // This project uses a custom name because the secret store reserves the
+  // SUPABASE_ prefix for managed connections. It must never be VITE_-prefixed:
+  // VITE_ values ship to the browser bundle.
+  const key = process.env["VENDORCLEAR_SERVICE_ROLE_KEY"]?.trim();
 
   if (!url || !key) {
     throw new Error(
-      "SUPABASE_SERVICE_ROLE_KEY (and VITE_SUPABASE_URL) must both be set to use the vendor " +
+      "VENDORCLEAR_SERVICE_ROLE_KEY (and VITE_SUPABASE_URL) must both be set to use the vendor " +
         "upload portal server functions.",
     );
   }
