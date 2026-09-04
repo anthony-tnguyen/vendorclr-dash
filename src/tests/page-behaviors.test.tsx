@@ -105,6 +105,19 @@ describe("authenticated-demo route behavior", () => {
     await user.click(screen.getByRole("button", { name: /save settings/i }));
     expect(await screen.findByRole("status")).toHaveTextContent(/not saved to any backend/i);
   });
+
+  it("renders the help FAQ with answers behind each question", async () => {
+    const { user } = await renderRoute("/dashboard/help");
+
+    expect(
+      await screen.findByRole("heading", { level: 1, name: "Help & FAQ" }),
+    ).toBeInTheDocument();
+
+    await user.click(screen.getByText("Are renewal reminders automatic?"));
+    expect(
+      await screen.findByText(/30 days before an active vendor's policy expires/i),
+    ).toBeInTheDocument();
+  });
 });
 
 describe("administrator route behavior", () => {
