@@ -2,7 +2,7 @@ import { render, screen, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { ComplianceRail, RAIL_ORDER } from "@/components/compliance/ComplianceRail";
 import { ComplianceBadge } from "@/components/compliance/ComplianceBadge";
-import type { ComplianceItem } from "@/data/contracts";
+import { COMPLIANCE_SHORT, type ComplianceItem } from "@/data/contracts";
 
 const items: ComplianceItem[] = [
   { key: "coi", status: "compliant", effectiveDate: "2026-11-30" },
@@ -13,6 +13,11 @@ const items: ComplianceItem[] = [
 ];
 
 describe("ComplianceRail", () => {
+  it("uses clear short labels for additional insured and lien waiver", () => {
+    expect(COMPLIANCE_SHORT.additionalInsured).toBe("Add Ins");
+    expect(COMPLIANCE_SHORT.lienWaiver).toBe("Lien Waiver");
+  });
+
   it("renders all five requirement slots in a fixed order", () => {
     render(<ComplianceRail items={items} vendorName="Corbett Structural Steel" />);
     const rail = screen.getByLabelText("Compliance rail for Corbett Structural Steel");
