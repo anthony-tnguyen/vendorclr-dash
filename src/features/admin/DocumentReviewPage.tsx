@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { AdminGuard } from "./AdminGuard";
 import { AppShell } from "@/components/shell/AppShell";
@@ -8,9 +8,11 @@ import { EmptyState, ErrorState, LoadingState } from "@/components/states/AsyncS
 import {
   getReviewQueueItem,
   resolveReviewItem,
+  selectClassifiedPolicies,
   type ReviewQueueItemDetail,
 } from "@/workflows/documentReview";
 import { reprocessDocument } from "@/workflows/vendorUploadRequests";
+import type { PolicyType } from "@/workflows/insuranceExtractionSchema";
 
 /**
  * The screen "What is still not built" in supabase/README.md used to flag as
@@ -47,6 +49,8 @@ function looksLikeMismatch(certificateHolderName: string | null, companyName: st
 export function DocumentReviewPage({ queueItemId }: { queueItemId: string }) {
   const queryClient = useQueryClient();
   const [note, setNote] = useState("");
+  const [selectedPolicyTypes, setSelectedPolicyTypes] = useState<PolicyType[]>([]);
+  const [confirmingApproval, setConfirmingApproval] = useState(false);
 
   const detail = useQuery({
     queryKey: ["review-queue-item", queueItemId],
@@ -54,8 +58,17 @@ export function DocumentReviewPage({ queueItemId }: { queueItemId: string }) {
   });
 
   const resolve = useMutation({
-    mutationFn: (decision: "approve" | "reject") =>
-      resolveReviewItem({ data: { queueItemId, decision, note: note.trim() || undefined } }),
+    mutationFn: (
+      data: { decision: "approve"; selectedPolicyTypes: PolicyType[] } | { decision: "reject" },
+    ) =>
+      resolveReviewItem({
+        data: {
+          queueItemId,
+          decision: data.decision,
+          note: note.trim() || undefined,
+          ...(data.decision === "approve" ? { selectedPolicyTypes: data.selectedPolicyTypes } : {}),
+        },
+      }),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["review-queue-item", queueItemId] });
       void queryClient.invalidateQueries({ queryKey: ["queue"] });
@@ -72,6 +85,30 @@ export function DocumentReviewPage({ queueItemId }: { queueItemId: string }) {
 
   const data: ReviewQueueItemDetail | undefined = detail.data;
   const resolved = data?.queueItem.state === "resolved";
+  const classifiedPolicies = useMemo(
+    () =>
+      (data?.document?.parsedData?.policies ?? []).filter(
+        (policy): policy is typeof policy & { type: PolicyType } => policy.type !== null,
+      ),
+    [data?.document?.parsedData],
+  );
+  const availablePolicyTypes = useMemo(
+    () => [...new Set(classifiedPolicies.map((policy) => policy.type))],
+    [classifiedPolicies],
+  );
+  const availablePolicyTypesKey = availablePolicyTypes.join("|");
+  const selectedPolicies = useMemo(
+    () => selectClassifiedPolicies(classifiedPolicies, selectedPolicyTypes),
+    [classifiedPolicies, selectedPolicyTypes],
+  );
+
+  useEffect(() => {
+    setSelectedPolicyTypes(
+      availablePolicyTypesKey ? (availablePolicyTypesKey.split("|") as PolicyType[]) : [],
+    );
+    setConfirmingApproval(false);
+  }, [data?.document?.id, availablePolicyTypesKey]);
+
   const canApproveOrReject =
     !!data && !resolved && !!data.document && data.document.processingStatus !== "processing";
 
@@ -280,9 +317,34 @@ export function DocumentReviewPage({ queueItemId }: { queueItemId: string }) {
               <section className="rounded-md border border-border bg-card p-4">
                 <h2 className="text-sm font-semibold text-foreground">Decision</h2>
                 <p className="mt-1 text-xs text-muted-foreground">
-                  Approve applies every classified coverage line above to this vendor's record.
-                  Reject leaves the vendor's record unchanged and closes this item.
+                  Select the coverage lines that should update the vendor record. Lines left
+                  unchecked stay unchanged and are recorded in the review decision.
                 </p>
+                <fieldset className="mt-4 border-y border-border py-3">
+                  <legend className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    Coverage to apply
+                  </legend>
+                  <div className="mt-2 space-y-2">
+                    {availablePolicyTypes.map((type) => (
+                      <label key={type} className="flex items-center gap-2 text-sm text-foreground">
+                        <input
+                          type="checkbox"
+                          checked={selectedPolicyTypes.includes(type)}
+                          onChange={(event) => {
+                            setConfirmingApproval(false);
+                            setSelectedPolicyTypes((current) =>
+                              event.target.checked
+                                ? [...current, type]
+                                : current.filter((selected) => selected !== type),
+                            );
+                          }}
+                          className="focusable size-4 accent-primary"
+                        />
+                        {formatPolicyType(type)}
+                      </label>
+                    ))}
+                  </div>
+                </fieldset>
                 <textarea
                   value={note}
                   onChange={(e) => setNote(e.target.value)}
@@ -291,23 +353,62 @@ export function DocumentReviewPage({ queueItemId }: { queueItemId: string }) {
                   className="focusable mt-3 w-full rounded-sm border border-input bg-background px-2 py-1.5 text-sm"
                 />
                 <div className="mt-3 flex flex-wrap gap-2">
-                  <button
-                    type="button"
-                    disabled={resolve.isPending || !data.document?.parsedData}
-                    onClick={() => resolve.mutate("approve")}
-                    className="focusable rounded-sm bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground disabled:opacity-60"
-                  >
-                    {resolve.isPending && resolve.variables === "approve"
-                      ? "Applying…"
-                      : "Approve & apply"}
-                  </button>
+                  {!confirmingApproval ? (
+                    <button
+                      type="button"
+                      disabled={resolve.isPending || selectedPolicies.length === 0}
+                      onClick={() => setConfirmingApproval(true)}
+                      className="focusable rounded-sm bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground disabled:opacity-60"
+                    >
+                      Review {selectedPolicies.length} selected line
+                      {selectedPolicies.length === 1 ? "" : "s"}
+                    </button>
+                  ) : (
+                    <div className="w-full rounded-sm border border-warn/40 bg-warn-soft p-3 text-xs">
+                      <p className="font-semibold text-foreground">
+                        Apply {selectedPolicies.length} selected coverage line
+                        {selectedPolicies.length === 1 ? "" : "s"}?
+                      </p>
+                      <p className="mt-1 text-muted-foreground">
+                        {availablePolicyTypes.length - selectedPolicyTypes.length} line
+                        {availablePolicyTypes.length - selectedPolicyTypes.length === 1
+                          ? ""
+                          : "s"}{" "}
+                        will remain unchanged.
+                      </p>
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          disabled={resolve.isPending}
+                          onClick={() =>
+                            resolve.mutate({ decision: "approve", selectedPolicyTypes })
+                          }
+                          className="focusable rounded-sm bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground disabled:opacity-60"
+                        >
+                          {resolve.isPending && resolve.variables.decision === "approve"
+                            ? "Applying…"
+                            : "Confirm & apply"}
+                        </button>
+                        <button
+                          type="button"
+                          disabled={resolve.isPending}
+                          onClick={() => setConfirmingApproval(false)}
+                          className="focusable rounded-sm border border-border px-3 py-2 text-xs font-semibold disabled:opacity-60"
+                        >
+                          Edit selection
+                        </button>
+                      </div>
+                    </div>
+                  )}
                   <button
                     type="button"
                     disabled={resolve.isPending}
-                    onClick={() => resolve.mutate("reject")}
+                    onClick={() => resolve.mutate({ decision: "reject" })}
                     className="focusable rounded-sm border border-border px-3 py-2 text-xs font-semibold disabled:opacity-60"
                   >
-                    {resolve.isPending && resolve.variables === "reject" ? "Rejecting…" : "Reject"}
+                    {resolve.isPending && resolve.variables.decision === "reject"
+                      ? "Rejecting…"
+                      : "Reject"}
                   </button>
                 </div>
                 {!data.document?.parsedData ? (
@@ -326,6 +427,10 @@ export function DocumentReviewPage({ queueItemId }: { queueItemId: string }) {
                   <p role="status" className="mt-2 text-xs">
                     {resolve.data.decision === "approve"
                       ? `Applied ${resolve.data.appliedCount} coverage line(s).${
+                          resolve.data.skippedPolicyTypes.length > 0
+                            ? ` ${resolve.data.skippedPolicyTypes.length} coverage line(s) were left unchanged.`
+                            : ""
+                        }${
                           resolve.data.errors.length > 0
                             ? ` ${resolve.data.errors.length} could not be applied — see the note above.`
                             : ""

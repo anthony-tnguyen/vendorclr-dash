@@ -67,6 +67,18 @@ describe("authenticated-demo route behavior", () => {
     expect(screen.getByText("Beacon Roofing Systems")).toBeInTheDocument();
   });
 
+  it("lets a coordinator isolate vendors that need compliance action", async () => {
+    const { user } = await renderRoute("/dashboard/vendors");
+
+    await screen.findByText("Northgate Mechanical");
+    await user.click(screen.getByRole("button", { name: "Show vendors needing action" }));
+
+    expect(screen.getByText("Delgado Concrete Works")).toBeInTheDocument();
+    expect(screen.getByText("Rivera Electrical Contractors")).toBeInTheDocument();
+    expect(screen.queryByText("Northgate Mechanical")).not.toBeInTheDocument();
+    expect(screen.queryByText("Ironclad Fire Protection")).not.toBeInTheDocument();
+  });
+
   it("renders the vendor detail limits and compliance rail", async () => {
     await renderRoute("/dashboard/vendors/vnd-1042");
 

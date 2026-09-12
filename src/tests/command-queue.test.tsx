@@ -55,5 +55,24 @@ describe("command-queue dashboards", () => {
     expect(screen.getByRole("complementary", { name: "Review inspector" })).toHaveTextContent(
       "Certificate of insurance",
     );
+    expect(
+      screen.getByRole("button", {
+        name: "Open review for Certificate of insurance from Delgado Concrete Works",
+      }),
+    ).toBeInTheDocument();
+  });
+
+  it("keeps the mobile navigation out of the way until a user asks for it", async () => {
+    const user = await renderRoute("/dashboard");
+
+    expect(
+      screen.queryByRole("navigation", { name: "Mobile dashboard sections" }),
+    ).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Open navigation menu" }));
+
+    expect(screen.getByRole("navigation", { name: "Mobile dashboard sections" })).toHaveTextContent(
+      "Command center",
+    );
   });
 });

@@ -6,7 +6,13 @@ async function getServiceRoleClient() {
   return mod.getServiceRoleClient();
 }
 import { isGeneralLiability } from "./complianceEngine";
-import type { ExtractedPolicy, InsuranceExtraction } from "./insuranceExtractionSchema";
+import {
+  POLICY_TYPES,
+  PolicyTypeSchema,
+  type ExtractedPolicy,
+  type InsuranceExtraction,
+  type PolicyType,
+} from "./insuranceExtractionSchema";
 import {
   applyOnePolicyLine,
   assertPlatformAdmin,
@@ -196,28 +202,58 @@ export const getReviewQueueItem = createServerFn({ method: "GET" })
 // resolveReviewItem - the human decision
 // ---------------------------------------------------------------------------
 
-const resolveReviewItemSchema = z.object({
-  queueItemId: z.string().uuid(),
-  decision: z.enum(["approve", "reject"]),
-  note: z.string().max(2000).optional(),
-});
+const selectedPolicyTypesSchema = z
+  .array(PolicyTypeSchema)
+  .min(1, "Select at least one coverage line to apply.")
+  .max(POLICY_TYPES.length)
+  .refine((types) => new Set(types).size === types.length, "Coverage lines must be unique.");
+
+const resolveReviewItemSchema = z.discriminatedUnion("decision", [
+  z.object({
+    queueItemId: z.string().uuid(),
+    decision: z.literal("approve"),
+    selectedPolicyTypes: selectedPolicyTypesSchema,
+    note: z.string().max(2000).optional(),
+  }),
+  z.object({
+    queueItemId: z.string().uuid(),
+    decision: z.literal("reject"),
+    note: z.string().max(2000).optional(),
+  }),
+]);
+
+/**
+ * Applies a reviewer's explicit selection to a freshly read extraction. The
+ * client supplies only policy types; the authoritative policy details always
+ * come from the document stored by the server.
+ */
+export function selectClassifiedPolicies(
+  policies: ExtractedPolicy[],
+  selectedPolicyTypes: PolicyType[],
+): Array<ExtractedPolicy & { type: PolicyType }> {
+  const selected = new Set(selectedPolicyTypes);
+  return policies.filter(
+    (policy): policy is ExtractedPolicy & { type: PolicyType } =>
+      policy.type !== null && selected.has(policy.type),
+  );
+}
 
 export interface ResolveReviewItemResult {
   decision: "approve" | "reject";
-  /** How many classified coverage lines on the certificate were written to vendor_policies. Always 0 for a reject. */
+  /** How many reviewer-selected coverage lines on the certificate were written to vendor_policies. Always 0 for a reject. */
   appliedCount: number;
-  /** One entry per classified line apply_policy_renewal() itself failed on - not lines the reviewer chose to skip, there is no such thing here (see the module docblock: approve is all-classified-lines-or-nothing). */
+  /** Classified coverage types the reviewer explicitly left unchanged. */
+  skippedPolicyTypes: PolicyType[];
+  /** One entry per selected line apply_policy_renewal() itself failed on. */
   errors: string[];
 }
 
 /**
- * "Approve" applies EVERY classified coverage line on the certificate, not
- * just the one that originally triggered review - the same all-or-nothing
- * shape the automated path already uses per-document, just without
- * matchExtractedPolicy() gating which lines qualify. A human looking at the
- * whole certificate and deciding "yes, apply this" is exactly the override
- * that gate exists to defer to; there is no partial-approval UI here (see
- * "Known compromises" in supabase/README.md). This includes
+ * "Approve" applies only the classified coverage types the reviewer selected
+ * in the confirmation step. The server re-reads the document's parsed data
+ * and uses those types as a filter, so a browser never supplies policy values
+ * to persist. Deselected lines are deliberately left unchanged and recorded
+ * in the decision audit trail. This includes
  * matchExtractedPolicy()'s company-requirements check (migration 13) - a
  * human approving here can knowingly apply a certificate below what the
  * company requires, same as they can knowingly apply one with a changed
@@ -257,6 +293,7 @@ export const resolveReviewItem = createServerFn({ method: "POST" })
     let appliedCount = 0;
     const errors: string[] = [];
     let appliedPolicyId: string | null = null;
+    let classified: Array<ExtractedPolicy & { type: PolicyType }> = [];
 
     if (data.decision === "approve") {
       if (!queueRow.document_id) {
@@ -272,9 +309,8 @@ export const resolveReviewItem = createServerFn({ method: "POST" })
       if (docError || !docRow) throw new Error("Document not found.");
 
       const parsed = docRow.parsed_data as InsuranceExtraction | null;
-      const classified = (parsed?.policies ?? []).filter(
-        (p): p is ExtractedPolicy & { type: NonNullable<ExtractedPolicy["type"]> } =>
-          p.type !== null,
+      classified = (parsed?.policies ?? []).filter(
+        (p): p is ExtractedPolicy & { type: PolicyType } => p.type !== null,
       );
 
       if (classified.length === 0) {
@@ -283,9 +319,16 @@ export const resolveReviewItem = createServerFn({ method: "POST" })
         );
       }
 
+      const selected = selectClassifiedPolicies(parsed?.policies ?? [], data.selectedPolicyTypes);
+      if (selected.length === 0) {
+        throw new Error(
+          "None of the selected coverage lines remain classified on this document. Reprocess it before applying changes.",
+        );
+      }
+
       const existingByType = await fetchActivePoliciesByType(supabase, queueRow.vendor_id);
 
-      for (const policy of classified) {
+      for (const policy of selected) {
         const existing = existingByType.get(policy.type) ?? null;
         const result = await applyOnePolicyLine(supabase, {
           companyId: queueRow.company_id,
@@ -321,12 +364,19 @@ export const resolveReviewItem = createServerFn({ method: "POST" })
         .eq("id", queueRow.document_id);
     }
 
+    const skippedPolicyTypes =
+      data.decision === "approve"
+        ? [...new Set(classified.map((policy) => policy.type))].filter(
+            (type) => !data.selectedPolicyTypes.includes(type),
+          )
+        : [];
+
     const resolutionNote =
       data.note?.trim() ||
       (data.decision === "approve"
         ? errors.length > 0
-          ? `Applied ${appliedCount} of ${appliedCount + errors.length} coverage lines on reviewer approval; ${errors.join(" ")}`
-          : `Applied all ${appliedCount} coverage line(s) on reviewer approval.`
+          ? `Applied ${appliedCount} selected coverage line(s); ${errors.join(" ")}`
+          : `Applied ${appliedCount} selected coverage line(s) on reviewer approval.`
         : "Dismissed by reviewer.");
 
     await supabase
@@ -348,8 +398,14 @@ export const resolveReviewItem = createServerFn({ method: "POST" })
       action: "review_resolved",
       target_type: "compliance_queue_item",
       target_id: queueRow.id,
-      detail: { decision: data.decision, appliedCount, errors, note: resolutionNote },
+      detail: {
+        decision: data.decision,
+        appliedCount,
+        skippedPolicyTypes,
+        errors,
+        note: resolutionNote,
+      },
     });
 
-    return { decision: data.decision, appliedCount, errors };
+    return { decision: data.decision, appliedCount, skippedPolicyTypes, errors };
   });
