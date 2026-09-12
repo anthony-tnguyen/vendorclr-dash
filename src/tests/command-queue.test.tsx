@@ -21,6 +21,10 @@ describe("command-queue dashboards", () => {
 
     expect(await screen.findByRole("heading", { name: "Needs action now" })).toBeInTheDocument();
     expect((await screen.findAllByText("Delgado Concrete Works")).length).toBeGreaterThan(0);
+    expect(screen.getByRole("region", { name: "Compliance posture" })).toBeInTheDocument();
+    expect(
+      screen.getByLabelText("Compliance matrix for Delgado Concrete Works"),
+    ).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Resolution inspector" })).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Inspect Rivera Electrical Contractors" }));
@@ -47,6 +51,8 @@ describe("command-queue dashboards", () => {
     expect(
       await screen.findByRole("heading", { name: "Queue requiring review" }),
     ).toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "Review posture" })).toBeInTheDocument();
+    expect(screen.getByLabelText("Escalated: 1, Needs reviewer attention")).toBeInTheDocument();
     expect(
       await screen.findByRole("button", {
         name: "Inspect Certificate of insurance from Delgado Concrete Works",

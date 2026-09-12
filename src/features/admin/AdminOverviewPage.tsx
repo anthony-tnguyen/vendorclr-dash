@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { AdminGuard } from "./AdminGuard";
 import { AppShell } from "@/components/shell/AppShell";
+import { CompliancePosture } from "@/components/compliance/CompliancePosture";
 import { EmptyState, ErrorState, LoadingState } from "@/components/states/AsyncState";
 import type { QueueItem } from "@/data/contracts";
 import { getRepository, isBackendConfigured } from "@/data/repository";
@@ -34,6 +35,31 @@ export function AdminOverviewPage() {
     queue: queue.data?.length ?? 0,
     escalated: (queue.data ?? []).filter((q) => q.state === "escalated").length,
   };
+  const reviewPosture = [
+    {
+      id: "escalated",
+      label: "Escalated",
+      value: (queue.data ?? []).filter((item) => item.state === "escalated").length,
+      detail: "Needs reviewer attention",
+      tone: "danger" as const,
+    },
+    {
+      id: "in-review",
+      label: "In review",
+      value: (queue.data ?? []).filter(
+        (item) => item.state === "in-review" || item.state === "queued",
+      ).length,
+      detail: "Awaiting a decision",
+      tone: "warn" as const,
+    },
+    {
+      id: "resolved",
+      label: "Resolved",
+      value: (queue.data ?? []).filter((item) => item.state === "resolved").length,
+      detail: "Decisions completed",
+      tone: "ok" as const,
+    },
+  ];
 
   return (
     <AppShell
@@ -52,7 +78,7 @@ export function AdminOverviewPage() {
             }}
           />
         ) : (
-          <div className="space-y-8">
+          <div className="space-y-7">
             {notice ? (
               <p
                 role="status"
@@ -62,10 +88,10 @@ export function AdminOverviewPage() {
               </p>
             ) : null}
             <section aria-labelledby="admin-metrics-heading">
-              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-                Portfolio signal
-              </p>
-              <h2 id="admin-metrics-heading" className="mt-1 text-lg font-semibold text-foreground">
+              <h2
+                id="admin-metrics-heading"
+                className="text-lg font-semibold tracking-tight text-foreground"
+              >
                 Review capacity
               </h2>
               <dl className="mt-4 grid divide-y divide-border border-y border-border sm:grid-cols-2 sm:divide-x sm:divide-y-0 xl:grid-cols-4">
@@ -92,14 +118,17 @@ export function AdminOverviewPage() {
               </dl>
             </section>
 
+            <CompliancePosture
+              label="Review posture"
+              summary={`${reviewPosture.reduce((total, segment) => total + segment.value, 0)} documents tracked`}
+              segments={reviewPosture}
+            />
+
             <section aria-labelledby="review-queue-heading">
               <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-                  Review queue
-                </p>
                 <h2
                   id="review-queue-heading"
-                  className="mt-1 text-lg font-semibold text-foreground"
+                  className="text-lg font-semibold tracking-tight text-foreground"
                 >
                   Queue requiring review
                 </h2>
@@ -113,8 +142,8 @@ export function AdminOverviewPage() {
                 </div>
               ) : (
                 <div className="mt-4 grid gap-6 xl:grid-cols-[minmax(0,1fr)_22rem]">
-                  <div className="border-y border-border">
-                    <div className="hidden grid-cols-[minmax(0,1fr)_8rem_8rem] gap-4 border-b border-border px-4 py-3 text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground md:grid">
+                  <div className="overflow-hidden border border-border bg-card shadow-[0_12px_28px_-24px_rgb(15_23_42/0.55)]">
+                    <div className="hidden grid-cols-[minmax(0,1fr)_8rem_8rem] gap-4 border-b border-border bg-muted/45 px-4 py-3 text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground md:grid">
                       <span>Document and vendor</span>
                       <span>State</span>
                       <span>Submitted</span>
@@ -152,12 +181,9 @@ export function AdminOverviewPage() {
                   {selectedItem ? (
                     <aside
                       aria-label="Review inspector"
-                      className="border border-border bg-card p-5 xl:sticky xl:top-6 xl:self-start"
+                      className="border border-border bg-card p-5 shadow-[0_12px_28px_-24px_rgb(15_23_42/0.55)] xl:sticky xl:top-6 xl:self-start"
                     >
-                      <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-                        Selected submission
-                      </p>
-                      <h2 className="mt-2 text-lg font-semibold text-foreground">
+                      <h2 className="text-lg font-semibold tracking-tight text-foreground">
                         Review inspector
                       </h2>
                       <div className="mt-5 border-y border-border py-4">
