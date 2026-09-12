@@ -418,21 +418,22 @@ wait for the vendor to send a *new* certificate that happened to match
 cleanly. Staff-only (`/dashboard/admin/compliance/$queueItemId`,
 `AdminGuard`-gated same as the queue list it opens from), it shows what the
 certificate extracted side by side with what's currently on file per
-coverage type, and lets a reviewer **Approve & apply** or **Reject**.
+coverage type, and lets a reviewer apply selected lines or reject the document.
 
 Two decisions worth being explicit about:
 
-- **Approve is all classified coverage lines on the certificate, or nothing**
-  - not a per-line UI. `resolveReviewItem()` re-reads `parsed_data` fresh
-    from the database (never a client-supplied payload) and calls the same
-    `apply_policy_renewal()` RPC the automated path uses for every classified
-    line, bypassing only `matchExtractedPolicy()`'s automated gate - the
-    human looking at the whole document *is* the override that gate exists
-    to defer to. This also means a `new_coverage` line (the vendor's first
-    policy of a given type, which the automated path can never apply on its
-    own - `matchExtractedPolicy()` returns `new_coverage`, not `renew`, and
-    only `renew` auto-applies) can finally be recorded, through this screen.
-    Editable/per-line overrides are not built - see Known compromises.
+- **Approve applies only the policy types the reviewer confirms**
+  - the reviewer starts with every classified line selected, can deselect any
+    line, and sees an inline confirmation stating how many selected lines will
+    be applied and how many will remain unchanged. `resolveReviewItem()`
+    re-reads `parsed_data` fresh from the database (never a client-supplied
+    payload), uses the client-supplied policy types only as a validated filter,
+    and calls the same `apply_policy_renewal()` RPC the automated path uses for
+    each selected classified line. The skipped types are retained in the audit
+    entry. This also means a `new_coverage` line (the vendor's first policy of
+    a given type, which the automated path can never apply on its own -
+    `matchExtractedPolicy()` returns `new_coverage`, not `renew`, and only
+    `renew` auto-applies) can finally be recorded through this screen.
 - **Staff act across companies they don't belong to, on purpose, through the
   service role.** `vendor_policies`/`vendor_documents`/`compliance_queue_items`
   writes and the storage bucket's read policy all gate on company membership

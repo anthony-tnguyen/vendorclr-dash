@@ -10,7 +10,8 @@ import {
   type ComplianceStatus,
   type Vendor,
 } from "@/data/contracts";
-import { getRepository } from "@/data/repository";
+import { getRepository, isBackendConfigured } from "@/data/repository";
+import { RequestDocumentsAction } from "@/features/vendors/RequestDocumentsAction";
 
 const statusRank: Record<ComplianceStatus, number> = {
   expired: 5,
@@ -223,6 +224,9 @@ export function OverviewPage() {
                   >
                     Open vendor record
                   </Link>
+                  {isBackendConfigured() ? (
+                    <RequestDocumentsAction vendorId={selectedVendor.id} />
+                  ) : null}
                 </aside>
               ) : null}
             </div>

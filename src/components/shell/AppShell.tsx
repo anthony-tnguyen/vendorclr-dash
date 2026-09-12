@@ -1,4 +1,5 @@
 import { Link } from "@tanstack/react-router";
+import { useState } from "react";
 import type { ReactNode } from "react";
 import { useSession } from "@/app/App";
 import { adminNav, customerNav } from "@/app/router";
@@ -6,7 +7,15 @@ import { cn } from "@/lib/utils";
 
 type NavItems = typeof customerNav | typeof adminNav;
 
-function NavList({ title, items }: { title: string; items: NavItems }) {
+function NavList({
+  title,
+  items,
+  onNavigate,
+}: {
+  title: string;
+  items: NavItems;
+  onNavigate?: () => void;
+}) {
   return (
     <div>
       <p className="px-3 text-[11px] font-semibold uppercase tracking-wider text-sidebar-foreground/60">
@@ -27,6 +36,7 @@ function NavList({ title, items }: { title: string; items: NavItems }) {
                 className: "bg-sidebar-accent text-sidebar-foreground font-semibold",
                 "aria-current": "page",
               }}
+              onClick={onNavigate}
               className="focusable block rounded-sm px-3 py-2 text-sm text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-foreground"
             >
               {item.label}
@@ -35,6 +45,42 @@ function NavList({ title, items }: { title: string; items: NavItems }) {
         ))}
       </ul>
     </div>
+  );
+}
+
+function SidebarContents({
+  navigation,
+  navigationTitle,
+  role,
+  onNavigate,
+}: {
+  navigation: NavItems;
+  navigationTitle: string;
+  role: "admin" | "customer";
+  onNavigate?: () => void;
+}) {
+  return (
+    <>
+      <div className="flex items-center justify-between px-4 py-4">
+        <Link
+          to="/dashboard"
+          onClick={onNavigate}
+          className="focusable"
+          aria-label="VendorClr dashboard home"
+        >
+          <img src="/vendorclr-logo-white.svg" alt="VendorClr" className="h-5 w-auto" />
+        </Link>
+        <span className="numeric rounded-sm border border-sidebar-border px-1.5 py-0.5 text-[10px] uppercase text-sidebar-foreground/70">
+          {role === "admin" ? "ADMIN" : "CUSTOMER"}
+        </span>
+      </div>
+      <nav aria-label="Dashboard sections" className="space-y-4 px-1 pb-4">
+        <NavList title={navigationTitle} items={navigation} onNavigate={onNavigate} />
+      </nav>
+      <div className="px-3 pb-6">
+        <SessionPanel />
+      </div>
+    </>
   );
 }
 
@@ -114,6 +160,7 @@ export interface AppShellProps {
 
 export function AppShell({ title, subtitle, actions, children }: AppShellProps) {
   const { personName, companyName, role, mode } = useSession();
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const navigation = role === "admin" ? adminNav : customerNav;
   const navigationTitle = role === "admin" ? "Operations" : "Workspace";
 
@@ -126,24 +173,42 @@ export function AppShell({ title, subtitle, actions, children }: AppShellProps) 
         Skip to main content
       </a>
       <div className="lg:flex">
-        <aside className="bg-sidebar text-sidebar-foreground lg:min-h-screen lg:w-64 lg:shrink-0">
-          <div className="flex items-center justify-between px-4 py-4">
-            <Link to="/dashboard" className="focusable" aria-label="VendorClr dashboard home">
-              <img src="/vendorclr-logo-white.svg" alt="VendorClr" className="h-5 w-auto" />
-            </Link>
-            <span className="numeric rounded-sm border border-sidebar-border px-1.5 py-0.5 text-[10px] uppercase text-sidebar-foreground/70">
-              {role === "admin" ? "ADMIN" : "CUSTOMER"}
-            </span>
-          </div>
-          <nav aria-label="Dashboard sections" className="space-y-4 px-1 pb-4">
-            <NavList title={navigationTitle} items={navigation} />
-          </nav>
-          <div className="px-3 pb-6">
-            <SessionPanel />
-          </div>
+        <aside className="hidden bg-sidebar text-sidebar-foreground lg:block lg:min-h-screen lg:w-64 lg:shrink-0">
+          <SidebarContents navigation={navigation} navigationTitle={navigationTitle} role={role} />
         </aside>
 
         <div className="min-w-0 flex-1">
+          <div className="border-b border-sidebar-border bg-sidebar text-sidebar-foreground lg:hidden">
+            <div className="flex items-center justify-between px-4 py-3">
+              <Link to="/dashboard" className="focusable" aria-label="VendorClr dashboard home">
+                <img src="/vendorclr-logo-white.svg" alt="VendorClr" className="h-5 w-auto" />
+              </Link>
+              <button
+                type="button"
+                onClick={() => setMobileNavOpen((open) => !open)}
+                aria-expanded={mobileNavOpen}
+                aria-controls="mobile-dashboard-navigation"
+                aria-label={mobileNavOpen ? "Close navigation menu" : "Open navigation menu"}
+                className="focusable rounded-sm border border-sidebar-border px-3 py-1.5 text-xs font-semibold"
+              >
+                {mobileNavOpen ? "Close" : "Menu"}
+              </button>
+            </div>
+            {mobileNavOpen ? (
+              <div id="mobile-dashboard-navigation" className="border-t border-sidebar-border">
+                <nav aria-label="Mobile dashboard sections" className="space-y-4 px-1 pt-3">
+                  <NavList
+                    title={navigationTitle}
+                    items={navigation}
+                    onNavigate={() => setMobileNavOpen(false)}
+                  />
+                </nav>
+                <div className="px-3 pb-4">
+                  <SessionPanel />
+                </div>
+              </div>
+            ) : null}
+          </div>
           <header className="border-b border-border bg-card px-4 py-4 sm:px-6">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
               <div className="min-w-0">

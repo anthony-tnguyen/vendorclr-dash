@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { AppShell } from "@/components/shell/AppShell";
 import { ComplianceRail } from "@/components/compliance/ComplianceRail";
 import { EmptyState, ErrorState, LoadingState } from "@/components/states/AsyncState";
+import type { ComplianceStatus, Vendor } from "@/data/contracts";
 import { VendorForm } from "./VendorForm";
 import { getRepository } from "@/data/repository";
 
@@ -13,23 +14,58 @@ const currency = new Intl.NumberFormat("en-US", {
   maximumFractionDigits: 0,
 });
 
+const statusRank: Record<ComplianceStatus, number> = {
+  expired: 4,
+  missing: 3,
+  expiring: 2,
+  pending: 1,
+  compliant: 0,
+};
+
+const filters = [
+  "all",
+  "needs-action",
+  "expired",
+  "missing",
+  "expiring",
+  "pending",
+  "compliant",
+] as const;
+type Filter = (typeof filters)[number];
+
+function highestStatus(vendor: Vendor): ComplianceStatus {
+  return vendor.compliance.reduce<ComplianceStatus>(
+    (highest, item) => (statusRank[item.status] > statusRank[highest] ? item.status : highest),
+    "compliant",
+  );
+}
+
 export function VendorsPage() {
   const repo = getRepository();
   const [query, setQuery] = useState("");
+  const [filter, setFilter] = useState<Filter>("all");
   const [showForm, setShowForm] = useState(false);
   const vendors = useQuery({ queryKey: ["vendors"], queryFn: () => repo.listVendors() });
 
   const filtered = useMemo(() => {
     const list = vendors.data ?? [];
     const q = query.trim().toLowerCase();
-    if (!q) return list;
-    return list.filter(
-      (v) =>
-        v.name.toLowerCase().includes(q) ||
-        v.trade.toLowerCase().includes(q) ||
-        v.project.toLowerCase().includes(q),
-    );
-  }, [vendors.data, query]);
+    return list
+      .filter(
+        (v) =>
+          !q ||
+          v.name.toLowerCase().includes(q) ||
+          v.trade.toLowerCase().includes(q) ||
+          v.project.toLowerCase().includes(q),
+      )
+      .filter((vendor) => {
+        const status = highestStatus(vendor);
+        if (filter === "all") return true;
+        if (filter === "needs-action") return status !== "compliant";
+        return status === filter;
+      })
+      .sort((a, b) => statusRank[highestStatus(b)] - statusRank[highestStatus(a)]);
+  }, [vendors.data, query, filter]);
 
   return (
     <AppShell
@@ -62,6 +98,35 @@ export function VendorsPage() {
             className="focusable mt-1 w-full rounded-sm border border-input bg-card px-3 py-2 text-sm"
           />
         </div>
+
+        <fieldset>
+          <legend className="text-sm font-medium text-foreground">Compliance status</legend>
+          <div className="mt-2 flex flex-wrap gap-1">
+            {filters.map((value) => {
+              const label = value === "needs-action" ? "Needs action" : value;
+              return (
+                <button
+                  key={value}
+                  type="button"
+                  onClick={() => setFilter(value)}
+                  aria-pressed={filter === value}
+                  aria-label={
+                    value === "needs-action"
+                      ? "Show vendors needing action"
+                      : `Show ${label} vendors`
+                  }
+                  className={`focusable rounded-sm border px-3 py-1.5 text-sm font-medium capitalize ${
+                    filter === value
+                      ? "border-primary bg-primary text-primary-foreground"
+                      : "border-border bg-card text-foreground"
+                  }`}
+                >
+                  {label}
+                </button>
+              );
+            })}
+          </div>
+        </fieldset>
 
         {vendors.isLoading ? (
           <LoadingState label="Loading vendor roster" rows={6} />

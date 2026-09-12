@@ -4,7 +4,7 @@ import { AdminGuard } from "./AdminGuard";
 import { AppShell } from "@/components/shell/AppShell";
 import { EmptyState, ErrorState, LoadingState } from "@/components/states/AsyncState";
 import type { QueueItem } from "@/data/contracts";
-import { getRepository } from "@/data/repository";
+import { getRepository, isBackendConfigured } from "@/data/repository";
 
 const queueRank: Record<QueueItem["state"], number> = {
   escalated: 4,
@@ -18,6 +18,7 @@ export function AdminOverviewPage() {
   const companies = useQuery({ queryKey: ["companies"], queryFn: () => repo.listCompanies() });
   const queue = useQuery({ queryKey: ["queue"], queryFn: () => repo.listQueue() });
   const [selectedItemId, setSelectedItemId] = useState<string>();
+  const [notice, setNotice] = useState<string | null>(null);
   const activeQueue = useMemo(
     () =>
       [...(queue.data ?? [])]
@@ -52,6 +53,14 @@ export function AdminOverviewPage() {
           />
         ) : (
           <div className="space-y-8">
+            {notice ? (
+              <p
+                role="status"
+                className="rounded-sm border border-border bg-muted px-3 py-2 text-xs"
+              >
+                {notice}
+              </p>
+            ) : null}
             <section aria-labelledby="admin-metrics-heading">
               <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
                 Portfolio signal
@@ -186,6 +195,29 @@ export function AdminOverviewPage() {
                           </dd>
                         </div>
                       </dl>
+                      {isBackendConfigured() && selectedItem.documentId ? (
+                        <Link
+                          to="/dashboard/admin/compliance/$queueItemId"
+                          params={{ queueItemId: selectedItem.id }}
+                          aria-label={`Open review for ${selectedItem.document} from ${selectedItem.vendorName}`}
+                          className="focusable mt-6 inline-flex rounded-sm bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground"
+                        >
+                          Open review
+                        </Link>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setNotice(
+                              "Demo mode: review is unavailable because no document has been stored.",
+                            )
+                          }
+                          aria-label={`Open review for ${selectedItem.document} from ${selectedItem.vendorName}`}
+                          className="focusable mt-6 inline-flex rounded-sm border border-border px-3 py-2 text-xs font-semibold"
+                        >
+                          Open review (demo)
+                        </button>
+                      )}
                     </aside>
                   ) : null}
                 </div>
