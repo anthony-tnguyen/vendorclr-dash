@@ -2,7 +2,8 @@ import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { AppShell } from "@/components/shell/AppShell";
-import { ComplianceRail } from "@/components/compliance/ComplianceRail";
+import { ComplianceMatrix } from "@/components/compliance/ComplianceMatrix";
+import { CompliancePosture } from "@/components/compliance/CompliancePosture";
 import { EmptyState, ErrorState, LoadingState } from "@/components/states/AsyncState";
 import {
   COMPLIANCE_LABELS,
@@ -45,20 +46,48 @@ export function OverviewPage() {
   );
   const selectedVendor = attention.find((vendor) => vendor.id === selectedVendorId) ?? attention[0];
   const selectedException = selectedVendor ? primaryException(selectedVendor) : undefined;
+  const posture = useMemo(() => {
+    const items = (vendors.data ?? []).flatMap((vendor) => vendor.compliance);
+    return [
+      {
+        id: "urgent",
+        label: "Urgent",
+        value: items.filter((item) => item.status === "missing" || item.status === "expired")
+          .length,
+        detail: "Requirements blocking action",
+        tone: "danger" as const,
+      },
+      {
+        id: "expiring",
+        label: "Expiring",
+        value: items.filter((item) => item.status === "expiring" || item.status === "pending")
+          .length,
+        detail: "Due soon or in review",
+        tone: "warn" as const,
+      },
+      {
+        id: "clear",
+        label: "Clear",
+        value: items.filter((item) => item.status === "compliant").length,
+        detail: "Requirements currently met",
+        tone: "ok" as const,
+      },
+    ];
+  }, [vendors.data]);
 
   return (
     <AppShell
       title="Command center"
       subtitle="The exceptions most likely to hold up vendor approval, ranked for action."
     >
-      <div className="space-y-8">
+      <div className="space-y-7">
         <section aria-labelledby="metrics-heading">
           <div className="flex items-end justify-between gap-4">
             <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-                Program signal
-              </p>
-              <h2 id="metrics-heading" className="mt-1 text-lg font-semibold text-foreground">
+              <h2
+                id="metrics-heading"
+                className="text-lg font-semibold tracking-tight text-foreground"
+              >
                 Current position
               </h2>
             </div>
@@ -94,13 +123,21 @@ export function OverviewPage() {
           )}
         </section>
 
+        {vendors.data ? (
+          <CompliancePosture
+            label="Compliance posture"
+            summary={`${posture.reduce((total, segment) => total + segment.value, 0)} requirements tracked`}
+            segments={posture}
+          />
+        ) : null}
+
         <section aria-labelledby="attention-heading">
           <div className="flex items-end justify-between gap-4">
             <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-                Action queue
-              </p>
-              <h2 id="attention-heading" className="mt-1 text-lg font-semibold text-foreground">
+              <h2
+                id="attention-heading"
+                className="text-lg font-semibold tracking-tight text-foreground"
+              >
                 Needs action now
               </h2>
             </div>
@@ -131,11 +168,11 @@ export function OverviewPage() {
             </div>
           ) : (
             <div className="mt-4 grid gap-6 xl:grid-cols-[minmax(0,1fr)_22rem]">
-              <div className="border-y border-border">
-                <div className="hidden grid-cols-[minmax(0,1fr)_8rem_12rem] gap-4 border-b border-border px-4 py-3 text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground md:grid">
+              <div className="overflow-hidden border border-border bg-card shadow-[0_12px_28px_-24px_rgb(15_23_42/0.55)]">
+                <div className="hidden grid-cols-[minmax(0,1fr)_8rem_12rem] gap-4 border-b border-border bg-muted/45 px-4 py-3 text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground md:grid">
                   <span>Vendor and blocker</span>
                   <span>Priority</span>
-                  <span>Compliance rail</span>
+                  <span>Compliance register</span>
                 </div>
                 {attention.map((vendor) => {
                   const exception = primaryException(vendor)!;
@@ -165,7 +202,7 @@ export function OverviewPage() {
                       <span className="text-xs font-semibold uppercase tracking-[0.12em] text-destructive">
                         {exception.status}
                       </span>
-                      <ComplianceRail
+                      <ComplianceMatrix
                         items={vendor.compliance}
                         vendorName={vendor.name}
                         className="mt-1 md:mt-0"
@@ -177,12 +214,9 @@ export function OverviewPage() {
               {selectedVendor && selectedException ? (
                 <aside
                   aria-label="Resolution inspector"
-                  className="border border-border bg-card p-5 xl:sticky xl:top-6 xl:self-start"
+                  className="border border-border bg-card p-5 shadow-[0_12px_28px_-24px_rgb(15_23_42/0.55)] xl:sticky xl:top-6 xl:self-start"
                 >
-                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-                    Selected exception
-                  </p>
-                  <h2 className="mt-2 text-lg font-semibold text-foreground">
+                  <h2 className="text-lg font-semibold tracking-tight text-foreground">
                     Resolution inspector
                   </h2>
                   <div className="mt-5 border-y border-border py-4">
