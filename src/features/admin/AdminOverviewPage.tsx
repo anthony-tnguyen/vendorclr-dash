@@ -141,7 +141,7 @@ export function AdminOverviewPage() {
                   />
                 </div>
               ) : (
-                <div className="mt-4 grid gap-6 xl:grid-cols-[minmax(0,1fr)_22rem]">
+                <div className="mt-4 grid gap-6 2xl:grid-cols-[minmax(0,1fr)_22rem]">
                   <div className="overflow-hidden border border-border bg-card shadow-[0_12px_28px_-24px_rgb(15_23_42/0.55)]">
                     <div className="hidden grid-cols-[minmax(0,1fr)_8rem_8rem] gap-4 border-b border-border bg-muted/45 px-4 py-3 text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground md:grid">
                       <span>Document and vendor</span>
@@ -181,7 +181,7 @@ export function AdminOverviewPage() {
                   {selectedItem ? (
                     <aside
                       aria-label="Review inspector"
-                      className="border border-border bg-card p-5 shadow-[0_12px_28px_-24px_rgb(15_23_42/0.55)] xl:sticky xl:top-6 xl:self-start"
+                      className="border border-border bg-card p-5 shadow-[0_12px_28px_-24px_rgb(15_23_42/0.55)] 2xl:sticky 2xl:top-6 2xl:self-start"
                     >
                       <h2 className="text-lg font-semibold tracking-tight text-foreground">
                         Review inspector

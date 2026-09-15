@@ -167,9 +167,9 @@ export function OverviewPage() {
               />
             </div>
           ) : (
-            <div className="mt-4 grid gap-6 xl:grid-cols-[minmax(0,1fr)_22rem]">
+            <div className="mt-4 grid gap-6 2xl:grid-cols-[minmax(0,1fr)_22rem]">
               <div className="overflow-hidden border border-border bg-card shadow-[0_12px_28px_-24px_rgb(15_23_42/0.55)]">
-                <div className="hidden grid-cols-[minmax(0,1fr)_8rem_12rem] gap-4 border-b border-border bg-muted/45 px-4 py-3 text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground md:grid">
+                <div className="hidden grid-cols-[minmax(0,1fr)_9rem_22rem] gap-4 border-b border-border bg-muted/45 px-4 py-3 text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground xl:grid">
                   <span>Vendor and blocker</span>
                   <span>Priority</span>
                   <span>Compliance register</span>
@@ -183,7 +183,7 @@ export function OverviewPage() {
                       type="button"
                       aria-label={`Inspect ${vendor.name}`}
                       onClick={() => setSelectedVendorId(vendor.id)}
-                      className={`focusable grid w-full gap-2 border-b border-border px-4 py-4 text-left transition-colors last:border-b-0 md:grid-cols-[minmax(0,1fr)_8rem_12rem] md:items-center md:gap-4 ${active ? "bg-primary/5" : "hover:bg-muted/70"}`}
+                      className={`focusable grid w-full gap-2 border-b border-border px-4 py-4 text-left transition-colors last:border-b-0 xl:grid-cols-[minmax(0,1fr)_9rem_22rem] xl:items-center xl:gap-4 ${active ? "bg-primary/5" : "hover:bg-muted/70"}`}
                     >
                       <span className="min-w-0">
                         <span className="block truncate text-sm font-semibold text-foreground">
@@ -205,7 +205,7 @@ export function OverviewPage() {
                       <ComplianceMatrix
                         items={vendor.compliance}
                         vendorName={vendor.name}
-                        className="mt-1 md:mt-0"
+                        className="mt-1 xl:mt-0"
                       />
                     </button>
                   );
@@ -214,7 +214,7 @@ export function OverviewPage() {
               {selectedVendor && selectedException ? (
                 <aside
                   aria-label="Resolution inspector"
-                  className="border border-border bg-card p-5 shadow-[0_12px_28px_-24px_rgb(15_23_42/0.55)] xl:sticky xl:top-6 xl:self-start"
+                  className="border border-border bg-card p-5 shadow-[0_12px_28px_-24px_rgb(15_23_42/0.55)] 2xl:sticky 2xl:top-6 2xl:self-start"
                 >
                   <h2 className="text-lg font-semibold tracking-tight text-foreground">
                     Resolution inspector

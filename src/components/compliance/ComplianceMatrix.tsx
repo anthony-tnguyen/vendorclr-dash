@@ -1,11 +1,6 @@
 import { AlertTriangle, Check, Clock3, Minus } from "lucide-react";
 import { RAIL_ORDER } from "./ComplianceRail";
-import {
-  COMPLIANCE_LABELS,
-  COMPLIANCE_SHORT,
-  STATUS_LABELS,
-  type ComplianceItem,
-} from "@/data/contracts";
+import { COMPLIANCE_LABELS, STATUS_LABELS, type ComplianceItem } from "@/data/contracts";
 import { cn } from "@/lib/utils";
 
 export interface ComplianceMatrixProps {
@@ -28,6 +23,14 @@ const statusIconStyles: Record<ComplianceItem["status"], string> = {
   pending: "text-primary",
   missing: "text-destructive",
   expired: "text-destructive",
+};
+
+const matrixLabels: Record<ComplianceItem["key"], string> = {
+  coi: "COI",
+  additionalInsured: "AI",
+  waiverOfSubrogation: "WOS",
+  lienWaiver: "LW",
+  renewal: "REN",
 };
 
 function StatusIcon({
@@ -76,12 +79,12 @@ export function ComplianceMatrix({ items, vendorName, className }: ComplianceMat
             data-status={item.status}
             data-requirement={item.key}
             className={cn(
-              "flex min-w-0 flex-col items-center gap-1 border-r border-border px-1 py-1.5 text-[9px] font-semibold uppercase tracking-wide last:border-r-0",
+              "flex min-w-0 flex-col items-center gap-1.5 border-r border-border px-1.5 py-2 text-[10px] font-semibold uppercase tracking-[0.08em] last:border-r-0",
               statusStyles[item.status],
             )}
           >
             <StatusIcon status={item.status} className={statusIconStyles[item.status]} />
-            <span className="truncate">{COMPLIANCE_SHORT[item.key]}</span>
+            <span>{matrixLabels[item.key]}</span>
           </span>
         );
       })}
