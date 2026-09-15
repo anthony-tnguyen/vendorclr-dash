@@ -144,6 +144,21 @@ export interface AccessGrant {
   lastActiveOn: string;
 }
 
+export interface SignupInvite {
+  id: string;
+  companyName: string;
+  email: string;
+  code: string;
+  status: "pending" | "used" | "revoked";
+  expiresOn: string;
+  createdOn: string;
+}
+
+export interface SignupInviteDraft {
+  companyName: string;
+  email: string;
+}
+
 export interface DashboardRepository {
   listVendors(): Promise<Vendor[]>;
   getVendor(vendorId: string): Promise<Vendor | null>;
@@ -155,6 +170,9 @@ export interface DashboardRepository {
   listQueue(): Promise<QueueItem[]>;
   listLeads(): Promise<Lead[]>;
   listAccessGrants(): Promise<AccessGrant[]>;
+  listSignupInvites(): Promise<SignupInvite[]>;
+  createSignupInvite(draft: SignupInviteDraft): Promise<SignupInvite>;
+  revokeSignupInvite(inviteId: string): Promise<void>;
 }
 
 export const COMPLIANCE_LABELS: Record<ComplianceKey, string> = {
