@@ -202,7 +202,7 @@ export function createSupabaseRepository(
         if (error) throw new Error(error.message);
         if (!data) {
           throw new Error(
-            "Signed-in user belongs to no company. Call create_company_for_current_user() during signup.",
+            "Signed-in user belongs to no company. Business accounts are created via an admin-issued signup invite (see /signup); this user has none.",
           );
         }
         return data.company_id;
