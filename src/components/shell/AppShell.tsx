@@ -210,7 +210,7 @@ export function AppShell({ title, subtitle, actions, children }: AppShellProps) 
             ) : null}
           </div>
           <header className="border-b border-border bg-card px-4 py-4 sm:px-6">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div className="mx-auto flex w-full max-w-[100rem] flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
               <div className="min-w-0">
                 <h1 className="text-lg font-bold tracking-tight text-foreground">{title}</h1>
                 {subtitle ? <p className="mt-1 text-sm text-muted-foreground">{subtitle}</p> : null}
@@ -224,13 +224,15 @@ export function AppShell({ title, subtitle, actions, children }: AppShellProps) 
               </div>
             </div>
           </header>
-          <main id="main-content" className="px-4 py-6 sm:px-6">
+          <main id="main-content" className="mx-auto w-full max-w-[100rem] px-4 py-6 sm:px-6">
             {children}
           </main>
           <footer className="border-t border-border px-4 py-4 text-xs text-muted-foreground sm:px-6">
-            {mode === "demo"
-              ? "Demo environment. Uploads, emails, reviews and exports are simulated in memory and are never persisted or sent."
-              : "Vendor records, document upload, extraction, review and renewal email are all live."}
+            <div className="mx-auto w-full max-w-[100rem]">
+              {mode === "demo"
+                ? "Demo environment. Uploads, emails, reviews and exports are simulated in memory and are never persisted or sent."
+                : "Vendor records, document upload, extraction, review and renewal email are all live."}
+            </div>
           </footer>
         </div>
       </div>
