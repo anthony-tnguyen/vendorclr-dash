@@ -127,3 +127,78 @@ revoke execute on function public.create_signup_invite(text, text) from public, 
 grant execute on function public.create_signup_invite(text, text) to authenticated;
 
 revoke execute on function public.set_signup_invite_defaults() from public, anon, authenticated;
+
+-- ---------------------------------------------------------------------------
+-- handle_new_user(): now redeems an invite code before creating a company.
+-- Company creation used to be conditional on a client-supplied
+-- company_name; it is now conditional on a client-supplied invite_code that
+-- resolves to a pending, unexpired, email-matching invite. A missing,
+-- invalid, expired, revoked or already-used code raises, which aborts the
+-- whole auth.users insert - signUp() fails and no account is created.
+--
+-- No code at all still creates the profile with no company, same as
+-- today's no-company_name path. That path is intentionally left open: it is
+-- how a teammate is added to an *existing* company (direct company_members
+-- insert, not through /signup), which this gate is not meant to cover - see
+-- the "Non-goals" section of the design doc.
+-- ---------------------------------------------------------------------------
+
+create or replace function public.handle_new_user()
+returns trigger
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $fn$
+declare
+  requested_code text := nullif(btrim(coalesce(new.raw_user_meta_data ->> 'invite_code', '')), '');
+  invite         public.signup_invites;
+  new_company    uuid;
+begin
+  insert into public.profiles (id, email, full_name)
+  values (
+    new.id,
+    new.email,
+    nullif(btrim(coalesce(new.raw_user_meta_data ->> 'full_name', '')), '')
+  )
+  on conflict (id) do nothing;
+
+  if requested_code is not null then
+    select * into invite
+    from public.signup_invites
+    where code = upper(requested_code)
+      and status = 'pending'
+    for update;
+
+    if invite.id is null
+       or invite.expires_at < now()
+       or invite.email <> lower(new.email)
+    then
+      raise exception 'Invalid or expired invite code.';
+    end if;
+
+    insert into public.companies (name)
+    values (left(invite.company_name, 200))
+    returning id into new_company;
+
+    insert into public.company_members (company_id, user_id, role, last_active_at)
+    values (new_company, new.id, 'owner', now())
+    on conflict (company_id, user_id) do nothing;
+
+    update public.signup_invites
+    set status = 'used', used_at = now(), used_by = new.id
+    where id = invite.id;
+  end if;
+
+  return new;
+end;
+$fn$;
+
+-- ---------------------------------------------------------------------------
+-- create_company_for_current_user() bypassed the invite gate entirely - any
+-- authenticated user could call it directly and get a company with no code
+-- at all. It is not called anywhere in the app today (supabaseRepository.ts
+-- only names it in an error message), so revoking EXECUTE closes the hole
+-- without breaking anything that calls it.
+-- ---------------------------------------------------------------------------
+
+revoke execute on function public.create_company_for_current_user(text, text) from authenticated;

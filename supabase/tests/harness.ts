@@ -163,10 +163,27 @@ export interface TestUser {
 
 /** Inserts into auth.users, which fires handle_new_user exactly as signup does. */
 export async function signUp(db: PGlite, user: TestUser): Promise<void> {
-  const meta = user.companyName ? JSON.stringify({ company_name: user.companyName }) : "{}";
+  let inviteCode: string | null = null;
+
+  if (user.companyName) {
+    // Provisions a matching, valid invite so existing callers of signUp()
+    // that pass companyName keep working under the new gate, without every
+    // test needing to know about invites. Leaves the trigger's own code
+    // generation and normalization in the loop rather than hand-rolling a
+    // code here, so this exercises the same defaults path production uses.
+    const invite = await db.query<{ code: string }>(
+      `insert into public.signup_invites (email, company_name, expires_at)
+       values ($1, $2, now() + interval '14 days')
+       returning code`,
+      [user.email, user.companyName],
+    );
+    inviteCode = invite.rows[0]!.code;
+  }
+
+  const meta = inviteCode ? { invite_code: inviteCode } : {};
   await db.query(
     `insert into auth.users (id, email, raw_user_meta_data) values ($1, $2, $3::jsonb)`,
-    [user.id, user.email, meta],
+    [user.id, user.email, JSON.stringify(meta)],
   );
 }
 
