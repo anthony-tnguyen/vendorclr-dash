@@ -23,6 +23,7 @@ import { Route as DashboardAdminIndexRouteImport } from './routes/dashboard.admi
 import { Route as DashboardAdminAccessRouteImport } from './routes/dashboard.admin.access'
 import { Route as DashboardAdminCompaniesRouteImport } from './routes/dashboard.admin.companies'
 import { Route as DashboardAdminComplianceRouteImport } from './routes/dashboard.admin.compliance'
+import { Route as DashboardAdminInvitesRouteImport } from './routes/dashboard.admin.invites'
 import { Route as DashboardAdminLeadsRouteImport } from './routes/dashboard.admin.leads'
 import { Route as DashboardVendorsIndexRouteImport } from './routes/dashboard.vendors.index'
 import { Route as DashboardVendorsVendorIdRouteImport } from './routes/dashboard.vendors.$vendorId'
@@ -99,6 +100,11 @@ const DashboardAdminComplianceRoute =
     path: '/dashboard/admin/compliance',
     getParentRoute: () => rootRouteImport,
   } as any)
+const DashboardAdminInvitesRoute = DashboardAdminInvitesRouteImport.update({
+  id: '/dashboard/admin/invites',
+  path: '/dashboard/admin/invites',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const DashboardAdminLeadsRoute = DashboardAdminLeadsRouteImport.update({
   id: '/dashboard/admin/leads',
   path: '/dashboard/admin/leads',
@@ -136,6 +142,7 @@ export interface FileRoutesByFullPath {
   '/dashboard/admin/access': typeof DashboardAdminAccessRoute
   '/dashboard/admin/companies': typeof DashboardAdminCompaniesRoute
   '/dashboard/admin/compliance': typeof DashboardAdminComplianceRouteWithChildren
+  '/dashboard/admin/invites': typeof DashboardAdminInvitesRoute
   '/dashboard/admin/leads': typeof DashboardAdminLeadsRoute
   '/dashboard/vendors/$vendorId': typeof DashboardVendorsVendorIdRoute
   '/dashboard/admin/': typeof DashboardAdminIndexRoute
@@ -156,6 +163,7 @@ export interface FileRoutesByTo {
   '/dashboard/admin/access': typeof DashboardAdminAccessRoute
   '/dashboard/admin/companies': typeof DashboardAdminCompaniesRoute
   '/dashboard/admin/compliance': typeof DashboardAdminComplianceRouteWithChildren
+  '/dashboard/admin/invites': typeof DashboardAdminInvitesRoute
   '/dashboard/admin/leads': typeof DashboardAdminLeadsRoute
   '/dashboard/vendors/$vendorId': typeof DashboardVendorsVendorIdRoute
   '/dashboard/admin': typeof DashboardAdminIndexRoute
@@ -177,6 +185,7 @@ export interface FileRoutesById {
   '/dashboard/admin/access': typeof DashboardAdminAccessRoute
   '/dashboard/admin/companies': typeof DashboardAdminCompaniesRoute
   '/dashboard/admin/compliance': typeof DashboardAdminComplianceRouteWithChildren
+  '/dashboard/admin/invites': typeof DashboardAdminInvitesRoute
   '/dashboard/admin/leads': typeof DashboardAdminLeadsRoute
   '/dashboard/vendors/$vendorId': typeof DashboardVendorsVendorIdRoute
   '/dashboard/admin/': typeof DashboardAdminIndexRoute
@@ -199,6 +208,7 @@ export interface FileRouteTypes {
     | '/dashboard/admin/access'
     | '/dashboard/admin/companies'
     | '/dashboard/admin/compliance'
+    | '/dashboard/admin/invites'
     | '/dashboard/admin/leads'
     | '/dashboard/vendors/$vendorId'
     | '/dashboard/admin/'
@@ -219,6 +229,7 @@ export interface FileRouteTypes {
     | '/dashboard/admin/access'
     | '/dashboard/admin/companies'
     | '/dashboard/admin/compliance'
+    | '/dashboard/admin/invites'
     | '/dashboard/admin/leads'
     | '/dashboard/vendors/$vendorId'
     | '/dashboard/admin'
@@ -239,6 +250,7 @@ export interface FileRouteTypes {
     | '/dashboard/admin/access'
     | '/dashboard/admin/companies'
     | '/dashboard/admin/compliance'
+    | '/dashboard/admin/invites'
     | '/dashboard/admin/leads'
     | '/dashboard/vendors/$vendorId'
     | '/dashboard/admin/'
@@ -260,6 +272,7 @@ export interface RootRouteChildren {
   DashboardAdminAccessRoute: typeof DashboardAdminAccessRoute
   DashboardAdminCompaniesRoute: typeof DashboardAdminCompaniesRoute
   DashboardAdminComplianceRoute: typeof DashboardAdminComplianceRouteWithChildren
+  DashboardAdminInvitesRoute: typeof DashboardAdminInvitesRoute
   DashboardAdminLeadsRoute: typeof DashboardAdminLeadsRoute
   DashboardVendorsVendorIdRoute: typeof DashboardVendorsVendorIdRoute
   DashboardAdminIndexRoute: typeof DashboardAdminIndexRoute
@@ -366,6 +379,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DashboardAdminComplianceRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/dashboard/admin/invites': {
+      id: '/dashboard/admin/invites'
+      path: '/dashboard/admin/invites'
+      fullPath: '/dashboard/admin/invites'
+      preLoaderRoute: typeof DashboardAdminInvitesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/dashboard/admin/leads': {
       id: '/dashboard/admin/leads'
       path: '/dashboard/admin/leads'
@@ -426,6 +446,7 @@ const rootRouteChildren: RootRouteChildren = {
   DashboardAdminAccessRoute: DashboardAdminAccessRoute,
   DashboardAdminCompaniesRoute: DashboardAdminCompaniesRoute,
   DashboardAdminComplianceRoute: DashboardAdminComplianceRouteWithChildren,
+  DashboardAdminInvitesRoute: DashboardAdminInvitesRoute,
   DashboardAdminLeadsRoute: DashboardAdminLeadsRoute,
   DashboardVendorsVendorIdRoute: DashboardVendorsVendorIdRoute,
   DashboardAdminIndexRoute: DashboardAdminIndexRoute,
