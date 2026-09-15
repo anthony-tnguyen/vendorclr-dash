@@ -37,6 +37,10 @@ describe("Compliance Pulse Ledger primitives", () => {
 
     const matrix = screen.getByLabelText("Compliance matrix for Corbett Structural Steel");
     expect(within(matrix).getAllByRole("status")).toHaveLength(5);
+    expect(within(matrix).getByText("AI")).toBeInTheDocument();
+    expect(within(matrix).getByText("LW")).toBeInTheDocument();
+    expect(within(matrix).queryByText("Add Ins")).not.toBeInTheDocument();
+    expect(within(matrix).queryByText("Lien Waiver")).not.toBeInTheDocument();
     expect(screen.getByLabelText(/^COI: Compliant/)).toBeInTheDocument();
     expect(screen.getByLabelText(/^Renewal: Expired/)).toBeInTheDocument();
   });
