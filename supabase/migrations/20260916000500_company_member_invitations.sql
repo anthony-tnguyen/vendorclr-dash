@@ -307,12 +307,12 @@ declare
   invite  public.company_invitations;
   result  public.company_invitations;
 begin
+  -- Combined into one identical error for "doesn't exist" and "exists but
+  -- isn't yours to resend" - same anti-probing discipline as
+  -- resolve_assignment_requirements() (construction core migration): a
+  -- caller must not be able to distinguish the two by error code/message.
   select * into invite from public.company_invitations where id = invitation_id;
-  if invite.id is null then
-    raise exception 'invitation not found' using errcode = 'P0002';
-  end if;
-
-  if not public.has_company_role(invite.company_id, array['owner']) then
+  if invite.id is null or not public.has_company_role(invite.company_id, array['owner']) then
     raise exception 'not authorized' using errcode = '42501';
   end if;
 
@@ -357,12 +357,10 @@ declare
   invite  public.company_invitations;
   result  public.company_invitations;
 begin
+  -- See resend_company_invitation() above for why "not found" and "not
+  -- yours" share one error.
   select * into invite from public.company_invitations where id = invitation_id;
-  if invite.id is null then
-    raise exception 'invitation not found' using errcode = 'P0002';
-  end if;
-
-  if not public.has_company_role(invite.company_id, array['owner']) then
+  if invite.id is null or not public.has_company_role(invite.company_id, array['owner']) then
     raise exception 'not authorized' using errcode = '42501';
   end if;
 
@@ -502,12 +500,10 @@ declare
   member  public.company_members;
   result  public.company_members;
 begin
+  -- See resend_company_invitation() (this migration) for why "not found"
+  -- and "not yours" share one error.
   select * into member from public.company_members where id = target_member_id;
-  if member.id is null then
-    raise exception 'member not found' using errcode = 'P0002';
-  end if;
-
-  if not public.has_company_role(member.company_id, array['owner']) then
+  if member.id is null or not public.has_company_role(member.company_id, array['owner']) then
     raise exception 'not authorized' using errcode = '42501';
   end if;
 
@@ -547,12 +543,10 @@ declare
   member  public.company_members;
   result  public.company_members;
 begin
+  -- See resend_company_invitation() (this migration) for why "not found"
+  -- and "not yours" share one error.
   select * into member from public.company_members where id = target_member_id;
-  if member.id is null then
-    raise exception 'member not found' using errcode = 'P0002';
-  end if;
-
-  if not public.has_company_role(member.company_id, array['owner']) then
+  if member.id is null or not public.has_company_role(member.company_id, array['owner']) then
     raise exception 'not authorized' using errcode = '42501';
   end if;
 
@@ -636,3 +630,31 @@ $fn$;
 
 revoke execute on function public.transfer_company_ownership(uuid, uuid, text) from public, anon, authenticated;
 grant execute on function public.transfer_company_ownership(uuid, uuid, text) to authenticated;
+
+-- ---------------------------------------------------------------------------
+-- admin_company_stats.seat_count fix
+--
+-- This view (20260901000300_tasks_queue_leads_and_views.sql) predates
+-- deactivated_at and counted every company_members row unconditionally.
+-- Removal now soft-deactivates rather than deletes, so left unfixed this
+-- would overcount seats by every removed member. create or replace view
+-- keeps its oid/dependents stable while updating the definition.
+-- ---------------------------------------------------------------------------
+
+create or replace view public.admin_company_stats
+with (security_invoker = true) as
+select
+  c.id,
+  c.name,
+  c.plan,
+  c.subscription_renews_on,
+  (select count(*) from public.vendors v
+    where v.company_id = c.id and v.archived_at is null)::int as vendor_count,
+  (select count(*) from public.company_members m
+    where m.company_id = c.id and m.deactivated_at is null)::int as seat_count,
+  coalesce((
+    select round(100.0 * count(*) filter (where s.fully_compliant) / nullif(count(*), 0))
+    from public.vendor_compliance_summary s
+    where s.company_id = c.id
+  ), 0)::int                                                  as compliance_rate
+from public.companies c;
