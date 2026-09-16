@@ -1,7 +1,7 @@
 # Release process
 
-Status: Task 0A (release engineering). Last verified against the live repo
-on 2026-09-15.
+Status: Tasks 0A and 0B (release engineering and role-flow browser coverage).
+Last verified against the live repo on 2026-09-15.
 
 ## 1. PR #25
 
@@ -14,12 +14,12 @@ schema or code.
 
 `.github/workflows/ci.yml` runs four jobs on every push and pull request:
 
-| Job         | Purpose                                                                                                                                         | Required to merge? |
-| ----------- | ----------------------------------------------------------------------------------------------------------------------------------------------- | ------------------ |
-| `quality`   | install, `tsc --noEmit`, `eslint .`, `prettier --check .`, `vitest run`                                                                         | **Yes**            |
-| `db-verify` | `vitest run --config vitest.db.config.ts` against a real Postgres (PGlite/WASM) - the only check that catches an RLS regression                 | **Yes**            |
-| `build`     | `vite build` (nitro `cloudflare-module` preset) → uploads `.output` as an artifact                                                              | **Yes**            |
-| `e2e-smoke` | Downloads the `build` artifact, boots it under `wrangler dev`, runs `bunx playwright test e2e/smoke.spec.ts` against the real production bundle | **No - see below** |
+| Job         | Purpose                                                                                                                                   | Required to merge? |
+| ----------- | ----------------------------------------------------------------------------------------------------------------------------------------- | ------------------ |
+| `quality`   | install, `tsc --noEmit`, `eslint .`, `prettier --check .`, `vitest run`                                                                   | **Yes**            |
+| `db-verify` | `vitest run --config vitest.db.config.ts` against a real Postgres (PGlite/WASM) - the only check that catches an RLS regression           | **Yes**            |
+| `build`     | `vite build` (nitro `cloudflare-module` preset) → uploads `.output` as an artifact                                                        | **Yes**            |
+| `e2e-smoke` | Downloads the `build` artifact, boots it under `wrangler dev`, runs the full `e2e/**` Playwright suite against the real production bundle | **Yes**            |
 
 Local equivalents:
 
@@ -31,32 +31,16 @@ bun run format:check
 bun run test
 bun run db:verify
 bun run build
-bunx playwright test e2e/smoke.spec.ts   # after `bun run build`; boots wrangler dev itself
+bun run e2e                              # after `bun run build`; boots wrangler dev itself
 ```
 
-### Why `e2e-smoke` is not a required check yet
+### Why `e2e-smoke` is a required check
 
-`e2e/smoke.spec.ts` is a **minimal placeholder** added by this task: it
-boots the built Cloudflare Worker bundle and asserts the dashboard shell
-renders (HTTP < 400, `<title>Program overview — VendorClr</title>` - the
-`/dashboard` route's own title override; "VendorClr Dashboard" in
-`__root.tsx` is only the fallback). It exists so the
-`e2e-smoke` job exercises something real instead of nothing, and so the
-Playwright plumbing (browser cache, `wrangler dev` bootstrap,
-`playwright.config.ts`) is already in place.
-
-It is **not** the full role-based smoke suite the implementation plan
-describes - that is Task 0B's (Engineer B) responsibility, under `e2e/**`
-(e.g. `e2e/role-flows.spec.ts`). Until that coverage lands, a flake or a gap
-in this placeholder should not be able to block every PR, so the job:
-
-- runs on every push/PR (so regressions are visible),
-- is **not** listed in the required-checks spec below,
-- uses `continue-on-error: true` in `ci.yml` as a second layer of
-  non-blocking-ness.
-
-**Once Task 0B lands real coverage, add `e2e-smoke` to the required-checks
-list below and drop `continue-on-error: true`.**
+`e2e/smoke.spec.ts` confirms the Worker bundle starts. Task 0B adds
+`e2e/role-flows.spec.ts`, which verifies customer triage, administrator role
+preview, public invalid-link handling, empty results, permission denial, and
+error focus at 1440 x 900 and 390 x 844. The job therefore runs `bun run e2e`
+and is a blocking status check.
 
 ### `wrangler dev`, not the Vite dev server
 
@@ -103,7 +87,7 @@ gh api repos/anthony-tnguyen/vendorclr-dash/branches/main/protection \
 {
   "required_status_checks": {
     "strict": true,
-    "contexts": ["quality", "db-verify", "build"]
+    "contexts": ["quality", "db-verify", "build", "e2e-smoke"]
   },
   "enforce_admins": true,
   "required_pull_request_reviews": {
@@ -118,10 +102,9 @@ gh api repos/anthony-tnguyen/vendorclr-dash/branches/main/protection \
 EOF
 ```
 
-This requires PRs (no direct pushes to `main`), the three required checks
-(`quality`, `db-verify`, `build` - deliberately **not** `e2e-smoke`, see
-above), one approval, dismissal of stale approvals on new pushes, and
-blocks force pushes and branch deletion. `enforce_admins: true` means this
+This requires PRs (no direct pushes to `main`), the four required checks
+(`quality`, `db-verify`, `build`, `e2e-smoke`), one approval, dismissal of
+stale approvals on new pushes, and blocks force pushes and branch deletion. `enforce_admins: true` means this
 also applies to repo admins - drop it only with a documented reason.
 
 Equivalent via the UI: **Settings → Branches → Add branch protection rule**
