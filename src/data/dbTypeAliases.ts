@@ -162,3 +162,42 @@ export type SuppressionReason = "bounced" | "complained" | "manual";
 export type SuppressedRecipientRow = Omit<Row<"suppressed_recipients">, "reason"> & {
   reason: SuppressionReason;
 };
+
+/** upload_request_checklist_items.document_kind / package_documents.document_kind - Task 8a (20260917000300_submission_packages.sql). Kept in sync by hand across both tables' CHECK constraints - see that migration's docblock for why a Postgres domain wasn't used instead. */
+export type DocumentKind =
+  | "certificate_of_insurance"
+  | "additional_insured_endorsement"
+  | "waiver_of_subrogation_endorsement"
+  | "primary_noncontributory_endorsement"
+  | "other";
+
+export type UploadRequestChecklistItemRow = Omit<
+  Row<"upload_request_checklist_items">,
+  "document_kind"
+> & { document_kind: DocumentKind };
+
+/** submission_packages.status - Task 8a. 'open' accepts uploads, 'finalized' has queued processing and cannot accept new checklist-slot documents, 'superseded' was replaced by a later version via replaceDeficientDocument(). */
+export type SubmissionPackageStatus = "open" | "finalized" | "superseded";
+
+export type SubmissionPackageRow = Omit<Row<"submission_packages">, "status"> & {
+  status: SubmissionPackageStatus;
+};
+
+export type PackageDocumentRow = Omit<Row<"package_documents">, "document_kind"> & {
+  document_kind: DocumentKind;
+};
+
+/** document_processing_jobs.job_type - Task 8a. Only one value exists today; widen when a second job type is needed. */
+export type DocumentProcessingJobType = "extract_document";
+
+/** document_processing_jobs.status - Task 8a. 'exhausted' is a valid value now even though the retry/backoff logic that produces it is Task 8b's - see that migration's own docblock. */
+export type DocumentProcessingJobStatus =
+  "queued" | "processing" | "succeeded" | "failed" | "exhausted";
+
+export type DocumentProcessingJobRow = Omit<
+  Row<"document_processing_jobs">,
+  "job_type" | "status"
+> & {
+  job_type: DocumentProcessingJobType;
+  status: DocumentProcessingJobStatus;
+};
