@@ -1,5 +1,5 @@
 -- Task 2 (Engineer A) continued - two narrow public-schema wrapper functions
--- so getOperationalFailures() (src/server/operations.ts) can read pg_cron's
+-- so getOperationalFailures() (src/workflows/operations.ts) can read pg_cron's
 -- run history and the database's on-disk size through this app's ordinary
 -- Supabase client, which only ever speaks to PostgREST.
 --

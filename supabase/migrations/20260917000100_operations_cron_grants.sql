@@ -1,5 +1,5 @@
 -- Task 2 (Engineer A) - read-only access to pg_cron's own run-history tables,
--- needed by getOperationalFailures() (src/server/operations.ts) for the
+-- needed by getOperationalFailures() (src/workflows/operations.ts) for the
 -- "failed/missed scheduled jobs" operations signal.
 --
 -- Confirmed missing before adding this, not speculative: on the live project,
