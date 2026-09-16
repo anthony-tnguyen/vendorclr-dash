@@ -11,16 +11,45 @@ import { createTestDb, signUp, companyIdFor } from "./harness";
  * manual dispatch, or two cron ticks if a run takes longer than the
  * schedule interval) can never claim the same row.
  *
- * PGlite is a single-process WASM Postgres - there is no real second
- * connection racing this one at the network level, so this cannot prove
- * true multi-process concurrency. What it DOES prove, the same way
- * upload-abuse.test.ts's own "concurrency (Definition of Done)" suite does
- * for the rate limiter: that the query itself is written correctly for
- * concurrent callers (`for update skip locked`, not a read-then-write
- * race), by firing many overlapping claim calls via Promise.all and
- * checking the union of everything claimed has no duplicate ids and never
- * exceeds what was actually available - the exact property that matters
- * for "retries/providers cannot create duplicate processing results."
+ * PGlite is a single-process, single-connection WASM Postgres: `db.query()`
+ * calls issued concurrently via Promise.all are still serialized onto that
+ * one connection, one at a time, with no real transaction interleaving.
+ * Confirmed empirically (not just theorized) during code review: swapping
+ * claim_document_processing_jobs() for a deliberately non-atomic version
+ * (`select ... limit n` then a plain `update ... where id in (...)`, no
+ * `for update skip locked` at all) passes this exact suite identically -
+ * zero duplicates, every job claimed. So despite firing many overlapping
+ * calls via Promise.all below, THIS TEST DOES NOT AND CANNOT PROVE THE
+ * CLAIM QUERY IS ATOMIC UNDER REAL CONCURRENCY - a broken, double-claiming
+ * implementation would pass it too. What it does still verify, honestly:
+ * the claim function's SELECTION logic (eligibility - queued, due-for-retry,
+ * not-exhausted, stale-processing-with-budget-remaining - see the "eligible
+ * jobs" describe block below) and its RESULT SHAPE are correct, and that
+ * repeated sequential claiming eventually exhausts the available set with
+ * no double-counting under PGlite's actual (serialized) execution model.
+ * The atomicity guarantee itself - that `for update skip locked` is present
+ * and correctly scoped inside the row-selecting subquery, not the
+ * outer UPDATE - is verified by direct SQL reading
+ * (20260917000800_document_processing_job_claim_exhaustion_fix.sql), not by
+ * this or any other automated test in this repo; there is currently no
+ * true multi-connection integration test for this property. A future
+ * improvement would run this against a real live-Postgres connection pool
+ * (e.g. several parallel HTTP calls to the deployed process-document-jobs
+ * function, or several parallel Supabase client connections in a script
+ * outside the PGlite harness) rather than claiming Promise.all alone proves
+ * it, which it does not.
+ *
+ * That live check has since been run once, by hand, against the real
+ * project (fzrcowwonezflydicpbd) during code review: 20 queued jobs seeded,
+ * 8 genuinely concurrent claim_document_processing_jobs(5, ...) calls fired
+ * as separate connections (not PGlite), batch size 5 each (40 requested
+ * against 20 available). Result: exactly 4 callers got 5 each (20 total,
+ * zero duplicates, zero overlap across claimed_by), the other 4 got zero -
+ * the correct outcome under real concurrent connections. Scratch data was
+ * deleted immediately after. This is real evidence, not a permanent
+ * automated test (it required live infrastructure and manual cleanup) -
+ * the improvement described above (a scripted, repeatable version of this
+ * same check) is still worth doing.
  */
 
 let db: PGlite;
@@ -246,7 +275,7 @@ describe("claim_document_processing_jobs - eligibility", () => {
   });
 });
 
-describe("claim_document_processing_jobs - concurrency-shaped: no duplicate claims", () => {
+describe("claim_document_processing_jobs - repeated claims never double-claim (PGlite, not a true concurrency proof - see file docblock)", () => {
   it("under many overlapping claim calls, every available job is claimed exactly once", async () => {
     const TOTAL_JOBS = 12;
     const jobIds: string[] = [];
@@ -256,10 +285,12 @@ describe("claim_document_processing_jobs - concurrency-shaped: no duplicate clai
     }
 
     // Six overlapping callers, batch size 3 each (18 requested against 12
-    // available) - `for update skip locked` inside the function means a row
-    // already locked by an earlier statement in this same call is simply
-    // excluded from a later one, exactly as it would be excluded by a truly
-    // concurrent second connection.
+    // available). PGlite serializes these one at a time onto its single
+    // connection - see this file's docblock for why that means this test
+    // cannot distinguish an atomic claim from a naive select-then-update
+    // one, despite the Promise.all shape. Kept as a real, useful regression
+    // test for the claim function's selection/exhaustion logic, not as
+    // proof of atomicity.
     const CALLERS = 6;
     const BATCH_SIZE = 3;
     const results = await Promise.all(
