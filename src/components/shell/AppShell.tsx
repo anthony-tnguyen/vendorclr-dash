@@ -14,7 +14,7 @@ function NavList({
 }: {
   title: string;
   items: NavItems;
-  onNavigate?: () => void;
+  onNavigate?: (() => void) | undefined;
 }) {
   return (
     <div>
