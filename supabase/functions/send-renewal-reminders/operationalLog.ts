@@ -26,7 +26,9 @@ const REDACTED = "[REDACTED]";
 
 const EMAIL_PATTERN = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
 const BEARER_PATTERN = /Bearer\s+[A-Za-z0-9._-]+/gi;
-const PREFIXED_SECRET_PATTERN = /\b(?:whsec|sk|pk|re|rk)_[A-Za-z0-9]{6,}\b/g;
+// Suffix must contain a digit - real key shapes always do, ordinary text
+// after a short prefix like "re_"/"sk_" (e.g. "re_evaluate") never does.
+const PREFIXED_SECRET_PATTERN = /\b(?:whsec|sk|pk|re|rk)_(?=[A-Za-z0-9]*\d)[A-Za-z0-9]{6,}\b/g;
 const JWT_PATTERN = /\bey[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\b/g;
 const HEX_HASH_PATTERN = /\b[a-f0-9]{40,}\b/gi;
 const FILENAME_PATTERN = /\b[\w.-]+\.(?:pdf|png|jpe?g|docx?|xlsx?|heic|tiff?)\b/gi;

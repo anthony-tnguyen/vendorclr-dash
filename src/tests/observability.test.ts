@@ -64,6 +64,19 @@ describe("redact()", () => {
     expect(redact("secret is whsec_plJ3nmyCDGBKInavdOK15jsl")).toBe("secret is [REDACTED]");
   });
 
+  it("masks a real Resend-key-shaped string", () => {
+    expect(redact("using re_A1b2C3d4E5f6G7h8 to send")).toBe("using [REDACTED] to send");
+  });
+
+  it("does not redact ordinary English text that merely starts with a short secret prefix", () => {
+    // A digit-free suffix after "re_"/"sk_" is ordinary text, not a key shape -
+    // this app has no digit-free real secret. Regression test for a false
+    // positive an earlier pattern produced (see logger.server.ts).
+    expect(redact("re_evaluate the submission")).toBe("re_evaluate the submission");
+    expect(redact("please re_upload the file")).toBe("please re_upload the file");
+    expect(redact("sk_pending review")).toBe("sk_pending review");
+  });
+
   it("masks a JWT-shaped string", () => {
     const jwt =
       "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U";

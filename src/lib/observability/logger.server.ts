@@ -36,7 +36,12 @@ const REDACTED = "[REDACTED]";
 
 /** Generic bearer/API-key style tokens: "Bearer xxxx", "sk_live_xxx", "whsec_xxx", "re_xxx" (Resend), etc. */
 const BEARER_PATTERN = /\bBearer\s+[A-Za-z0-9._-]+/gi;
-const PREFIXED_SECRET_PATTERN = /\b(?:whsec|sk|pk|re|rk)_[A-Za-z0-9]{6,}\b/g;
+// The suffix must contain at least one digit - real key shapes (base62/64
+// random strings) virtually always do, and ordinary English text following
+// a short prefix like "re_" or "sk_" (e.g. "re_evaluate", "sk_pending")
+// never does. Caught by this file's own tests: an earlier version without
+// the digit requirement redacted "re_evaluate the submission" whole.
+const PREFIXED_SECRET_PATTERN = /\b(?:whsec|sk|pk|re|rk)_(?=[A-Za-z0-9]*\d)[A-Za-z0-9]{6,}\b/g;
 /** JWTs - three base64url segments separated by dots, the shape a Supabase access/service-role token takes. */
 const JWT_PATTERN = /\bey[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\b/g;
 /** A bare sha256/sha1-shaped hex string - what hashToken()/hashFileBytes() produce (uploadTokens.ts) and what an upload token or token_hash could leak as. */
