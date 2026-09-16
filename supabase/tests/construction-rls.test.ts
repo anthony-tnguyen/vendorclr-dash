@@ -478,8 +478,8 @@ describe("requirement_profiles: the last company-default profile cannot be remov
   // Without a guard, resolve_assignment_requirements() would then silently
   // resolve to zero required rules for every assignment that falls back to
   // the company default - the worst failure mode a compliance product can
-  // have. requirement_profiles_require_default_after_stmt (the expand
-  // migration) is what prevents that state from ever existing.
+  // have. requirement_profiles_require_default_after_update/_after_delete
+  // (the expand migration) are what prevent that state from ever existing.
   //
   // This is a statement-level (FOR EACH STATEMENT with a transition table),
   // not row-level, trigger - deliberately, so that an atomic single-statement
