@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from "react";
 import { AppShell } from "@/components/shell/AppShell";
 import { COMPLIANCE_LABELS, type ComplianceKey } from "@/data/contracts";
+import { isBackendConfigured } from "@/data/repository";
 
 const requirementKeys: ComplianceKey[] = [
   "coi",
@@ -12,6 +13,7 @@ const requirementKeys: ComplianceKey[] = [
 
 export function SettingsPage() {
   const [notice, setNotice] = useState<string | null>(null);
+  const isDemo = !isBackendConfigured();
 
   const onSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -21,7 +23,10 @@ export function SettingsPage() {
   return (
     <AppShell title="Settings" subtitle="Requirement defaults and notification contacts.">
       <form onSubmit={onSubmit} className="grid gap-4 lg:grid-cols-2">
-        <fieldset className="rounded-md border border-border bg-card p-4">
+        <fieldset
+          disabled={!isDemo}
+          className="rounded-md border border-border bg-card p-4 disabled:opacity-60"
+        >
           <legend className="px-1 text-sm font-semibold">Required documents</legend>
           <p className="text-xs text-muted-foreground">
             Applied to every new vendor added to the roster.
@@ -43,7 +48,10 @@ export function SettingsPage() {
           </ul>
         </fieldset>
 
-        <fieldset className="rounded-md border border-border bg-card p-4">
+        <fieldset
+          disabled={!isDemo}
+          className="rounded-md border border-border bg-card p-4 disabled:opacity-60"
+        >
           <legend className="px-1 text-sm font-semibold">Limits and reminders</legend>
           <div className="mt-2 space-y-3">
             <div>
@@ -81,7 +89,9 @@ export function SettingsPage() {
                 className="focusable mt-1 w-full rounded-sm border border-input bg-background px-3 py-2 text-sm"
               />
               <p className="mt-1 text-xs text-muted-foreground">
-                Demo-only: no reminder email is ever sent from this environment.
+                {isDemo
+                  ? "Demo-only: no reminder email is ever sent from this environment."
+                  : "Settings are not yet configurable in this workspace."}
               </p>
             </div>
           </div>
@@ -90,9 +100,10 @@ export function SettingsPage() {
         <div className="lg:col-span-2">
           <button
             type="submit"
+            disabled={!isDemo}
             className="focusable rounded-sm bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground"
           >
-            Save settings (demo)
+            {isDemo ? "Save settings (demo)" : "Settings are not available"}
           </button>
           {notice ? (
             <p

@@ -3,24 +3,30 @@ import { useState } from "react";
 import { AdminGuard } from "./AdminGuard";
 import { AppShell } from "@/components/shell/AppShell";
 import { EmptyState, ErrorState, LoadingState } from "@/components/states/AsyncState";
-import { getRepository } from "@/data/repository";
+import { getRepository, isBackendConfigured } from "@/data/repository";
 
 export function AccessPage() {
   const repo = getRepository();
   const [notice, setNotice] = useState<string | null>(null);
+  const isDemo = !isBackendConfigured();
   const grants = useQuery({ queryKey: ["access"], queryFn: () => repo.listAccessGrants() });
 
   return (
     <AppShell
       title="Access management"
-      subtitle="Roles and project scopes. Demo mode — changes are not persisted."
+      subtitle={
+        isDemo
+          ? "Roles and project scopes. Demo mode — changes are not persisted."
+          : "Roles and project scopes. Teammate invitations are not available yet."
+      }
       actions={
         <button
           type="button"
+          disabled={!isDemo}
           onClick={() => setNotice("Demo mode: no invitation was created or emailed.")}
-          className="focusable rounded-sm bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground"
+          className="focusable rounded-sm bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground disabled:cursor-not-allowed disabled:opacity-60"
         >
-          Invite teammate (demo)
+          {isDemo ? "Invite teammate (demo)" : "Teammate invitations are not available"}
         </button>
       }
     >
@@ -36,7 +42,7 @@ export function AccessPage() {
             <LoadingState label="Loading access grants" rows={4} />
           ) : grants.isError ? (
             <ErrorState
-              description="Demo access list failed to load."
+              description="Could not load access grants."
               onRetry={() => void grants.refetch()}
             />
           ) : (grants.data ?? []).length === 0 ? (
