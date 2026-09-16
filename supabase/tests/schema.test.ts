@@ -30,6 +30,7 @@ describe("migrations", () => {
     expect(names).toEqual([
       "audit_log",
       "companies",
+      "company_feature_flags",
       "company_members",
       "compliance_queue_items",
       "compliance_requirements",

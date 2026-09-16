@@ -50,6 +50,7 @@ describe("RLS-primitive functions: authenticated yes, anon no", () => {
     "public.shares_company_with(uuid)",
     "public.current_user_id()",
     "public.create_signup_invite(text, text)",
+    "public.set_company_feature_flag(uuid, text, boolean)",
   ];
 
   it.each(fns)("anon cannot execute %s", async (fn) => {

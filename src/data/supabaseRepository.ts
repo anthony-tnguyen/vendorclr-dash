@@ -27,7 +27,7 @@ import type {
   VendorComplianceItemRow,
   VendorPolicyRow,
   VendorRow,
-} from "./db-types";
+} from "./dbTypeAliases";
 import { getSupabaseClient, type VendorClrClient } from "@/lib/supabase/client";
 
 /**
