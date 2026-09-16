@@ -38,7 +38,9 @@ bunx playwright test e2e/smoke.spec.ts   # after `bun run build`; boots wrangler
 
 `e2e/smoke.spec.ts` is a **minimal placeholder** added by this task: it
 boots the built Cloudflare Worker bundle and asserts the dashboard shell
-renders (HTTP < 400, `<title>VendorClr Dashboard</title>`). It exists so the
+renders (HTTP < 400, `<title>Program overview — VendorClr</title>` - the
+`/dashboard` route's own title override; "VendorClr Dashboard" in
+`__root.tsx` is only the fallback). It exists so the
 `e2e-smoke` job exercises something real instead of nothing, and so the
 Playwright plumbing (browser cache, `wrangler dev` bootstrap,
 `playwright.config.ts`) is already in place.
