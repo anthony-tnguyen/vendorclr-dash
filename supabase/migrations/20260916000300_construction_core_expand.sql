@@ -363,6 +363,62 @@ create trigger companies_seed_default_requirement_profile
   for each row execute function public.seed_company_default_requirement_profile();
 
 -- ---------------------------------------------------------------------------
+-- A company's default profile can never be fully removed
+-- ---------------------------------------------------------------------------
+--
+-- The partial unique index above guarantees at most one is_company_default =
+-- true row per company, but nothing on its own stops that row being deleted
+-- or demoted (is_company_default set to false) - RLS allows both to an
+-- owner/risk_manager, same as any other update/delete on this table. Without
+-- this trigger that leaves resolve_assignment_requirements() with no profile
+-- to fall back to, silently resolving to zero required rules for every
+-- assignment that relies on the company default - the worst failure mode a
+-- compliance product can have. Same invariant class as "the last active
+-- owner cannot be removed" (Task 6's plan).
+--
+-- Because the unique index already guarantees is_company_default = true means
+-- "the only one for this company", checking OLD.is_company_default alone
+-- (not a COUNT) is sufficient to know this is the last one.
+create or replace function public.assert_not_last_default_requirement_profile()
+returns trigger
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $fn$
+begin
+  if old.is_company_default and (tg_op = 'DELETE' or new.is_company_default = false) then
+    -- A cascading delete of the whole company (companies' own row removed,
+    -- cascading via "on delete cascade" through every child table including
+    -- this one) tears down every row for that company together - there is no
+    -- longer-lived company left for "must always have a default" to protect.
+    -- Only block a standalone removal/demotion that would leave the company
+    -- itself still around with no default. The parent row is already gone
+    -- (visible within this same transaction) by the time a cascaded delete
+    -- reaches here, which is what distinguishes the two cases.
+    if tg_op = 'DELETE' and not exists (
+      select 1 from public.companies where id = old.company_id
+    ) then
+      return old;
+    end if;
+
+    raise exception
+      'company % must always have exactly one default requirement profile - promote a replacement before removing this one',
+      old.company_id using errcode = '23514';
+  end if;
+
+  if tg_op = 'DELETE' then
+    return old;
+  end if;
+
+  return new;
+end;
+$fn$;
+
+create trigger requirement_profiles_block_removing_last_default
+  before update or delete on public.requirement_profiles
+  for each row execute function public.assert_not_last_default_requirement_profile();
+
+-- ---------------------------------------------------------------------------
 -- resolve_assignment_requirements(): the effective-requirements precedence
 -- ---------------------------------------------------------------------------
 --
@@ -386,6 +442,21 @@ create trigger companies_seed_default_requirement_profile
 -- (Approved exceptions - the plan's precedence step 5 - are deliberately not
 -- referenced here: they change a deficiency's *disposition* later (Task 10),
 -- never the configured requirement this function resolves.)
+--
+-- SECURITY DEFINER + explicit authorization check, first statement in the
+-- body: this function is owned by its creating role (postgres on a Supabase
+-- project), which has rolbypassrls = true, so every SELECT inside this body
+-- bypasses RLS regardless of who calls it - RLS on project_vendor_assignments
+-- /projects/requirement_profiles does NOT apply here just because those
+-- tables have RLS enabled. Without the explicit check below, any signed-in
+-- user of any company could call this with a foreign company's assignment_id
+-- and read that company's resolved requirements (policy types, amounts, rule
+-- keys) - a cross-tenant IDOR. Same fix pattern as set_company_feature_flag()
+-- (migration 19): raise before doing anything else, and use the same generic
+-- message whether the assignment does not exist at all or exists but belongs
+-- to a company the caller is not in, so the error itself cannot be used to
+-- probe which foreign assignment ids are real (this project's established
+-- "don't leak existence" pattern - see vendorUploadRequests.ts).
 create or replace function public.resolve_assignment_requirements(assignment_id uuid)
 returns table (
   key         text,
@@ -409,8 +480,16 @@ begin
   select * into v_assignment
   from public.project_vendor_assignments where id = assignment_id;
 
-  if not found then
-    raise exception 'assignment % does not exist', assignment_id using errcode = '23503';
+  -- One check covers both "does not exist" and "exists but is a different
+  -- company's assignment" with the exact same exception, on purpose - see
+  -- the docblock above.
+  if not found
+     or not (
+       v_assignment.company_id in (select public.current_company_ids())
+       or public.is_platform_admin()
+     )
+  then
+    raise exception 'not authorized' using errcode = '42501';
   end if;
 
   select * into v_project from public.projects where id = v_assignment.project_id;
@@ -483,19 +562,16 @@ $fn$;
 revoke execute on function public.assert_company_matches_project() from public, anon, authenticated;
 revoke execute on function public.assert_company_matches_requirement_profile() from public, anon, authenticated;
 revoke execute on function public.seed_company_default_requirement_profile() from public, anon, authenticated;
+revoke execute on function public.assert_not_last_default_requirement_profile() from public, anon, authenticated;
 revoke execute on function public.resolve_assignment_requirements(uuid) from public, anon, authenticated;
 
 -- resolve_assignment_requirements() is the one function here meant to be
 -- called directly (by a future UI/report, not just fired as a trigger), so
--- it alone is granted back to authenticated. RLS on project_vendor_
--- assignments/projects/requirement_profiles still applies to everything it
--- reads even though it runs as SECURITY DEFINER: it is `stable` and only
--- ever selects, and every table it touches is scoped by v_assignment.company_id,
--- so a caller cannot use it to read another company's assignment - they simply
--- cannot look up an assignment_id belonging to another company in the first
--- place without already being able to see it, and if they somehow guessed a
--- foreign UUID, the rows returned are still that foreign company's own
--- configured requirements, not attacker-controlled data.
+-- it alone is granted back to authenticated. Being SECURITY DEFINER, it does
+-- NOT inherit RLS from the tables it reads (see the function's own docblock
+-- above) - the explicit current_company_ids()/is_platform_admin() check as
+-- its first statement is what makes it safe to grant to every authenticated
+-- caller, not an assumption that RLS is doing that work underneath it.
 grant execute on function public.resolve_assignment_requirements(uuid) to authenticated;
 
 -- ---------------------------------------------------------------------------

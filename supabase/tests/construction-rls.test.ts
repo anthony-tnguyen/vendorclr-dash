@@ -405,3 +405,122 @@ describe("cross-tenant integrity triggers", () => {
     }
   });
 });
+
+describe("resolve_assignment_requirements(): cross-tenant IDOR", () => {
+  // SECURITY DEFINER functions do not inherit RLS just because the tables
+  // they read have RLS enabled - the function runs as its owning role, which
+  // bypasses RLS entirely. Without an explicit authorization check as the
+  // function's first statement, a member of one company could call this RPC
+  // with another company's assignment id and read that company's resolved
+  // requirements (policy types, amounts, rule keys). This is exactly the gap
+  // a spec review found live against the hosted project - covering it here so
+  // a regression fails a fast local test, not another live audit.
+  it("refuses to resolve an assignment belonging to a different company", async () => {
+    const project = await db.query<{ id: string }>(
+      `insert into public.projects (company_id, name) values ($1, 'Rival Only Site') returning id`,
+      [rivalCompanyId],
+    );
+    const assignment = await db.query<{ id: string }>(
+      `insert into public.project_vendor_assignments (company_id, project_id, vendor_id)
+       values ($1, $2, $3) returning id`,
+      [rivalCompanyId, project.rows[0]!.id, rivalVendorId],
+    );
+
+    await expect(
+      asUser(db, OWNER, `select * from public.resolve_assignment_requirements($1)`, [
+        assignment.rows[0]!.id,
+      ]),
+    ).rejects.toThrow(/not authorized/);
+  });
+
+  it("gives the exact same error for a nonexistent assignment id, so the message cannot be used to probe real ids", async () => {
+    const bogus = "00000000-0000-0000-0000-000000000000";
+
+    await expect(
+      asUser(db, OWNER, `select * from public.resolve_assignment_requirements($1)`, [bogus]),
+    ).rejects.toThrow(/not authorized/);
+  });
+
+  it("still lets a member resolve their own company's assignment", async () => {
+    const project = await db.query<{ id: string }>(
+      `insert into public.projects (company_id, name) values ($1, 'Own Resolve Site') returning id`,
+      [companyId],
+    );
+    const vendor = await db.query<{ id: string }>(
+      `insert into public.vendors (company_id, name, trade) values ($1, 'Own Resolve Vendor', 'Concrete') returning id`,
+      [companyId],
+    );
+    const assignment = await db.query<{ id: string }>(
+      `insert into public.project_vendor_assignments (company_id, project_id, vendor_id)
+       values ($1, $2, $3) returning id`,
+      [companyId, project.rows[0]!.id, vendor.rows[0]!.id],
+    );
+
+    // Not asserting the exact rows here - earlier tests in this file already
+    // added rules to the company default profile, and this assertion should
+    // not be coupled to that unrelated state. The point of this test is only
+    // that a member resolving their OWN company's assignment is not rejected
+    // by the authorization check added above.
+    const rows = await asUser(
+      db,
+      OWNER,
+      `select * from public.resolve_assignment_requirements($1)`,
+      [assignment.rows[0]!.id],
+    );
+    expect(Array.isArray(rows)).toBe(true);
+  });
+});
+
+describe("requirement_profiles: the last company-default profile cannot be removed", () => {
+  // RLS alone allows an owner/risk_manager to delete or demote the one
+  // is_company_default = true row for their own company - that write is
+  // entirely within their own tenant, so no cross-tenant policy stops it.
+  // Without a guard, resolve_assignment_requirements() would then silently
+  // resolve to zero required rules for every assignment that falls back to
+  // the company default - the worst failure mode a compliance product can
+  // have. requirement_profiles_block_removing_last_default (the expand
+  // migration) is what prevents that state from ever existing.
+  it("refuses to delete the company default profile", async () => {
+    const defaultProfile = await db.query<{ id: string }>(
+      `select id from public.requirement_profiles where company_id = $1 and is_company_default`,
+      [companyId],
+    );
+
+    await expect(
+      asUser(db, OWNER, `delete from public.requirement_profiles where id = $1`, [
+        defaultProfile.rows[0]!.id,
+      ]),
+    ).rejects.toThrow(/must always have exactly one default/);
+  });
+
+  it("refuses to demote the company default profile to non-default", async () => {
+    const defaultProfile = await db.query<{ id: string }>(
+      `select id from public.requirement_profiles where company_id = $1 and is_company_default`,
+      [companyId],
+    );
+
+    await expect(
+      asUser(
+        db,
+        OWNER,
+        `update public.requirement_profiles set is_company_default = false where id = $1`,
+        [defaultProfile.rows[0]!.id],
+      ),
+    ).rejects.toThrow(/must always have exactly one default/);
+  });
+
+  it("still allows ordinary updates to the default profile that do not touch is_company_default", async () => {
+    const defaultProfile = await db.query<{ id: string }>(
+      `select id from public.requirement_profiles where company_id = $1 and is_company_default`,
+      [companyId],
+    );
+
+    const rows = await asUser<{ name: string }>(
+      db,
+      OWNER,
+      `update public.requirement_profiles set name = 'Renamed Default' where id = $1 returning name`,
+      [defaultProfile.rows[0]!.id],
+    );
+    expect(rows[0]?.name).toBe("Renamed Default");
+  });
+});
