@@ -75,7 +75,13 @@ Deno.serve(async (req: Request) => {
     return new Response(JSON.stringify({ error: "Missing signature headers" }), { status: 401 });
   }
 
-  const verified = await verifySvixSignature({ secret, svixId, svixTimestamp, rawBody, svixSignature });
+  const verified = await verifySvixSignature({
+    secret,
+    svixId,
+    svixTimestamp,
+    rawBody,
+    svixSignature,
+  });
   if (!verified) {
     return new Response(JSON.stringify({ error: "Invalid signature" }), { status: 401 });
   }

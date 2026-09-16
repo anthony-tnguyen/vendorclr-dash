@@ -6,7 +6,11 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 
-import { renewalReminderHtml, renewalReminderSubject, renewalReminderText } from "./emailTemplates.ts";
+import {
+  renewalReminderHtml,
+  renewalReminderSubject,
+  renewalReminderText,
+} from "./emailTemplates.ts";
 import { generateUploadToken, hashToken, newExpiryDate } from "./uploadTokens.ts";
 
 /**
@@ -134,7 +138,10 @@ Deno.serve(async (req: Request) => {
         .from("vendors")
         .select("id, name, contact_name, contact_email, company_id, companies ( name )")
         .in("id", vendorIds),
-      supabase.from("vendor_policies").select("id, carrier_name, policy_number").in("id", policyIds),
+      supabase
+        .from("vendor_policies")
+        .select("id, carrier_name, policy_number")
+        .in("id", policyIds),
     ]);
 
   if (vendorsError || policiesError) {

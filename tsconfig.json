@@ -3,8 +3,10 @@
     "src/**/*.ts",
     "src/**/*.tsx",
     "supabase/tests/**/*.ts",
+    "e2e/**/*.ts",
     "vite.config.ts",
     "vitest.db.config.ts",
+    "playwright.config.ts",
     "eslint.config.js"
   ],
   "compilerOptions": {
