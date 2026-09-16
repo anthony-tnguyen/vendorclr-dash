@@ -1,6 +1,6 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState, type FormEvent } from "react";
-import { getRepository } from "@/data/repository";
+import { getRepository, isBackendConfigured } from "@/data/repository";
 import type { VendorTrade } from "@/data/contracts";
 
 const trades: VendorTrade[] = [
@@ -18,13 +18,16 @@ export function VendorForm({ onDone }: { onDone?: () => void }) {
   const repo = getRepository();
   const queryClient = useQueryClient();
   const [notice, setNotice] = useState<string | null>(null);
+  const isDemo = !isBackendConfigured();
 
   const mutation = useMutation({
     mutationFn: repo.createVendor,
     onSuccess: (vendor) => {
       void queryClient.invalidateQueries({ queryKey: ["vendors"] });
       setNotice(
-        `${vendor.name} added to the in-memory demo roster. Nothing was uploaded, emailed or saved to a backend.`,
+        isDemo
+          ? `${vendor.name} added to the in-memory demo roster. Nothing was uploaded, emailed or saved to a backend.`
+          : `${vendor.name} was added to the vendor roster.`,
       );
     },
   });
@@ -52,8 +55,9 @@ export function VendorForm({ onDone }: { onDone?: () => void }) {
         Add vendor
       </h2>
       <p className="mt-1 text-xs text-muted-foreground">
-        Demo-only: the vendor is held in memory for this session and starts with every requirement
-        marked missing.
+        {isDemo
+          ? "Demo-only: the vendor is held in memory for this session and starts with every requirement marked missing."
+          : "New vendors start with every required document marked missing."}
       </p>
 
       <div className="mt-4 grid gap-3 sm:grid-cols-2">
@@ -136,7 +140,7 @@ export function VendorForm({ onDone }: { onDone?: () => void }) {
           disabled={mutation.isPending}
           className="focusable rounded-sm bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-60"
         >
-          {mutation.isPending ? "Adding…" : "Add to demo roster"}
+          {mutation.isPending ? "Adding…" : isDemo ? "Add to demo roster" : "Add vendor"}
         </button>
         {onDone ? (
           <button

@@ -2,11 +2,12 @@ import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { AppShell } from "@/components/shell/AppShell";
 import { EmptyState, ErrorState, LoadingState } from "@/components/states/AsyncState";
-import { getRepository } from "@/data/repository";
+import { getRepository, isBackendConfigured } from "@/data/repository";
 
 export function ReportsPage() {
   const repo = getRepository();
   const [notice, setNotice] = useState<string | null>(null);
+  const isDemo = !isBackendConfigured();
   const rows = useQuery({ queryKey: ["reports"], queryFn: () => repo.listReportRows() });
 
   return (
@@ -16,10 +17,11 @@ export function ReportsPage() {
       actions={
         <button
           type="button"
+          disabled={!isDemo}
           onClick={() => setNotice("Demo mode: no file was generated, exported or downloaded.")}
-          className="focusable rounded-sm border border-border px-3 py-2 text-sm font-medium"
+          className="focusable rounded-sm border border-border px-3 py-2 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-60"
         >
-          Export CSV (demo)
+          {isDemo ? "Export CSV (demo)" : "CSV export is not available"}
         </button>
       }
     >
@@ -34,7 +36,7 @@ export function ReportsPage() {
           <LoadingState label="Loading report rows" rows={3} />
         ) : rows.isError ? (
           <ErrorState
-            description="Demo report data failed to load."
+            description="Could not load report data."
             onRetry={() => void rows.refetch()}
           />
         ) : (rows.data ?? []).length === 0 ? (
