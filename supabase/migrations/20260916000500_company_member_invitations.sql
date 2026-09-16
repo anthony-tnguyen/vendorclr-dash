@@ -597,14 +597,20 @@ begin
   select * into from_row from public.company_members where id = from_member_id;
   select * into to_row from public.company_members where id = to_member_id;
 
-  if from_row.id is null or to_row.id is null then
+  -- Combined into one identical error for "from_member doesn't exist" and
+  -- "exists but isn't yours to transfer" - same anti-probing discipline as
+  -- resend_company_invitation() etc. above. has_company_role(null, ...)
+  -- safely resolves to false when from_row wasn't found, so this ordering
+  -- (auth check before the null check would otherwise require) still works
+  -- with a null company_id.
+  if from_row.id is null or not public.has_company_role(from_row.company_id, array['owner']) then
+    raise exception 'not authorized' using errcode = '42501';
+  end if;
+  if to_row.id is null then
     raise exception 'member not found' using errcode = 'P0002';
   end if;
   if from_row.company_id <> to_row.company_id then
     raise exception 'both members must belong to the same company' using errcode = '22023';
-  end if;
-  if not public.has_company_role(from_row.company_id, array['owner']) then
-    raise exception 'not authorized' using errcode = '42501';
   end if;
   if from_row.role <> 'owner' then
     raise exception 'the outgoing member is not currently an owner' using errcode = '22023';
