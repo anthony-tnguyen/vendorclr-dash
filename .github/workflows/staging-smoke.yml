@@ -1,0 +1,83 @@
+name: Staging smoke test
+
+# Runs the Playwright smoke suite (currently just e2e/smoke.spec.ts, see
+# docs/operations/release-process.md) against an already-deployed staging
+# environment. This is deliberately decoupled from a deploy pipeline: Task
+# 0A does not stand up real CD (see release-process.md's "deploy owner"
+# section), so this is manual (workflow_dispatch) for now. Once a real
+# staging deploy workflow exists, add a `workflow_call` trigger here and
+# call it as that workflow's last step, or trigger on `deployment_status`
+# for the `staging` environment.
+on:
+  workflow_dispatch:
+    inputs:
+      staging_url:
+        description: "Base URL of the staging deployment to smoke-test (overrides the 'staging' environment's STAGING_URL variable)"
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    name: staging-smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # Ties this run to the `staging` GitHub Environment so its URL/variables
+    # (not secrets - see release-process.md) and any future protection rules
+    # apply here too.
+    environment: staging
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - uses: oven-sh/setup-bun@v2
+
+      - name: Install dependencies from the committed Bun lockfile
+        run: bun install --frozen-lockfile
+
+      - name: Resolve staging URL
+        id: target
+        env:
+          INPUT_URL: ${{ inputs.staging_url }}
+          ENV_URL: ${{ vars.STAGING_URL }}
+        run: |
+          URL="${INPUT_URL:-$ENV_URL}"
+          if [ -z "$URL" ]; then
+            echo "::error::No staging URL available. Either pass staging_url when running this workflow, or set a STAGING_URL variable (Settings > Environments > staging > Environment variables) - variable name only, this is a public URL, not a secret."
+            exit 1
+          fi
+          echo "url=$URL" >> "$GITHUB_OUTPUT"
+
+      - name: Cache Playwright browsers
+        id: playwright-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-chromium-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+
+      - name: Install Playwright Chromium
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
+        run: bunx playwright install --with-deps chromium
+
+      - name: Install Playwright OS dependencies
+        if: steps.playwright-cache.outputs.cache-hit == 'true'
+        run: bunx playwright install-deps chromium
+
+      - name: Run smoke test against staging
+        env:
+          PLAYWRIGHT_BASE_URL: ${{ steps.target.outputs.url }}
+        run: bunx playwright test e2e/smoke.spec.ts
+
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: staging-smoke-report
+          path: playwright-report
+          retention-days: 7

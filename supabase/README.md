@@ -20,27 +20,27 @@ Four phases so far:
 
 ## What the migrations create
 
-| Migration | Contents |
-|---|---|
-| `20260901000100_identity_and_tenancy.sql` | `profiles`, `companies`, `company_members`, `platform_admins`, the RLS helper functions, signup provisioning |
-| `20260901000200_vendor_domain.sql` | `vendors`, `vendor_policies`, `vendor_compliance_items`, `vendor_coverage_limits` (dropped in migration 13) |
-| `20260901000300_tasks_queue_leads_and_views.sql` | `tasks`, `compliance_queue_items`, `leads`, and the report/admin views |
-| `20260901000400_vendor_upload_requests_and_documents.sql` | `vendor_upload_requests`, `vendor_documents`, `email_outbox`, the private `vendor-documents` storage bucket |
-| `20260902000100_security_and_performance_hardening.sql` | Fixes discovered by applying 1-4 to a real project and running Supabase's advisor — see [Security model](#security-model) |
-| `20260902000200_document_extraction.sql` | Adds `parsed_data`, `extraction_confidence`, `duplicate_of_document_id` to `vendor_documents` |
-| `20260902000300_compliance_engine.sql` | `vendor_documents.applied_policy_id`/`review_reason`, and `apply_policy_renewal()` |
-| `20260902000400_notification_emails.sql` | Widens `email_outbox.template` to add `document_received`, `admin_review_needed` |
-| `20260902000500_renewal_reminders.sql` | `policy_reminder_log`, `current_reminder_threshold()`, `policies_due_for_reminder`; widens `email_outbox.template` to add `renewal_reminder` |
-| `20260902000600_schedule_renewal_reminders.sql` | Enables `pg_cron`/`pg_net`, schedules a daily call into the `send-renewal-reminders` Edge Function — see [Renewal reminders](#renewal-reminders) |
-| `20260902000700_review_queue.sql` | Adds `document_id`, `resolution`, `resolution_note`, `resolved_at`, and a `'resolved'` state to `compliance_queue_items` — see [The review queue screen](#the-review-queue-screen) |
-| `20260902000800_compliance_requirements.sql` | Drops `vendor_coverage_limits`; adds `compliance_requirements` — see [Matching against coverage requirements](#matching-against-coverage-requirements) |
-| `20260902000900_audit_log.sql` | Adds `audit_log`, `current_user_id()` — see [Audit log](#audit-log) |
-| `20260903000100_upload_request_cancellation.sql` | Widens `audit_log`'s `action`/`target_type` CHECK constraints for `upload_request_cancelled` — see [Cancelling an upload request](#cancelling-an-upload-request) |
-| `20260903000200_malware_scanning.sql` | Adds `malware_scan_status`/`malware_scan_detail`/`scanned_at` to `vendor_documents` — see [Malware scanning](#malware-scanning) |
-| `20260903000300_automated_retry_queue.sql` | Adds `vendor_documents.retry_count`/`next_retry_at`, `documents_due_for_retry` — see [Automated retry queue](#automated-retry-queue) |
-| `20260903000400_schedule_automated_retries.sql` | Schedules an hourly call into the `retry-failed-documents` Edge Function via `pg_cron`/`pg_net` — see [Automated retry queue](#automated-retry-queue) |
-| `20260903000500_email_bounce_handling.sql` | Widens `email_outbox.status`; adds `email_delivery_events` — see [Email bounce handling](#email-bounce-handling) |
-| `20260903000600_certificate_holder_on_file.sql` | Adds `vendor_policies.certificate_holder_name`/`certificate_holder_address`; widens `apply_policy_renewal()` to two more parameters — see [Certificate holder on file](#certificate-holder-on-file) |
+| Migration                                                 | Contents                                                                                                                                                                                            |
+| --------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `20260901000100_identity_and_tenancy.sql`                 | `profiles`, `companies`, `company_members`, `platform_admins`, the RLS helper functions, signup provisioning                                                                                        |
+| `20260901000200_vendor_domain.sql`                        | `vendors`, `vendor_policies`, `vendor_compliance_items`, `vendor_coverage_limits` (dropped in migration 13)                                                                                         |
+| `20260901000300_tasks_queue_leads_and_views.sql`          | `tasks`, `compliance_queue_items`, `leads`, and the report/admin views                                                                                                                              |
+| `20260901000400_vendor_upload_requests_and_documents.sql` | `vendor_upload_requests`, `vendor_documents`, `email_outbox`, the private `vendor-documents` storage bucket                                                                                         |
+| `20260902000100_security_and_performance_hardening.sql`   | Fixes discovered by applying 1-4 to a real project and running Supabase's advisor — see [Security model](#security-model)                                                                           |
+| `20260902000200_document_extraction.sql`                  | Adds `parsed_data`, `extraction_confidence`, `duplicate_of_document_id` to `vendor_documents`                                                                                                       |
+| `20260902000300_compliance_engine.sql`                    | `vendor_documents.applied_policy_id`/`review_reason`, and `apply_policy_renewal()`                                                                                                                  |
+| `20260902000400_notification_emails.sql`                  | Widens `email_outbox.template` to add `document_received`, `admin_review_needed`                                                                                                                    |
+| `20260902000500_renewal_reminders.sql`                    | `policy_reminder_log`, `current_reminder_threshold()`, `policies_due_for_reminder`; widens `email_outbox.template` to add `renewal_reminder`                                                        |
+| `20260902000600_schedule_renewal_reminders.sql`           | Enables `pg_cron`/`pg_net`, schedules a daily call into the `send-renewal-reminders` Edge Function — see [Renewal reminders](#renewal-reminders)                                                    |
+| `20260902000700_review_queue.sql`                         | Adds `document_id`, `resolution`, `resolution_note`, `resolved_at`, and a `'resolved'` state to `compliance_queue_items` — see [The review queue screen](#the-review-queue-screen)                  |
+| `20260902000800_compliance_requirements.sql`              | Drops `vendor_coverage_limits`; adds `compliance_requirements` — see [Matching against coverage requirements](#matching-against-coverage-requirements)                                              |
+| `20260902000900_audit_log.sql`                            | Adds `audit_log`, `current_user_id()` — see [Audit log](#audit-log)                                                                                                                                 |
+| `20260903000100_upload_request_cancellation.sql`          | Widens `audit_log`'s `action`/`target_type` CHECK constraints for `upload_request_cancelled` — see [Cancelling an upload request](#cancelling-an-upload-request)                                    |
+| `20260903000200_malware_scanning.sql`                     | Adds `malware_scan_status`/`malware_scan_detail`/`scanned_at` to `vendor_documents` — see [Malware scanning](#malware-scanning)                                                                     |
+| `20260903000300_automated_retry_queue.sql`                | Adds `vendor_documents.retry_count`/`next_retry_at`, `documents_due_for_retry` — see [Automated retry queue](#automated-retry-queue)                                                                |
+| `20260903000400_schedule_automated_retries.sql`           | Schedules an hourly call into the `retry-failed-documents` Edge Function via `pg_cron`/`pg_net` — see [Automated retry queue](#automated-retry-queue)                                               |
+| `20260903000500_email_bounce_handling.sql`                | Widens `email_outbox.status`; adds `email_delivery_events` — see [Email bounce handling](#email-bounce-handling)                                                                                    |
+| `20260903000600_certificate_holder_on_file.sql`           | Adds `vendor_policies.certificate_holder_name`/`certificate_holder_address`; widens `apply_policy_renewal()` to two more parameters — see [Certificate holder on file](#certificate-holder-on-file) |
 
 The headline modelling change: **a vendor no longer owns one flat policy.**
 `Vendor.policyNumber` / `Vendor.expiresOn` in `src/data/contracts.ts` could hold
@@ -124,7 +124,7 @@ under a `src/**/server/**` directory, or any `*.server.*` file, is reachable fro
 client-bundled code. `serverClient.server.ts` is meant to trip that on purpose —
 it is only ever imported from inside `createServerFn().handler()` bodies in
 `src/workflows/vendorUploadRequests.ts`, which itself lives in `src/workflows/`
-(not `src/server/`) specifically so its exported RPC stubs *can* be imported by
+(not `src/server/`) specifically so its exported RPC stubs _can_ be imported by
 `VendorUploadPortal.tsx` and `RequestDocumentsAction.tsx`. Verified at
 `bun run build` time by grepping `.output/public` for the service-role path —
 see the PR for that check.
@@ -225,7 +225,7 @@ Two independent gates decide whether a document's data reaches
    carrier matches, the policy number matches, and the new expiration date is
    strictly later. Anything else - a new carrier, a changed policy number, a
    date that didn't move forward, or simply no existing policy of that type
-   to compare against (`new_coverage` - a vendor's *first* submission for a
+   to compare against (`new_coverage` - a vendor's _first_ submission for a
    coverage type is deliberately never auto-applied) - requires a human
    decision instead.
 
@@ -270,7 +270,7 @@ deliberately not `security definer`.** Superseding the old policy row and
 inserting its renewal has to be atomic - the table's own
 `vendor_policies_one_active_per_type` unique index allows only one `'active'`
 row per `(vendor_id, policy_type)`, so two separate statements risk leaving a
-vendor with *zero* active policies of that type if the second one fails. One
+vendor with _zero_ active policies of that type if the second one fails. One
 RPC call is one transaction. Because it is not `security definer`, every
 statement inside runs with the **caller's own** row-level permissions - the
 same `can_write_company()` RLS policy that gates a direct `vendor_policies`
@@ -278,7 +278,7 @@ write gates a call to this function too. `supabase/tests/compliance-engine.test.
 verifies this doesn't just work for the happy path: a `read_only` member is
 refused, an owner cannot act on another company's vendor through it, `anon`
 cannot execute it at all, and a deliberately-broken renewal (an insert that
-violates a CHECK constraint) rolls back the *entire* call - the earlier
+violates a CHECK constraint) rolls back the _entire_ call - the earlier
 `UPDATE` included - so the old policy is never left superseded with no
 replacement.
 
@@ -347,7 +347,7 @@ Split across two layers because they need very different things to verify:
   - `policy_reminder_log` records which tier has already fired for which
     policy (`unique (policy_id, days_threshold)` — the constraint that makes
     the whole system idempotent).
-  - `current_reminder_threshold(days_until)` picks the single *tightest*
+  - `current_reminder_threshold(days_until)` picks the single _tightest_
     applicable tier for a day-count (45 days left resolves to 60, not 90), so
     a daily job sends exactly one reminder per threshold crossed rather than
     a backlog.
@@ -414,7 +414,7 @@ tomorrow's run tries again.
 Closes the gap the README used to list under "What is still not built": a
 `needs_review`/`failed` document had no screen to actually look at
 `parsed_data`/`review_reason` on, or to approve/reject by hand - staff had to
-wait for the vendor to send a *new* certificate that happened to match
+wait for the vendor to send a _new_ certificate that happened to match
 cleanly. Staff-only (`/dashboard/admin/compliance/$queueItemId`,
 `AdminGuard`-gated same as the queue list it opens from), it shows what the
 certificate extracted side by side with what's currently on file per
@@ -467,7 +467,7 @@ stays on the row for anyone who opens it directly.
 Migration 13 closes the last gap the compliance engine had left open since
 Phase 3: it could tell you whether a renewal was internally consistent with
 what was already on file, but never whether a vendor actually carried what
-the client *requires*. A clean renewal of an already-under-limit policy
+the client _requires_. A clean renewal of an already-under-limit policy
 sailed through unchanged, forever.
 
 `compliance_requirements` is the missing half - what a company requires,
@@ -483,7 +483,7 @@ Two places read it:
 
 - **`matchExtractedPolicy()`** (`complianceEngine.ts`) now takes the
   requirements for the extracted policy's type as a third argument, and
-  checks them *last* - after carrier, policy number, and date have already
+  checks them _last_ - after carrier, policy number, and date have already
   passed - so an otherwise-clean renewal that falls below a required limit
   still gets a specific `needs_review` reason instead of auto-applying. A
   missing/null extracted amount fails the check the same as an explicit
@@ -514,7 +514,7 @@ Neither answers "which staff member approved this, and when" for the two
 actions that most need it - a human review decision (`resolveReviewItem()`)
 and a manual retry (`reprocessDocument()`) - both of which run on the
 service role after `assertPlatformAdmin()`, so there was previously no
-record of *who* acted at all, only what happened and when.
+record of _who_ acted at all, only what happened and when.
 
 `audit_log` is deliberately scoped to the three server-function write paths
 that had no actor trail of their own - `upload_request_created`
@@ -614,7 +614,7 @@ renewal - comes back `'unknown'`, deliberately distinct from `'clean'`
 (analyzed, zero engines flagged it). This catches a **reused** malicious
 file, not a **novel** one. See Known compromises.
 
-This is also the one integration in this project that *blocks* rather than
+This is also the one integration in this project that _blocks_ rather than
 degrading gracefully: every other provider still lets the request through
 when unconfigured or failing, because nothing else here is unsafe to
 proceed without. Only a confirmed `'malicious'` verdict refuses the upload
@@ -644,16 +644,16 @@ with an already-rejected queue item is a real case, not a hypothetical
 one).
 
 **Deliberately conservative**, more so than the reminders Edge Function: a
-successful automated retry is *always* written as `'needs_review'`, never
+successful automated retry is _always_ written as `'needs_review'`, never
 `'processed'` - `'processed'` means more here than "confidently extracted."
 In the original upload path (`applyExtractionResult()`), it means
-confidently extracted *and* cleanly applied to `vendor_policies` by
+confidently extracted _and_ cleanly applied to `vendor_policies` by
 `applyComplianceEngine()`. Porting that matching/writing logic to Deno
 would be a much bigger duplication than the small, pure-function ports this
 needs (the extraction schema and the Anthropic call itself); recovering the
-*data* automatically and letting a person decide through the review screen
+_data_ automatically and letting a person decide through the review screen
 already built for exactly this (`documentReview.ts`) is the whole job here.
-`retry_count`/`next_retry_at` are written *only* by this automated path,
+`retry_count`/`next_retry_at` are written _only_ by this automated path,
 never by `reprocessDocument()` - they track an automated budget distinct
 from a human's own patience manually retrying; see migration 17's
 docblock for the full reasoning. Bounded at 5 attempts with widening
@@ -681,7 +681,7 @@ they mark it spam."
 than more mutable columns: an email's post-send lifecycle is genuinely
 multi-event (sent, then later delivered, or sent then bounced, sometimes a
 delay before either), which a single status column can only ever show the
-latest of. `email_outbox.status` is still updated for delivery *outcome*
+latest of. `email_outbox.status` is still updated for delivery _outcome_
 events (`delivered`/`bounced`/`complained`) - a dashboard reading one row
 doesn't need to join for the common case - but the event log is the actual
 record; status is a derived summary, not the source of truth.
@@ -702,7 +702,7 @@ unrecognized version prefix), the multi-signature secret-rotation case, and
 the replay-protection timestamp window - not deployed-and-hoped-for.
 
 `verifySvixSignature()` (`svixSignature.ts`) is a rare case in this codebase:
-the *same* file, byte-for-byte, runs in both the Node app (where it is
+the _same_ file, byte-for-byte, runs in both the Node app (where it is
 actually unit-tested, `src/workflows/svixSignature.ts`) and the Edge
 Function, because it uses nothing but `atob`/`btoa`/`crypto.subtle` -
 identical globals in both runtimes. Every other cross-runtime port in this
@@ -974,7 +974,7 @@ Deliberate, and worth revisiting as later phases grow on top of them:
   Multi-company users need a company switcher in the session context first.
 - **The double-redemption race on `signup_invites` is closed by a lock,
   verified only by review.** `handle_new_user()` takes `select ... for
-  update` on the invite row before checking and marking it used, so two
+update` on the invite row before checking and marking it used, so two
   concurrent signups racing the same still-pending code should serialize
   rather than both succeeding — see the comment near "rejects a code that
   has already been used" in `supabase/tests/signup-invites.test.ts`. PGlite
@@ -1018,7 +1018,7 @@ Deliberate, and worth revisiting as later phases grow on top of them:
 - **A `not_configured` reminder retries daily with no backoff**, since
   `policy_reminder_log` is only written on an actual send. Fine until
   `RESEND_API_KEY` is set (at which point it stops being reachable at all);
-  would need real backoff if a *configured* Resend integration started
+  would need real backoff if a _configured_ Resend integration started
   failing repeatedly for one vendor (a bad address, e.g.) instead.
 - **The review screen's approve is all-or-nothing per document, not per
   coverage line**, and the values it applies are exactly what the model
@@ -1034,7 +1034,7 @@ Deliberate, and worth revisiting as later phases grow on top of them:
   requires - the same human-override reasoning as approving a changed
   carrier. The shortfall is still visible afterward on the vendor's own
   Coverage Limits table (carried amounts are read live), just not surfaced
-  *during* the review decision itself - would be a natural addition to the
+  _during_ the review decision itself - would be a natural addition to the
   review screen once it's clear reviewers want that context in the moment
   rather than checking the vendor detail page separately after.
 - **`audit_log` covers three actions, not every mutation in this schema.**
@@ -1045,14 +1045,14 @@ Deliberate, and worth revisiting as later phases grow on top of them:
   as more actions need this kind of trail, rather than trying to instrument
   every write path in one pass.
 - **No screen reads `audit_log` as a list.** The review screen shows one
-  row's outcome (who resolved *this* item), which is the only place it's
+  row's outcome (who resolved _this_ item), which is the only place it's
   wired in today - there is no company-wide or admin-wide "recent activity"
   view yet.
 - **The malware scan is a hash lookup, not full-content analysis of a novel
   file.** VirusTotal has almost never seen a given certificate before -
   each is essentially unique per vendor/renewal - so most uploads land on
-  `'unknown'`, not `'clean'`. This catches a *reused* malicious file, not a
-  *novel* one; full-content scanning would need VirusTotal's asynchronous
+  `'unknown'`, not `'clean'`. This catches a _reused_ malicious file, not a
+  _novel_ one; full-content scanning would need VirusTotal's asynchronous
   upload-and-analyze endpoint (or a different provider offering a
   synchronous scan), a bigger integration than this pass reached for.
 - **No admin visibility into scan results beyond the raw column.** There is
@@ -1085,7 +1085,7 @@ Deliberate, and worth revisiting as later phases grow on top of them:
   Supabase CLI or dashboard, done outside this session. Confirmed live
   that the deployed function correctly refuses every call while it's
   unset (`401 Webhook not configured`) - the fail-safe default works - but
-  the *signed* path (a real secret, a matching signature) is verified only
+  the _signed_ path (a real secret, a matching signature) is verified only
   at the unit level so far (`src/tests/svix-signature.test.ts`, against
   Svix's own published test vector), not yet as a live round trip through
   the deployed function. `RESEND_API_KEY` itself is also still unset, so

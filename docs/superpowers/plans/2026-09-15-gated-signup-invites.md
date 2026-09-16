@@ -15,6 +15,7 @@
 ## Task 1: `signup_invites` table, defaults trigger, RLS, and the `create_signup_invite` RPC
 
 **Files:**
+
 - Create: `supabase/migrations/20260915000100_gated_signup_invites.sql`
 
 - [ ] **Step 1: Write the migration**
@@ -176,6 +177,7 @@ EOF
 ## Task 2: Redeem invites in `handle_new_user`; close the `create_company_for_current_user` loophole
 
 **Files:**
+
 - Modify: `supabase/migrations/20260915000100_gated_signup_invites.sql`
 - Modify: `supabase/tests/harness.ts:158-171`
 
@@ -323,6 +325,7 @@ EOF
 ## Task 3: Behavioral test coverage for invite redemption
 
 **Files:**
+
 - Create: `supabase/tests/signup-invites.test.ts`
 
 - [ ] **Step 1: Write the test file**
@@ -531,7 +534,10 @@ describe("create_signup_invite()", () => {
 
   it("denies a non-admin", async () => {
     await expect(
-      asUser(db, NON_ADMIN, `select public.create_signup_invite($1, $2)`, ["Rival Co", "x@rival.test"]),
+      asUser(db, NON_ADMIN, `select public.create_signup_invite($1, $2)`, [
+        "Rival Co",
+        "x@rival.test",
+      ]),
     ).rejects.toThrow(/not authorized/i);
   });
 });
@@ -607,6 +613,7 @@ EOF
 ## Task 4: Grant-level test coverage
 
 **Files:**
+
 - Modify: `supabase/tests/function-grants.test.ts`
 
 - [ ] **Step 1: Update the grant checks for the invite-gate changes**
@@ -712,6 +719,7 @@ EOF
 ## Task 5: TypeScript database types
 
 **Files:**
+
 - Modify: `src/data/db-types.ts`
 
 - [ ] **Step 1: Add the row type**
@@ -741,11 +749,11 @@ export interface SignupInviteRow {
 In the `Database.public.Tables` block, add after `leads` (currently line 328):
 
 ```typescript
-      leads: Table<LeadRow, Pick<LeadRow, "company_name"> & Partial<LeadRow>>;
-      signup_invites: Table<
-        SignupInviteRow,
-        Pick<SignupInviteRow, "email" | "company_name"> & Partial<SignupInviteRow>
-      >;
+leads: Table<LeadRow, Pick<LeadRow, "company_name"> & Partial<LeadRow>>;
+signup_invites: Table<
+  SignupInviteRow,
+  Pick<SignupInviteRow, "email" | "company_name"> & Partial<SignupInviteRow>
+>;
 ```
 
 In the `Database.public.Functions` block, add after `create_company_for_current_user` (currently lines 335-338):
@@ -779,6 +787,7 @@ EOF
 ## Task 6: Repository contract, demo implementation, and Supabase implementation
 
 **Files:**
+
 - Modify: `src/data/contracts.ts:138-158`
 - Modify: `src/data/demoRepository.ts`
 - Modify: `src/data/supabaseRepository.ts`
@@ -1042,6 +1051,7 @@ EOF
 ## Task 7: Admin route and nav entry
 
 **Files:**
+
 - Modify: `src/app/router.tsx`
 - Create: `src/routes/dashboard.admin.invites.tsx`
 
@@ -1128,6 +1138,7 @@ EOF
 ## Task 8: `InviteForm` and `InvitesPage` components
 
 **Files:**
+
 - Create: `src/features/admin/InviteForm.tsx`
 - Create: `src/features/admin/InvitesPage.tsx`
 
@@ -1221,7 +1232,10 @@ export function InviteForm({ onDone }: { onDone?: () => void }) {
       </div>
 
       {notice ? (
-        <p role="status" className="mt-3 rounded-sm border border-border bg-muted px-3 py-2 text-xs">
+        <p
+          role="status"
+          className="mt-3 rounded-sm border border-border bg-muted px-3 py-2 text-xs"
+        >
           {notice}
         </p>
       ) : null}
@@ -1230,7 +1244,9 @@ export function InviteForm({ onDone }: { onDone?: () => void }) {
           role="alert"
           className="mt-3 rounded-sm border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs font-semibold text-destructive"
         >
-          {mutation.error instanceof Error ? mutation.error.message : "Could not create the invite."}
+          {mutation.error instanceof Error
+            ? mutation.error.message
+            : "Could not create the invite."}
         </p>
       ) : null}
     </form>
@@ -1376,6 +1392,7 @@ EOF
 ## Task 9: Regenerate the route tree and add frontend test coverage for the admin page
 
 **Files:**
+
 - Regenerate: `src/routeTree.gen.ts` (auto-generated — do not hand-edit)
 - Modify: `src/tests/routes.test.tsx:6-21`
 - Modify: `src/tests/page-behaviors.test.tsx`
@@ -1429,28 +1446,28 @@ In `src/tests/page-behaviors.test.tsx`, add `"/dashboard/admin/invites"` to the 
 Then add a dedicated test after the existing `"keeps access invitations demo-only"` test (currently ending at line 165):
 
 ```typescript
-  it("creates and revokes a signup invite through the demo repository", async () => {
-    const { user } = await renderAdminRoute("/dashboard/admin/invites");
+it("creates and revokes a signup invite through the demo repository", async () => {
+  const { user } = await renderAdminRoute("/dashboard/admin/invites");
 
-    await screen.findByText("Meridian Fabrication");
+  await screen.findByText("Meridian Fabrication");
 
-    await user.click(screen.getByRole("button", { name: /create invite/i }));
-    await user.type(screen.getByLabelText("Company name"), "Cedar Ridge Contracting");
-    await user.type(screen.getByLabelText("Email"), "owner@cedarridge.example");
-    await user.click(screen.getByRole("button", { name: /^create invite$/i }));
+  await user.click(screen.getByRole("button", { name: /create invite/i }));
+  await user.type(screen.getByLabelText("Company name"), "Cedar Ridge Contracting");
+  await user.type(screen.getByLabelText("Email"), "owner@cedarridge.example");
+  await user.click(screen.getByRole("button", { name: /^create invite$/i }));
 
-    expect(
-      await screen.findByText(/invite code .+ created for cedar ridge contracting/i),
-    ).toBeInTheDocument();
-    expect(await screen.findByText("Cedar Ridge Contracting")).toBeInTheDocument();
+  expect(
+    await screen.findByText(/invite code .+ created for cedar ridge contracting/i),
+  ).toBeInTheDocument();
+  expect(await screen.findByText("Cedar Ridge Contracting")).toBeInTheDocument();
 
-    const row = screen.getByText("Cedar Ridge Contracting").closest("tr");
-    if (!row) throw new Error("expected a table row for the new invite");
-    await user.click(within(row).getByRole("button", { name: /revoke/i }));
+  const row = screen.getByText("Cedar Ridge Contracting").closest("tr");
+  if (!row) throw new Error("expected a table row for the new invite");
+  await user.click(within(row).getByRole("button", { name: /revoke/i }));
 
-    await waitFor(() => expect(within(row).queryByRole("button", { name: /revoke/i })).toBeNull());
-    expect(within(row).getByText("revoked")).toBeInTheDocument();
-  });
+  await waitFor(() => expect(within(row).queryByRole("button", { name: /revoke/i })).toBeNull());
+  expect(within(row).getByText("revoked")).toBeInTheDocument();
+});
 ```
 
 This uses `within`, which isn't imported yet — add it to the Testing Library import at the top of the file:
@@ -1481,6 +1498,7 @@ EOF
 ## Task 10: Update the signup form
 
 **Files:**
+
 - Modify: `src/features/auth/AuthPages.tsx:214-279`
 
 - [ ] **Step 1: Replace the company-name field with an invite-code field and update the metadata payload**
@@ -1589,6 +1607,7 @@ EOF
 ## Task 11: Frontend test coverage for the updated signup form
 
 **Files:**
+
 - Modify: `src/tests/page-behaviors.test.tsx`
 
 - [ ] **Step 1: Add a test asserting the new field is present and the company-name field is gone**
@@ -1596,12 +1615,12 @@ EOF
 In `src/tests/page-behaviors.test.tsx`, add a new test to the `"authenticated-demo route behavior"` describe block, right after the existing `it.each` block for `/login`/`/signup`/`/reset-password` (currently ending at line 37):
 
 ```typescript
-  it("asks for an invite code on signup instead of a free-text company name", async () => {
-    await renderRoute("/signup");
+it("asks for an invite code on signup instead of a free-text company name", async () => {
+  await renderRoute("/signup");
 
-    expect(await screen.findByLabelText("Invite code")).toBeInTheDocument();
-    expect(screen.queryByLabelText("Company name")).not.toBeInTheDocument();
-  });
+  expect(await screen.findByLabelText("Invite code")).toBeInTheDocument();
+  expect(screen.queryByLabelText("Company name")).not.toBeInTheDocument();
+});
 ```
 
 - [ ] **Step 2: Run the frontend suite**
@@ -1650,6 +1669,7 @@ Expected: Build succeeds (this also confirms `src/routeTree.gen.ts` is up to dat
 - [ ] **Step 5: Manually smoke-test the demo dashboard**
 
 Run: `npm run dev`, then in a browser:
+
 1. Open `/dashboard/admin/invites` with the demo role switched to Administrator — confirm the seeded invites (Meridian Fabrication: pending, Halstead Builders: used) render, "Create invite" opens the form, submitting it adds a row and shows the generated code in the notice, and "Revoke" flips a pending row to `revoked` and hides its Revoke button.
 2. Open `/signup` — confirm the form shows "Invite code" (not "Company name"), and submitting shows the existing demo-mode notice ("nothing was submitted, saved or emailed").
 

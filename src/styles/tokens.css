@@ -12,15 +12,15 @@
   --font-sans-stack: "Manrope", ui-sans-serif, system-ui, sans-serif;
   --font-mono-stack: "IBM Plex Mono", ui-monospace, SFMono-Regular, monospace;
 
-  --background: #F8FAFC;
-  --foreground: #0F172A;
-  --card: #FFFFFF;
+  --background: #f8fafc;
+  --foreground: #0f172a;
+  --card: #ffffff;
   --card-foreground: var(--foreground);
-  --popover: #FFFFFF;
+  --popover: #ffffff;
   --popover-foreground: var(--foreground);
 
-  --primary: #2563EB;
-  --primary-foreground: #FFFFFF;
+  --primary: #2563eb;
+  --primary-foreground: #ffffff;
   --secondary: oklch(0.968 0.007 247.896);
   --secondary-foreground: var(--foreground);
   --muted: oklch(0.968 0.007 247.896);
@@ -28,35 +28,35 @@
   --accent: oklch(0.955 0.02 259);
   --accent-foreground: var(--foreground);
 
-  --destructive: #DC2626;
-  --destructive-foreground: #FFFFFF;
+  --destructive: #dc2626;
+  --destructive-foreground: #ffffff;
 
-  --ok: #15803D;
-  --ok-foreground: #FFFFFF;
+  --ok: #15803d;
+  --ok-foreground: #ffffff;
   --ok-soft: oklch(0.955 0.035 150);
-  --warn: #D97706;
-  --warn-foreground: #FFFFFF;
+  --warn: #d97706;
+  --warn-foreground: #ffffff;
   --warn-soft: oklch(0.96 0.045 80);
   --danger-soft: oklch(0.955 0.03 25);
   --info-soft: oklch(0.955 0.025 262);
 
-  --ink: #0F172A;
+  --ink: #0f172a;
   --border: oklch(0.909 0.015 255.508);
   --input: oklch(0.909 0.015 255.508);
-  --ring: #2563EB;
+  --ring: #2563eb;
 
-  --sidebar: #0F172A;
+  --sidebar: #0f172a;
   --sidebar-foreground: oklch(0.97 0.005 250);
-  --sidebar-primary: #2563EB;
-  --sidebar-primary-foreground: #FFFFFF;
+  --sidebar-primary: #2563eb;
+  --sidebar-primary-foreground: #ffffff;
   --sidebar-accent: oklch(0.27 0.04 262);
   --sidebar-accent-foreground: oklch(0.97 0.005 250);
   --sidebar-border: oklch(0.3 0.035 262);
-  --sidebar-ring: #2563EB;
+  --sidebar-ring: #2563eb;
 
-  --chart-1: #2563EB;
-  --chart-2: #15803D;
-  --chart-3: #D97706;
-  --chart-4: #DC2626;
+  --chart-1: #2563eb;
+  --chart-2: #15803d;
+  --chart-3: #d97706;
+  --chart-4: #dc2626;
   --chart-5: oklch(0.554 0.046 257.417);
 }

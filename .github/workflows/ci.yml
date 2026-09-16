@@ -8,7 +8,10 @@ permissions:
   contents: read
 
 jobs:
-  test-and-build:
+  # Required status check. Everything here is cheap, static, and fast:
+  # install, typecheck, lint, format, and the in-memory/unit Vitest suite.
+  quality:
+    name: quality
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
@@ -24,15 +27,136 @@ jobs:
       - name: Install dependencies from the committed Bun lockfile
         run: bun install --frozen-lockfile
 
-      - name: Run tests
+      - name: Type-check
+        run: bun run typecheck
+
+      - name: Lint
+        run: bun run lint
+
+      - name: Check formatting
+        run: bun run format:check
+
+      - name: Run unit tests
         run: bun run test
 
-      # Applies supabase/migrations to a real Postgres (PGlite/WASM) and asserts
-      # the RLS tenancy boundary holds. No Docker or database service needed.
-      # This is the only check that would catch a policy regression - a broken
-      # RLS policy returns rows instead of raising, so nothing else notices.
+  # Required status check, split out from `quality` because it exercises a
+  # real Postgres (PGlite/WASM) rather than pure unit tests.
+  #
+  # Applies supabase/migrations to a real Postgres (PGlite/WASM) and asserts
+  # the RLS tenancy boundary holds. No Docker or database service needed.
+  # This is the only check that would catch a policy regression - a broken
+  # RLS policy returns rows instead of raising, so nothing else notices.
+  db-verify:
+    name: db-verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - uses: oven-sh/setup-bun@v2
+
+      - name: Install dependencies from the committed Bun lockfile
+        run: bun install --frozen-lockfile
+
       - name: Verify database schema and RLS policies
         run: bun run db:verify
 
+  # Required status check. Builds the same Cloudflare-Worker-via-Nitro
+  # production bundle GitHub Actions deploys (see
+  # docs/operations/release-process.md for the deploy-owner decision), and
+  # hands it to e2e-smoke so that job doesn't have to rebuild it.
+  build:
+    name: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - uses: oven-sh/setup-bun@v2
+
+      - name: Install dependencies from the committed Bun lockfile
+        run: bun install --frozen-lockfile
+
       - name: Build production bundle
         run: bun run build
+
+      - name: Upload production bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: production-bundle
+          path: .output
+          retention-days: 1
+
+  # NOT a required status check yet - see docs/operations/release-process.md.
+  # e2e/smoke.spec.ts is a minimal placeholder (Task 0A); Task 0B (Engineer
+  # B) owns full role-based coverage under e2e/**. This job is kept
+  # non-blocking (continue-on-error, and deliberately left off the required
+  # checks list) until that lands, so a flake or a gap in the placeholder
+  # can't block every PR in the meantime - but it still runs on every PR so
+  # regressions are visible.
+  #
+  # Runs Playwright against the actual built Cloudflare Worker output
+  # (via `wrangler dev`), not the Vite dev server - see playwright.config.ts.
+  e2e-smoke:
+    name: e2e-smoke
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    continue-on-error: true
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - uses: oven-sh/setup-bun@v2
+
+      - name: Install dependencies from the committed Bun lockfile
+        run: bun install --frozen-lockfile
+
+      - name: Download production bundle
+        uses: actions/download-artifact@v4
+        with:
+          name: production-bundle
+          path: .output
+
+      - name: Cache Playwright browsers
+        id: playwright-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-chromium-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+
+      - name: Install Playwright Chromium
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
+        run: bunx playwright install --with-deps chromium
+
+      # Cached browser binaries skip the download, but the OS-level shared
+      # libraries they need (installed by --with-deps above) live outside
+      # that cache and must still be installed on every run.
+      - name: Install Playwright OS dependencies
+        if: steps.playwright-cache.outputs.cache-hit == 'true'
+        run: bunx playwright install-deps chromium
+
+      - name: Run SSR smoke test against the production bundle
+        run: bunx playwright test e2e/smoke.spec.ts
+
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: playwright-report
+          retention-days: 7

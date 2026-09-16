@@ -76,7 +76,11 @@ async function recordFailedAttempt(
 
   await supabase
     .from("vendor_documents")
-    .update({ retry_count: newRetryCount, next_retry_at: nextRetryAt, processing_error: errorMessage })
+    .update({
+      retry_count: newRetryCount,
+      next_retry_at: nextRetryAt,
+      processing_error: errorMessage,
+    })
     .eq("id", row.document_id);
 }
 
@@ -95,9 +99,12 @@ Deno.serve(async (req: Request) => {
     console.warn(
       "[retry-failed-documents] ANTHROPIC_API_KEY is not set - skipping this run entirely.",
     );
-    return new Response(JSON.stringify({ processed: 0, succeeded: 0, failed: 0, notConfigured: true }), {
-      headers: { "Content-Type": "application/json" },
-    });
+    return new Response(
+      JSON.stringify({ processed: 0, succeeded: 0, failed: 0, notConfigured: true }),
+      {
+        headers: { "Content-Type": "application/json" },
+      },
+    );
   }
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
@@ -162,12 +169,18 @@ Deno.serve(async (req: Request) => {
       // queueItem.state should never be 'resolved' here; the check is
       // defensive, not load-bearing.
       if (queueItem && queueItem.state !== "resolved") {
-        await supabase.from("compliance_queue_items").update({ state: "in-review" }).eq("id", queueItem.id);
+        await supabase
+          .from("compliance_queue_items")
+          .update({ state: "in-review" })
+          .eq("id", queueItem.id);
       }
 
       succeeded++;
     } catch (error) {
-      console.error(`[retry-failed-documents] unhandled error for document ${row.document_id}:`, error);
+      console.error(
+        `[retry-failed-documents] unhandled error for document ${row.document_id}:`,
+        error,
+      );
       await recordFailedAttempt(
         supabase,
         row,
@@ -177,8 +190,7 @@ Deno.serve(async (req: Request) => {
     }
   }
 
-  return new Response(
-    JSON.stringify({ processed: dueRows.length, succeeded, failed }),
-    { headers: { "Content-Type": "application/json" } },
-  );
+  return new Response(JSON.stringify({ processed: dueRows.length, succeeded, failed }), {
+    headers: { "Content-Type": "application/json" },
+  });
 });
