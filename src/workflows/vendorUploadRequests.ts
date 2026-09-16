@@ -188,6 +188,10 @@ export const createUploadRequest = createServerFn({ method: "POST" })
       throw new Error("This vendor has no contact email on file.");
     }
 
+    // NOTE: unlike sendRequest() (communications.ts, Task 7), this path does
+    // not check suppressed_recipients - a bounced/complained address can
+    // still receive mail here. See supabase/README.md's Known compromises.
+
     const token = generateUploadToken();
     const tokenHash = await hashToken(token);
     const expiresAt = newExpiryDate();
