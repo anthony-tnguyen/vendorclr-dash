@@ -411,6 +411,54 @@ export type Database = {
         };
         Relationships: [];
       };
+      contacts: {
+        Row: {
+          company_id: string;
+          created_at: string;
+          email: string;
+          id: string;
+          name: string;
+          notes: string;
+          phone: string;
+          updated_at: string;
+        };
+        Insert: {
+          company_id: string;
+          created_at?: string;
+          email: string;
+          id?: string;
+          name: string;
+          notes?: string;
+          phone?: string;
+          updated_at?: string;
+        };
+        Update: {
+          company_id?: string;
+          created_at?: string;
+          email?: string;
+          id?: string;
+          name?: string;
+          notes?: string;
+          phone?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "contacts_company_id_fkey";
+            columns: ["company_id"];
+            isOneToOne: false;
+            referencedRelation: "admin_company_stats";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "contacts_company_id_fkey";
+            columns: ["company_id"];
+            isOneToOne: false;
+            referencedRelation: "companies";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       email_delivery_events: {
         Row: {
           company_id: string;
@@ -1049,6 +1097,61 @@ export type Database = {
           },
         ];
       };
+      suppressed_recipients: {
+        Row: {
+          company_id: string;
+          created_at: string;
+          email: string;
+          id: string;
+          reason: string;
+          source_event_id: string | null;
+          suppressed_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          company_id: string;
+          created_at?: string;
+          email: string;
+          id?: string;
+          reason: string;
+          source_event_id?: string | null;
+          suppressed_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          company_id?: string;
+          created_at?: string;
+          email?: string;
+          id?: string;
+          reason?: string;
+          source_event_id?: string | null;
+          suppressed_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "suppressed_recipients_company_id_fkey";
+            columns: ["company_id"];
+            isOneToOne: false;
+            referencedRelation: "admin_company_stats";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "suppressed_recipients_company_id_fkey";
+            columns: ["company_id"];
+            isOneToOne: false;
+            referencedRelation: "companies";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "suppressed_recipients_source_event_id_fkey";
+            columns: ["source_event_id"];
+            isOneToOne: false;
+            referencedRelation: "email_delivery_events";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       tasks: {
         Row: {
           company_id: string;
@@ -1193,6 +1296,69 @@ export type Database = {
           },
           {
             foreignKeyName: "vendor_compliance_items_vendor_id_fkey";
+            columns: ["vendor_id"];
+            isOneToOne: false;
+            referencedRelation: "vendors";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      vendor_contacts: {
+        Row: {
+          company_id: string;
+          contact_id: string;
+          created_at: string;
+          id: string;
+          role: string;
+          vendor_id: string;
+        };
+        Insert: {
+          company_id: string;
+          contact_id: string;
+          created_at?: string;
+          id?: string;
+          role: string;
+          vendor_id: string;
+        };
+        Update: {
+          company_id?: string;
+          contact_id?: string;
+          created_at?: string;
+          id?: string;
+          role?: string;
+          vendor_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "vendor_contacts_company_id_fkey";
+            columns: ["company_id"];
+            isOneToOne: false;
+            referencedRelation: "admin_company_stats";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "vendor_contacts_company_id_fkey";
+            columns: ["company_id"];
+            isOneToOne: false;
+            referencedRelation: "companies";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "vendor_contacts_contact_id_fkey";
+            columns: ["contact_id"];
+            isOneToOne: false;
+            referencedRelation: "contacts";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "vendor_contacts_vendor_id_fkey";
+            columns: ["vendor_id"];
+            isOneToOne: false;
+            referencedRelation: "vendor_compliance_summary";
+            referencedColumns: ["vendor_id"];
+          },
+          {
+            foreignKeyName: "vendor_contacts_vendor_id_fkey";
             columns: ["vendor_id"];
             isOneToOne: false;
             referencedRelation: "vendors";

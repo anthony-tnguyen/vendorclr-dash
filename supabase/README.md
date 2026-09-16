@@ -727,6 +727,142 @@ An event that doesn't match a known `provider_message_id` (an email this
 app never sent, or one sent before this feature shipped) is acknowledged
 (`200`) but not recorded - there is genuinely nothing to attach it to.
 
+### Contacts, suppression and communication recovery
+
+Task 7 - the migration this closes is
+`20260916000600_contacts_and_suppression.sql` (plus a small follow-up,
+`20260916000700_contacts_and_suppression_fixups.sql`, after `get_advisors`
+flagged a missing `search_path` pin and an unindexed FK). Two additive
+pieces, plus a generalized send path:
+
+**`contacts`/`vendor_contacts`** - a company-scoped address book, separate
+from `vendors.contact_name`/`contact_email` (which stay exactly as they
+are: a Phase 0-era single free-text pair, never migrated by this
+migration). One contact can link to several vendors; one vendor can have
+several contacts, each tagged `operational`/`broker`/`secondary` via
+`vendor_contacts.role`. Cross-tenant integrity is enforced the same way
+every other vendor-scoped child table in this schema enforces it -
+`assert_company_matches_vendor()` (migration 2) plus a new
+`assert_company_matches_contact()`, both firing regardless of caller/role.
+RLS is uniformly `can_write_company()` for insert/update/delete, matching
+`compliance_requirements`' shape rather than `vendors`' owner/risk_manager-
+only delete: a contact is operational address-book data, not something
+whose deletion destroys compliance history.
+
+**`suppressed_recipients`** - an active "do not auto-email this address"
+list, company-scoped, one row per `(company_id, email)` (a second bounce
+refreshes the row rather than duplicating it). Closes the exact gap this
+README's own Known compromises used to name: "A bounce/complaint does not
+trigger any follow-up action." Written automatically by
+**`handle_bounce_suppression()`**, an `AFTER INSERT` trigger on
+`email_delivery_events` (migration 19) - not new code in the
+`resend-webhook` Edge Function itself. That function already inserts one
+`email_delivery_events` row per bounce/complaint it receives; a trigger on
+that insert gets the suppression logic for free, without teaching
+`resend-webhook` anything about `suppressed_recipients` or `tasks`. It also
+means the behavior is provable through the same PGlite harness every other
+schema invariant here is (`supabase/tests/communications.test.ts`: insert a
+bounced/complained event, assert a suppression row and a high-priority
+`tasks` row appear, assert a `sent`/`delivered`/`delivery_delayed` event is
+a no-op, assert cross-tenant isolation) rather than only checkable against
+the live Edge Function - the same database-layer-over-application-code
+preference already established for `assert_company_matches_vendor()` and
+friends.
+
+**`sendRequest()`** (`src/workflows/communications.ts`) generalizes
+`createUploadRequest()`'s single-recipient send (`vendors.contact_email`,
+always exactly one address) to any set of a vendor's linked contacts -
+send-to-vendor, send-to-broker, send-to-both. It does not modify
+`createUploadRequest()` at all: that function's behavior, signature and
+file are untouched, and the small token-generation-and-insert sequence
+both functions need is duplicated rather than factored into a shared
+helper, since extracting one would have meant editing
+`vendorUploadRequests.ts` for a handful of lines unlikely to drift (see
+`sendRequest()`'s own docblock for the full reasoning). Two contracts worth
+calling out explicitly:
+
+- **Every resend is a brand-new `vendor_upload_requests` row and a brand-new
+  token** - `sendRequest()` never extends or reuses an existing request,
+  mirroring `cancelUploadRequest()`'s own "the old request stays exactly
+  what it was" discipline (see [Cancelling an upload
+  request](#cancelling-an-upload-request)).
+- **`confirmedRecipientIds` is the only way to name who receives mail** -
+  there is no "resend to whoever was on the previous request" shortcut.
+  "Resend requires recipient confirmation" (the plan's own wording) is
+  enforced by this being the sole recipient input on every call, first send
+  or resend alike; a future UI's resend action should re-show the previous
+  recipients for a human to confirm or edit, not read them off the old
+  request and pass them through silently.
+- **Suppressed recipients are skipped, not erred** - immediately before
+  each recipient's send, `sendRequest()` checks `suppressed_recipients` for
+  that (normalized) address and, if suppressed, records the skip via
+  `logOperational()` (`src/lib/observability/logger.server.ts`, Task 2) and
+  moves on rather than writing an `email_outbox` row for it. Every other
+  recipient in the same call still gets attempted.
+
+`src/data/repositories/contactRepository.ts` is the read/write layer a
+future `ContactsPanel.tsx`/`CommunicationHistory.tsx` would consume:
+listing/creating contacts and vendor links, checking/listing suppressions,
+and `listCommunicationHistoryForVendor()` - `email_outbox` joined with its
+full `email_delivery_events` history per send, the source for
+queued/sent/delivered/delayed/bounced/complained/failed history. That join
+is a genuine PostgREST embed (a direct FK, `email_delivery_events.email_outbox_id`
+→ `email_outbox.id`), not the no-FK trap documented elsewhere in this
+project's history.
+
+**`audit_log`** gains one more action, `contact_request_sent`, widening the
+same `action` CHECK constraint migrations 14/15/21 already widened -
+`sendRequest()` writes one audit row per call (not per recipient), the same
+granularity `createUploadRequest()` already uses.
+
+None of this ships UI - `ContactsPanel.tsx`, `CommunicationHistory.tsx`, and
+wiring `RequestDocumentsAction.tsx` onto `sendRequest()` are a later task's
+work. `sendRequest()`/`contactRepository.ts` are built to return everything
+that UI will need (per-recipient outcome, role, the full delivery-event
+join) without guessing at its exact shape.
+
+### Deployment verification
+
+Two operational checks, neither part of the app's own request path -
+`scripts/check-email-deliverability.ts` (run by hand, e.g. `bun run
+check:email-deliverability [domain] [dkimSelector]`, not on any schedule):
+
+**SPF/DKIM/DMARC** - plain DNS TXT lookups (Node's `dns/promises.resolveTxt`;
+acceptable here specifically because this script never runs in the
+Cloudflare Workers request path the rest of this project is built for - see
+the script's own docblock) against the configured sending domain
+(`compliance.vendorclr.com`, matching `FROM_ADDRESS` in
+`src/workflows/emailSender.ts`), reporting pass/fail/missing for each. A
+resolver failure (no network, a sandboxed environment with no outbound DNS)
+is reported as its own failed check rather than crashing the other two -
+worth knowing if this script is ever run somewhere network-restricted.
+
+**The signed-webhook round trip** - the same zero-side-effect technique
+this project has used since migration 19: `POST` to the deployed
+`resend-webhook` function with no (or an invalid) Svix signature and
+confirm it refuses with `401`, never `200` or a connection failure. A
+`401` here is the _passing_ outcome - it proves the function is live and
+that signature verification is actually active, not bypassed:
+
+```bash
+curl -i -X POST https://<project-ref>.supabase.co/functions/v1/resend-webhook \
+  -H "Content-Type: application/json" \
+  -d '{"type":"email.bounced","created_at":"2026-01-01T00:00:00Z","data":{}}'
+```
+
+Run live against this project during Task 7 (no signature headers sent):
+`401 {"error":"Missing signature headers"}`. That response - rather than
+the `401 {"error":"Webhook not configured"}` this README previously
+described as the only state ever observed live - means `RESEND_WEBHOOK_SECRET`
+is now set on the deployed function (it was not as of migration 19; see
+[Known compromises](#known-compromises)). The signature check itself is
+still exercised only at the unit level (`src/tests/svix-signature.test.ts`,
+against Svix's own published test vector) plus this fail-closed-when-headers-
+are-missing round trip - a round trip with a genuinely _valid_ signature
+would additionally require the real `RESEND_WEBHOOK_SECRET` value, which
+this session does not have and does not need in order to confirm the
+endpoint enforces verification rather than skipping it.
+
 ### Certificate holder on file
 
 Every certificate of insurance names a "certificate holder" at the bottom -
@@ -955,7 +1091,19 @@ CHECK, the `assert_company_matches_email_outbox()` integrity trigger firing
 on a mismatched `company_id` regardless of caller/role, and cross-tenant
 RLS isolation on the events table. `svixSignature.ts`'s cryptography is
 covered separately, at the unit level - see
-[Email bounce handling](#email-bounce-handling). The harness stubs a minimal
+[Email bounce handling](#email-bounce-handling); and (migration 22)
+`contacts`/`vendor_contacts` cross-tenant isolation, the
+`assert_company_matches_contact()` trigger firing regardless of caller/role
+(including when `company_id` matches the _contact_ but not the _vendor_, and
+vice versa), the `(vendor_id, contact_id, role)` uniqueness allowing the same
+contact to carry two different roles on one vendor, and -
+`supabase/tests/communications.test.ts`'s highest-value coverage -
+`handle_bounce_suppression()`: a no-op on `sent`/`delivered`/`delivery_delayed`,
+an active, lowercase-normalized `suppressed_recipients` row and a
+high-priority `tasks` row on `bounced`/`complained`, a second bounce
+refreshing the same row rather than duplicating it, a direct manual
+suppression/clear by a company writer, and the widened `audit_log.action`
+CHECK accepting `contact_request_sent`. The harness stubs a minimal
 `storage.objects`/`storage.buckets` schema (PGlite has no `storage` schema of
 its own) — see `supabase/tests/harness.ts`.
 
@@ -1153,25 +1301,41 @@ src/data/db-types.ts` followed by `git diff --exit-code src/data/db-types.ts`.
   automated attempts and are now waiting on a person via
   `reprocessDocument()`.
 - **No admin visibility into email delivery/bounce status.** `email_delivery_events`
-  and the widened `email_outbox.status` are written correctly, but no
-  screen surfaces them - an admin cannot yet see "this renewal request
-  bounced" without querying the database directly.
-- **A bounce/complaint does not trigger any follow-up action.** Nothing
-  reads `email_outbox.status = 'bounced'`/`'complained'` to, say, flag the
-  vendor's contact email as bad, create a task, or stop future automated
-  sends to that address - `resend-webhook` only records what happened.
-- **`RESEND_WEBHOOK_SECRET` is not set as a live Edge Function secret** -
-  the Supabase MCP connector used to build this project has no tool for
-  setting one, only for deploying function code, so this needs the
-  Supabase CLI or dashboard, done outside this session. Confirmed live
-  that the deployed function correctly refuses every call while it's
-  unset (`401 Webhook not configured`) - the fail-safe default works - but
-  the _signed_ path (a real secret, a matching signature) is verified only
-  at the unit level so far (`src/tests/svix-signature.test.ts`, against
-  Svix's own published test vector), not yet as a live round trip through
-  the deployed function. `RESEND_API_KEY` itself is also still unset, so
-  no real email has gone out to bounce yet either - there is no live
-  webhook to receive until both exist.
+  and the widened `email_outbox.status` are written correctly, and Task 7's
+  `contactRepository.ts` now exposes the full history a screen would need
+  (`listCommunicationHistoryForVendor()`), but no screen actually reads it
+  yet - an admin still cannot see "this renewal request bounced" without
+  querying the database directly or waiting for the future
+  `CommunicationHistory.tsx` task.
+- ~~A bounce/complaint does not trigger any follow-up action.~~ **Resolved
+  by Task 7.** `handle_bounce_suppression()` (a trigger on
+  `email_delivery_events`, see [Contacts, suppression and communication
+  recovery](#contacts-suppression-and-communication-recovery)) now writes an
+  active `suppressed_recipients` row and opens a high-priority `tasks` row
+  on every bounce/complaint, and `sendRequest()` skips a suppressed
+  recipient rather than emailing them again. `createUploadRequest()`'s own
+  single-recipient path does **not** check suppression - it was out of
+  scope to modify this task and still sends unconditionally to
+  `vendors.contact_email`; closing that gap needs either migrating
+  `RequestDocumentsAction.tsx` onto `sendRequest()` (the future UI task) or
+  a separate, deliberate change to `createUploadRequest()` itself.
+- **`RESEND_WEBHOOK_SECRET` is now set as a live Edge Function secret** -
+  confirmed during Task 7: the deployed function now refuses an unsigned
+  call with `401 {"error":"Missing signature headers"}` rather than the
+  `401 {"error":"Webhook not configured"}` this README previously described
+  as the only state ever observed live, meaning the secret has been set
+  since migration 19 shipped (see [Deployment
+  verification](#deployment-verification) for the exact round trip run).
+  The _signed_ path (a real secret, a matching signature) is still verified
+  only at the unit level (`src/tests/svix-signature.test.ts`, against
+  Svix's own published test vector) plus this fail-closed-when-unsigned
+  round trip - a live round trip with a genuinely valid signature would
+  additionally need the real secret value, which no session so far has had
+  reason to read out. `RESEND_API_KEY` itself is also still unset, so no
+  real email has gone out to bounce yet either - `suppressed_recipients`
+  and `handle_bounce_suppression()` are schema-proven
+  (`supabase/tests/communications.test.ts`) but not yet exercised by a real
+  bounce end to end.
 - **Certificate-holder mismatch detection is a loose string comparison,
   not a real legal-name match.** `looksLikeMismatch()` (`VendorDetailPage.tsx`,
   `DocumentReviewPage.tsx`) trims and lowercases before comparing - "Halstead
