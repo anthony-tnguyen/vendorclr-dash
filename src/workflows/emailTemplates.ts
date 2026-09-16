@@ -226,3 +226,60 @@ export function adminReviewNeededHtml(input: AdminReviewNeededEmailInput): strin
     </div>
   `;
 }
+
+// ---------------------------------------------------------------------------
+// companyInvitation - sent to a prospective teammate invited to an existing
+// company (src/workflows/companyInvitations.ts, inviteCompanyMember() /
+// resendCompanyInvitation()). Distinct from renewalRequest* above, which
+// targets an external vendor, not a teammate.
+// ---------------------------------------------------------------------------
+
+export interface CompanyInvitationEmailInput {
+  companyName: string;
+  inviterEmail: string;
+  role: string;
+  acceptUrl: string;
+}
+
+function formatRoleLabel(role: string): string {
+  return role.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+export function companyInvitationSubject(input: CompanyInvitationEmailInput): string {
+  return `You've been invited to join ${input.companyName} on VendorClr`;
+}
+
+export function companyInvitationText(input: CompanyInvitationEmailInput): string {
+  return [
+    "Hello,",
+    "",
+    `${input.inviterEmail} has invited you to join ${input.companyName} on VendorClr as a ${formatRoleLabel(input.role)}.`,
+    "",
+    `Accept the invitation: ${input.acceptUrl}`,
+    "",
+    "This link is unique to you and will expire.",
+  ].join("\n");
+}
+
+export function companyInvitationHtml(input: CompanyInvitationEmailInput): string {
+  return `
+    <div style="font-family:Arial,sans-serif;color:#0F172A;max-width:560px;">
+      <p style="font-weight:700;">VendorClr</p>
+      <p>Hello,</p>
+      <p>
+        ${escapeHtml(input.inviterEmail)} has invited you to join
+        ${escapeHtml(input.companyName)} on VendorClr as a
+        ${escapeHtml(formatRoleLabel(input.role))}.
+      </p>
+      <p style="margin-top:24px;">
+        <a href="${escapeHtml(input.acceptUrl)}"
+           style="background:#2563EB;color:#F8FAFC;padding:10px 18px;border-radius:6px;text-decoration:none;font-weight:600;">
+          Accept invitation
+        </a>
+      </p>
+      <p style="color:#475569;font-size:12px;">
+        This link is unique to you and will expire.
+      </p>
+    </div>
+  `;
+}
