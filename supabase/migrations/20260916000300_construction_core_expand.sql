@@ -34,11 +34,13 @@
 -- ---------------------------------------------------------------------------
 
 -- A named, reusable bundle of rules ("GC Standard", "High Risk Trade"). Every
--- company gets exactly one is_company_default = true profile (enforced by the
--- partial unique index below and seeded for every company - existing ones in
--- the backfill migration, new ones by the trigger at the bottom of this file) -
--- resolve_assignment_requirements() below depends on that invariant to always
--- have a profile to fall back to.
+-- company gets exactly one is_company_default = true profile (the "at most
+-- one" half enforced by the deferrable exclusion constraint below, the
+-- "at least one" half by the AFTER STATEMENT trigger further down, and
+-- seeded for every company - existing ones in the backfill migration, new
+-- ones by the trigger at the bottom of this file) - resolve_assignment_
+-- requirements() below depends on that invariant to always have a profile to
+-- fall back to.
 create table public.requirement_profiles (
   id                 uuid primary key default gen_random_uuid(),
   company_id         uuid not null references public.companies (id) on delete cascade,
@@ -51,11 +53,28 @@ create table public.requirement_profiles (
 
 create index requirement_profiles_company_id_idx on public.requirement_profiles (company_id);
 
--- Partial unique index rather than a boolean-keyed unique constraint: only
--- is_company_default = true rows need to be unique per company, and this is
--- also the ON CONFLICT target the seeding trigger/backfill rely on.
-create unique index requirement_profiles_one_default_per_company
-  on public.requirement_profiles (company_id) where is_company_default;
+-- A partial UNIQUE INDEX cannot be made DEFERRABLE in Postgres (only a table
+-- CONSTRAINT can be, and UNIQUE constraints don't support a WHERE clause) -
+-- an EXCLUDE constraint is the one construct that supports both a partial
+-- predicate and DEFERRABLE. That deferrability is load-bearing, not
+-- decorative: without it, swapping which profile is the default (demoting
+-- one row and promoting another) can transiently collide mid-statement
+-- depending on the order Postgres happens to process the touched rows in,
+-- non-deterministically failing an otherwise-correct single UPDATE. DEFERRED
+-- means the "at most one" check runs once, at commit, against the final
+-- state - not per row while the statement is still in flight. (This
+-- constraint only ever bounds the max at one; it says nothing about zero
+-- - see the AFTER STATEMENT trigger below for "at least one".)
+--
+-- Because this can no longer serve as an ON CONFLICT inference target
+-- (Postgres does not support inferring a deferrable constraint for ON
+-- CONFLICT), seed_company_default_requirement_profile() below uses a plain
+-- NOT EXISTS guard instead.
+alter table public.requirement_profiles
+  add constraint requirement_profiles_one_default_per_company
+  exclude using btree (company_id with =)
+  where (is_company_default)
+  deferrable initially deferred;
 
 -- ---------------------------------------------------------------------------
 -- requirement_profile_rules
@@ -351,9 +370,18 @@ security definer
 set search_path = public, pg_temp
 as $fn$
 begin
+  -- NOT EXISTS, not ON CONFLICT: the uniqueness guarantee is now a
+  -- deferrable exclusion constraint (see requirement_profiles above), and
+  -- Postgres cannot infer a deferrable constraint as an ON CONFLICT target.
+  -- A plain guard is sufficient here regardless - this fires once per new
+  -- company row, so there is no realistic concurrent-insert race to protect
+  -- against the way a shared/contended row might need one.
   insert into public.requirement_profiles (company_id, name, is_company_default)
-  values (new.id, 'Company Default', true)
-  on conflict (company_id) where is_company_default do nothing;
+  select new.id, 'Company Default', true
+  where not exists (
+    select 1 from public.requirement_profiles
+    where company_id = new.id and is_company_default
+  );
   return new;
 end;
 $fn$;
@@ -366,57 +394,94 @@ create trigger companies_seed_default_requirement_profile
 -- A company's default profile can never be fully removed
 -- ---------------------------------------------------------------------------
 --
--- The partial unique index above guarantees at most one is_company_default =
--- true row per company, but nothing on its own stops that row being deleted
--- or demoted (is_company_default set to false) - RLS allows both to an
--- owner/risk_manager, same as any other update/delete on this table. Without
--- this trigger that leaves resolve_assignment_requirements() with no profile
--- to fall back to, silently resolving to zero required rules for every
--- assignment that relies on the company default - the worst failure mode a
--- compliance product can have. Same invariant class as "the last active
--- owner cannot be removed" (Task 6's plan).
+-- "Exactly one default per company" is two separate bounds, enforced by two
+-- separate mechanisms:
 --
--- Because the unique index already guarantees is_company_default = true means
--- "the only one for this company", checking OLD.is_company_default alone
--- (not a COUNT) is sufficient to know this is the last one.
-create or replace function public.assert_not_last_default_requirement_profile()
+--   - "At most one": the deferrable exclusion constraint on
+--     requirement_profiles above, checked at commit against the final state
+--     rather than per row mid-statement - that deferral is what lets a
+--     single atomic swap (`update ... set is_company_default = (id = new_id)
+--     where company_id = $1`, touching both the old and new default rows in
+--     one statement) succeed even though it transiently has two (or zero)
+--     defaults while Postgres is still applying individual rows within that
+--     one statement.
+--   - "At least one": the AFTER STATEMENT trigger below. RLS alone allows an
+--     owner/risk_manager to delete or demote the one is_company_default =
+--     true row for their own company with nothing left to replace it -
+--     that's a write entirely within their own tenant, so no cross-tenant
+--     policy stops it either. Without a guard here, that leaves
+--     resolve_assignment_requirements() with no profile to fall back to,
+--     silently resolving to zero required rules for every assignment that
+--     relies on the company default - the worst failure mode a compliance
+--     product can have. Same invariant class as "the last active owner
+--     cannot be removed" (Task 6's plan).
+--
+-- This MUST be a statement-level (FOR EACH STATEMENT with a transition
+-- table), not row-level (FOR EACH ROW), trigger. An earlier version of this
+-- guard was row-level, and that made it structurally impossible to ever swap
+-- which profile is the default at all: a row-level BEFORE trigger evaluates
+-- each row in isolation mid-statement, with no visibility into a sibling row
+-- changing within the very same statement, so even the atomic single-UPDATE
+-- swap above was rejected outright. A statement-level AFTER trigger instead
+-- checks the NET state once the whole statement has applied - by the time it
+-- runs, the company already has its one (new) default again, so the swap is
+-- allowed, while a bare demote/delete with nothing promoted to replace it is
+-- still caught, because the company is left with zero defaults when this
+-- trigger's check runs.
+create or replace function public.assert_company_still_has_default_requirement_profile()
 returns trigger
 language plpgsql
 security definer
 set search_path = public, pg_temp
 as $fn$
+declare
+  affected_company uuid;
 begin
-  if old.is_company_default and (tg_op = 'DELETE' or new.is_company_default = false) then
+  -- Only companies that had their default touched by this statement can
+  -- possibly be broken by it - a statement that renames an unrelated
+  -- non-default profile, or touches a different company's rows, never enters
+  -- this loop at all.
+  for affected_company in
+    select distinct company_id from old_rows where is_company_default
+  loop
     -- A cascading delete of the whole company (companies' own row removed,
     -- cascading via "on delete cascade" through every child table including
     -- this one) tears down every row for that company together - there is no
     -- longer-lived company left for "must always have a default" to protect.
-    -- Only block a standalone removal/demotion that would leave the company
-    -- itself still around with no default. The parent row is already gone
-    -- (visible within this same transaction) by the time a cascaded delete
-    -- reaches here, which is what distinguishes the two cases.
-    if tg_op = 'DELETE' and not exists (
-      select 1 from public.companies where id = old.company_id
+    -- The parent row is already gone (visible within this same transaction)
+    -- by the time a cascaded delete reaches here.
+    continue when not exists (select 1 from public.companies where id = affected_company);
+
+    if not exists (
+      select 1 from public.requirement_profiles
+      where company_id = affected_company and is_company_default
     ) then
-      return old;
+      raise exception
+        'company % must always have exactly one default requirement profile - promote a replacement before removing this one',
+        affected_company using errcode = '23514';
     end if;
+  end loop;
 
-    raise exception
-      'company % must always have exactly one default requirement profile - promote a replacement before removing this one',
-      old.company_id using errcode = '23514';
-  end if;
-
-  if tg_op = 'DELETE' then
-    return old;
-  end if;
-
-  return new;
+  return null; -- ignored for AFTER STATEMENT triggers
 end;
 $fn$;
 
-create trigger requirement_profiles_block_removing_last_default
-  before update or delete on public.requirement_profiles
-  for each row execute function public.assert_not_last_default_requirement_profile();
+-- Postgres does not allow one trigger with a transition table to cover more
+-- than one event (`transition tables cannot be specified for triggers with
+-- more than one event`), so UPDATE and DELETE each get their own trigger
+-- here, both pointed at the same function - the function itself doesn't care
+-- which event fired it, only what old_rows contains.
+create trigger requirement_profiles_require_default_after_update
+  after update on public.requirement_profiles
+  referencing old table as old_rows
+  for each statement
+  execute function public.assert_company_still_has_default_requirement_profile();
+
+create trigger requirement_profiles_require_default_after_delete
+  after delete on public.requirement_profiles
+  referencing old table as old_rows
+  for each statement
+  execute function public.assert_company_still_has_default_requirement_profile();
 
 -- ---------------------------------------------------------------------------
 -- resolve_assignment_requirements(): the effective-requirements precedence
@@ -562,7 +627,7 @@ $fn$;
 revoke execute on function public.assert_company_matches_project() from public, anon, authenticated;
 revoke execute on function public.assert_company_matches_requirement_profile() from public, anon, authenticated;
 revoke execute on function public.seed_company_default_requirement_profile() from public, anon, authenticated;
-revoke execute on function public.assert_not_last_default_requirement_profile() from public, anon, authenticated;
+revoke execute on function public.assert_company_still_has_default_requirement_profile() from public, anon, authenticated;
 revoke execute on function public.resolve_assignment_requirements(uuid) from public, anon, authenticated;
 
 -- resolve_assignment_requirements() is the one function here meant to be

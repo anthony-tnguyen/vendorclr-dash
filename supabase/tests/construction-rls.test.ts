@@ -478,8 +478,16 @@ describe("requirement_profiles: the last company-default profile cannot be remov
   // Without a guard, resolve_assignment_requirements() would then silently
   // resolve to zero required rules for every assignment that falls back to
   // the company default - the worst failure mode a compliance product can
-  // have. requirement_profiles_block_removing_last_default (the expand
+  // have. requirement_profiles_require_default_after_stmt (the expand
   // migration) is what prevents that state from ever existing.
+  //
+  // This is a statement-level (FOR EACH STATEMENT with a transition table),
+  // not row-level, trigger - deliberately, so that an atomic single-statement
+  // swap (promote the new default, demote the old one, in one UPDATE) is
+  // still allowed even though a bare demote-with-nothing-promoted is not. A
+  // row-level BEFORE trigger cannot tell those two apart, because it
+  // evaluates each row in isolation mid-statement with no visibility into a
+  // sibling row changing in the same statement - see the swap test below.
   it("refuses to delete the company default profile", async () => {
     const defaultProfile = await db.query<{ id: string }>(
       `select id from public.requirement_profiles where company_id = $1 and is_company_default`,
@@ -522,5 +530,75 @@ describe("requirement_profiles: the last company-default profile cannot be remov
       [defaultProfile.rows[0]!.id],
     );
     expect(rows[0]?.name).toBe("Renamed Default");
+  });
+
+  it("allows an atomic single-statement swap of the default to a different profile", async () => {
+    const oldDefault = await db.query<{ id: string }>(
+      `select id from public.requirement_profiles where company_id = $1 and is_company_default`,
+      [companyId],
+    );
+    const newDefault = await db.query<{ id: string }>(
+      `insert into public.requirement_profiles (company_id, name) values ($1, 'Swap Target') returning id`,
+      [companyId],
+    );
+
+    // One statement, touching both rows: promotes newDefault and demotes
+    // oldDefault together. Neither row is ever the sole default mid-statement
+    // in a way any BEFORE ROW trigger could observe - only the net result
+    // (still exactly one default) is checked, after the fact.
+    const rows = await asUser<{ id: string; is_company_default: boolean }>(
+      db,
+      OWNER,
+      `update public.requirement_profiles
+       set is_company_default = (id = $2)
+       where company_id = $1 and id in ($3, $2)
+       returning id, is_company_default`,
+      [companyId, newDefault.rows[0]!.id, oldDefault.rows[0]!.id],
+    );
+
+    expect(rows).toEqual(
+      expect.arrayContaining([
+        { id: newDefault.rows[0]!.id, is_company_default: true },
+        { id: oldDefault.rows[0]!.id, is_company_default: false },
+      ]),
+    );
+
+    const check = await db.query<{ n: number }>(
+      `select count(*)::int n from public.requirement_profiles
+       where company_id = $1 and is_company_default`,
+      [companyId],
+    );
+    expect(check.rows[0]?.n).toBe(1);
+
+    // Restore state for any later test in this file that assumes the
+    // original default profile.
+    await db.query(
+      `update public.requirement_profiles set is_company_default = (id = $2)
+       where company_id = $1 and id in ($3, $2)`,
+      [companyId, oldDefault.rows[0]!.id, newDefault.rows[0]!.id],
+    );
+  });
+
+  it("still refuses a bare demote in the same swap shape when nothing is promoted to replace it", async () => {
+    const defaultProfile = await db.query<{ id: string }>(
+      `select id from public.requirement_profiles where company_id = $1 and is_company_default`,
+      [companyId],
+    );
+
+    // Same statement shape as the successful swap above, but the "promote"
+    // side names a row that will never actually become true (a nonexistent
+    // id) - net effect after the statement is zero defaults, which must
+    // still be rejected.
+    const bogus = "00000000-0000-0000-0000-000000000000";
+    await expect(
+      asUser(
+        db,
+        OWNER,
+        `update public.requirement_profiles
+         set is_company_default = (id = $2)
+         where company_id = $1 and id = $3`,
+        [companyId, bogus, defaultProfile.rows[0]!.id],
+      ),
+    ).rejects.toThrow(/must always have exactly one default/);
   });
 });
