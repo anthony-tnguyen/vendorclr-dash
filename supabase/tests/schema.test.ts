@@ -42,6 +42,7 @@ describe("migrations", () => {
       "profiles",
       "signup_invites",
       "tasks",
+      "upload_rate_limit_counters",
       "vendor_compliance_items",
       "vendor_documents",
       "vendor_policies",

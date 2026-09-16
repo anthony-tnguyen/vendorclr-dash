@@ -15,6 +15,17 @@ async function getServiceRoleClient() {
   const mod = await import("@/lib/supabase/serverClient.server");
   return mod.getServiceRoleClient();
 }
+/**
+ * Loaded lazily for the same reason as the two clients above: this module
+ * (uploadAbuse.server.ts) is a *.server file, and a static import here would
+ * put it in the client bundle's import graph.
+ */
+async function getUploadAbuseModule() {
+  return import("./uploadAbuse.server");
+}
+async function getFileValidationModule() {
+  return import("./fileValidation.server");
+}
 import {
   computeComplianceItems,
   hasUnclassifiedPolicy,
@@ -39,7 +50,6 @@ import {
 } from "./emailTemplates";
 import type { ExtractedPolicy } from "./insuranceExtractionSchema";
 import {
-  ALLOWED_UPLOAD_MIME_TYPES,
   buildStoragePath,
   canCancelRequest,
   canOpenRequest,
@@ -47,7 +57,6 @@ import {
   generateUploadToken,
   hashFileBytes,
   hashToken,
-  isAllowedUploadMimeType,
   isExpired,
   MAX_UPLOAD_BYTES,
   newExpiryDate,
@@ -384,9 +393,56 @@ const resolveUploadTokenSchema = z.object({ token: z.string().min(1) });
  *  attacker "expired" vs "not found" vs "already used" narrows their guesses. */
 const INVALID_TOKEN_MESSAGE = "This link is no longer valid. Ask your contact to send a new one.";
 
+/**
+ * The caller's real IP, read from the actual incoming Request inside a
+ * createServerFn handler. getRequest() (from "@tanstack/react-start/server",
+ * the same import path serverClient.server.ts already uses for
+ * getCookies()/setCookie()) returns the raw web-standard Request this
+ * pinned @tanstack/react-start version's AsyncLocalStorage-backed request
+ * context carries - its .headers is an ordinary Headers object, not a
+ * type-narrowed one, so it can be handed straight to extractClientIp()
+ * (uploadAbuse.server.ts) with no cast. Verified empirically, not just
+ * assumed from the framework's types: src/tests/upload-abuse.test.ts drives
+ * this exact function through requestHandler() (also exported from
+ * "@tanstack/react-start/server") with a real Request carrying a
+ * cf-connecting-ip header and asserts the extracted value matches - see
+ * that test for why this was checked rather than trusted.
+ */
+async function currentClientIp(): Promise<string> {
+  const { getRequest } = await import("@tanstack/react-start/server");
+  const { extractClientIp } = await getUploadAbuseModule();
+  return extractClientIp(getRequest().headers);
+}
+
+/**
+ * Records one invalid-token attempt against the caller's IP (the
+ * "5 invalid tokens/IP/10 minutes" limit) and then always throws
+ * INVALID_TOKEN_MESSAGE - unless assertUploadAllowed() itself throws first
+ * (UploadThrottledError/CaptchaRequiredError once that bucket is exceeded /
+ * warned), in which case that error propagates instead. Either way the
+ * caller learns nothing about whether the specific token they tried exists:
+ * INVALID_TOKEN_MESSAGE is identical for "never existed," "expired," and
+ * "wrong status," and the throttle/captcha errors name no token at all -
+ * they fire purely off IP-scoped attempt volume, the same message anyone
+ * from that IP would see regardless of which token (or non-token) they most
+ * recently guessed.
+ */
+async function rejectInvalidToken(ipAddress: string): Promise<never> {
+  const { assertUploadAllowed } = await getUploadAbuseModule();
+  await assertUploadAllowed({ operation: "invalid_token", ipAddress });
+  throw new Error(INVALID_TOKEN_MESSAGE);
+}
+
 export const resolveUploadToken = createServerFn({ method: "GET" })
   .validator(resolveUploadTokenSchema)
   .handler(async ({ data }): Promise<ResolvedUploadRequest> => {
+    const ipAddress = await currentClientIp();
+    const { assertUploadAllowed } = await getUploadAbuseModule();
+    // Governs total resolve attempts per IP regardless of token validity -
+    // checked before the token is even looked up, so it cannot itself leak
+    // anything about whether data.token exists.
+    await assertUploadAllowed({ operation: "resolve", ipAddress });
+
     const supabase = await getServiceRoleClient();
     const tokenHash = await hashToken(data.token);
 
@@ -399,7 +455,7 @@ export const resolveUploadToken = createServerFn({ method: "GET" })
       .eq("token_hash", tokenHash)
       .maybeSingle();
 
-    if (!request) throw new Error(INVALID_TOKEN_MESSAGE);
+    if (!request) await rejectInvalidToken(ipAddress);
 
     const row = request as unknown as {
       id: string;
@@ -419,9 +475,16 @@ export const resolveUploadToken = createServerFn({ method: "GET" })
     };
 
     if (isExpired(row.expires_at) || !canOpenRequest(row.status)) {
+      await rejectInvalidToken(ipAddress);
+    }
+    if (!row.vendors) {
+      // rejectInvalidToken() always throws - the explicit throw right after
+      // is never actually reached, but it's what lets TypeScript narrow
+      // row.vendors to non-null below (it can't infer "never returns"
+      // through an awaited Promise<never> the way it can a direct throw).
+      await rejectInvalidToken(ipAddress);
       throw new Error(INVALID_TOKEN_MESSAGE);
     }
-    if (!row.vendors) throw new Error(INVALID_TOKEN_MESSAGE);
 
     if (row.status === "pending" || row.status === "email_sent") {
       await supabase
@@ -454,169 +517,255 @@ export interface UploadDocumentResult {
   documentId: string;
 }
 
+/** Vendor-facing copy for a password-protected PDF - distinguishable to operations via FileValidationError's own "password_protected_pdf" code (logged, not shown), but this text itself is plain instruction, not internal jargon - the same "the vendor needs to know how to fix their own file" reasoning that already applies to every other file-validation message here. Unlike INVALID_TOKEN_MESSAGE, there is nothing to hide by being specific: this reveals nothing about the token or the abuse-tracking layer, only a fact about the file the vendor themselves just chose. */
+const PASSWORD_PROTECTED_PDF_MESSAGE =
+  "This PDF is password-protected. Remove the password and re-upload it.";
+
+/** Shared by both file-validation rejection sites below (a thrown FileValidationError, and the separate encryptedPdf branch) so the log shape can't drift between them - the only thing that differs between the two call sites is which errorCode applies. */
+async function logFileValidationFailure(errorCode: string): Promise<void> {
+  const { logOperational, newRequestId } = await import("@/lib/observability/logger.server");
+  logOperational(
+    {
+      level: "warn",
+      event: "upload_file_validation_failed",
+      requestId: newRequestId(),
+      outcome: "failure",
+      errorCode,
+    },
+    { operation: "upload" },
+  );
+}
+
+/**
+ * The actual logic, as a plain function taking ipAddress explicitly rather
+ * than calling currentClientIp() itself - separated from the createServerFn
+ * wrapper below so it's directly callable from a test with no
+ * TanStack-Start request/router context at all. createServerFn's own
+ * dispatch needs a "Start context" (@tanstack/start-storage-context) that
+ * requestHandler()/getRequest() alone do NOT establish - confirmed
+ * empirically while writing this function's own regression test
+ * (src/tests/upload-abuse.test.ts): calling the createServerFn-wrapped
+ * export from inside a bare requestHandler() context threw "No Start
+ * context found in AsyncLocalStorage," a different, larger piece of
+ * machinery than the h3Event context getRequest() needs. The same split
+ * api.health.ready.ts already uses for exactly this reason - see
+ * buildReadyHealthPayload() there.
+ */
+export async function uploadDocumentForTokenHandler(
+  formData: FormData,
+  ipAddress: string,
+): Promise<UploadDocumentResult> {
+  const token = formData.get("token");
+  const file = formData.get("file");
+
+  if (typeof token !== "string" || !token) await rejectInvalidToken(ipAddress);
+
+  const supabase = await getServiceRoleClient();
+  const tokenHash = await hashToken(token as string);
+
+  const { data: request } = await supabase
+    .from("vendor_upload_requests")
+    .select("id, status, expires_at, vendor_id, company_id, vendors ( name )")
+    .eq("token_hash", tokenHash)
+    .maybeSingle();
+
+  if (!request) await rejectInvalidToken(ipAddress);
+
+  const row = request as unknown as {
+    id: string;
+    status: string;
+    expires_at: string;
+    vendor_id: string;
+    company_id: string;
+    vendors: { name: string } | null;
+  };
+
+  if (isExpired(row.expires_at) || !canUploadToRequest(row.status)) {
+    await rejectInvalidToken(ipAddress);
+  }
+
+  // Consumed unconditionally, before the file is inspected at all - and
+  // deliberately the ONLY assertUploadAllowed({operation: "upload", ...})
+  // call in this handler, checking IP (10/15min), this specific token
+  // (5/15min) and the company-wide daily budget (250/day) together in one
+  // shot. Everything these three limits need (ipAddress, tokenHash,
+  // row.company_id) is already known by this point, and none of them need
+  // the file itself - so there is no reason to wait for the file-shape/
+  // size checks below to pass first. That used to be the order (file
+  // checks ran before this call), which meant a caller who always sent a
+  // missing or oversized file could hammer this endpoint forever without
+  // ever touching the upload:ip bucket - a real bypass, not a hypothetical
+  // one; fixed by moving the checks, not by adding a second call (a second
+  // "upload" call here would double-count the IP/token/company buckets
+  // against a single real request). A garbage/expired/wrong-status token
+  // never reaches this call at all - it is instead governed by the
+  // tighter invalid-token bucket via rejectInvalidToken() above.
+  const { assertUploadAllowed } = await getUploadAbuseModule();
+  await assertUploadAllowed({
+    operation: "upload",
+    ipAddress,
+    tokenHash,
+    companyId: row.company_id,
+  });
+
+  if (!(file instanceof File)) throw new Error("No file was attached.");
+  if (file.size <= 0 || file.size > MAX_UPLOAD_BYTES) {
+    throw new Error(`File must be under ${Math.floor(MAX_UPLOAD_BYTES / (1024 * 1024))}MB.`);
+  }
+
+  const { validateUploadedFile, FileValidationError } = await getFileValidationModule();
+  let validated: Awaited<ReturnType<typeof validateUploadedFile>>;
+  try {
+    validated = await validateUploadedFile(file);
+  } catch (error) {
+    // Logged with the validator's own error code (mime_mismatch/
+    // unsupported_type/empty_file) so operations can see what kind of bad
+    // file is arriving without needing to parse free-text messages - see
+    // this task's own checklist ("Log throttles and validation failures").
+    await logFileValidationFailure(
+      error instanceof FileValidationError ? error.code : "unknown_validation_error",
+    );
+    throw error instanceof FileValidationError
+      ? new Error(error.message)
+      : new Error("Could not read the uploaded file. Try again.");
+  }
+
+  if (validated.encryptedPdf) {
+    await logFileValidationFailure("password_protected_pdf");
+    throw new Error(PASSWORD_PROTECTED_PDF_MESSAGE);
+  }
+
+  const { bytes, detectedMime } = validated;
+  const sha256 = await hashFileBytes(bytes);
+
+  // The one integration in this project that blocks rather than degrades
+  // gracefully: every other provider (email, extraction) still lets the
+  // request through when unconfigured or failing, because nothing else
+  // in this app is unsafe to proceed without. A confirmed-malicious file
+  // is different - refused before anything is written, not stored and
+  // flagged for later. not_configured/unknown/error all still proceed;
+  // only a positive "malicious" result stops the upload.
+  const scanResult = await getMalwareScanner().scan(sha256);
+  if (scanResult.status === "malicious") {
+    throw new Error(
+      "This file was flagged by a malware scan and could not be uploaded. Contact support if you believe this is an error.",
+    );
+  }
+
+  // documentId is generated before the object is written so the storage path
+  // and the vendor_documents row it will be inserted under always agree -
+  // never derived from the client-supplied file name. mimeType is the
+  // BYTE-DETECTED type (validateUploadedFile()'s detectedMime), not the
+  // browser-supplied file.type - by this point they either agree or
+  // file.type was empty, per validateUploadedFile()'s own mismatch check.
+  const documentId = crypto.randomUUID();
+  const storagePath = buildStoragePath({
+    companyId: row.company_id,
+    vendorId: row.vendor_id,
+    documentId,
+    mimeType: detectedMime,
+  });
+
+  // Checked before inserting, scoped per vendor rather than globally - the
+  // same COI legitimately gets re-uploaded for different vendors (a
+  // broker's template). If an earlier upload for this vendor already has a
+  // successful extraction, that result is copied instead of paying for a
+  // second identical extraction call.
+  const { data: existingDuplicate } = await supabase
+    .from("vendor_documents")
+    .select("id, processing_status, parsed_data, extraction_confidence")
+    .eq("vendor_id", row.vendor_id)
+    .eq("sha256", sha256)
+    .order("created_at", { ascending: true })
+    .limit(1)
+    .maybeSingle();
+
+  const { error: uploadError } = await supabase.storage
+    .from("vendor-documents")
+    .upload(storagePath, bytes, { contentType: detectedMime, upsert: false });
+
+  if (uploadError) throw new Error("Could not store the file. Try again.");
+
+  // Shared with the applyExtractionResult() call below, so the admin
+  // notification email names exactly the file this row records - not a
+  // second, independently-computed fallback that could drift from it.
+  const fileName = file.name || `certificate.${detectedMime.split("/")[1] ?? "pdf"}`;
+
+  const { error: docError } = await supabase.from("vendor_documents").insert({
+    id: documentId,
+    company_id: row.company_id,
+    vendor_id: row.vendor_id,
+    upload_request_id: row.id,
+    storage_path: storagePath,
+    file_name: fileName,
+    mime_type: detectedMime,
+    file_size: file.size,
+    sha256,
+    source: "vendor_portal",
+    duplicate_of_document_id: existingDuplicate?.id ?? null,
+    malware_scan_status: scanResult.status,
+    malware_scan_detail: scanResult.detail,
+    scanned_at: new Date().toISOString(),
+  });
+
+  if (docError) throw new Error("Could not record the upload. Try again.");
+
+  await supabase
+    .from("vendor_upload_requests")
+    .update({ status: "uploaded", uploaded_at: new Date().toISOString() })
+    .eq("id", row.id);
+
+  // Gives staff visibility through the admin Compliance Queue page, which
+  // already reads compliance_queue_items - Phase 1 wires the upload into
+  // that existing screen rather than building a new one. document_id links
+  // this row back to the exact document it was created for (migration 12) -
+  // reprocessDocument() and the review screen both rely on this being exact,
+  // not an approximation.
+  const { data: queueItem } = await supabase
+    .from("compliance_queue_items")
+    .insert({
+      company_id: row.company_id,
+      vendor_id: row.vendor_id,
+      document_id: documentId,
+      document_label: file.name || "Uploaded certificate",
+      state: "queued",
+    })
+    .select("id")
+    .single();
+
+  // Duplicate of an already-successfully-processed document: reuse its
+  // result rather than re-running extraction. Any other outcome (no
+  // duplicate, or the duplicate itself never finished processing) runs a
+  // fresh extraction below.
+  const reusableDuplicate =
+    existingDuplicate?.processing_status === "processed" ? existingDuplicate : null;
+
+  const extraction = reusableDuplicate
+    ? ({
+        status: "processed",
+        data: reusableDuplicate.parsed_data,
+        confidence: reusableDuplicate.extraction_confidence,
+        error: null,
+      } as ExtractDocumentResult)
+    : await runExtractionSafely({ fileBytes: bytes, mimeType: detectedMime });
+
+  await applyExtractionResult(supabase, {
+    documentId,
+    companyId: row.company_id,
+    vendorId: row.vendor_id,
+    documentFileName: fileName,
+    queueItemId: queueItem?.id ?? null,
+    extraction,
+  });
+
+  return { documentId };
+}
+
 export const uploadDocumentForToken = createServerFn({ method: "POST" })
   .validator((formData: FormData) => formData)
   .handler(async ({ data: formData }): Promise<UploadDocumentResult> => {
-    const token = formData.get("token");
-    const file = formData.get("file");
-
-    if (typeof token !== "string" || !token) throw new Error(INVALID_TOKEN_MESSAGE);
-    if (!(file instanceof File)) throw new Error("No file was attached.");
-
-    if (!isAllowedUploadMimeType(file.type)) {
-      throw new Error(
-        `Unsupported file type. Upload a PDF, JPG or PNG. Allowed: ${ALLOWED_UPLOAD_MIME_TYPES.join(", ")}.`,
-      );
-    }
-    if (file.size <= 0 || file.size > MAX_UPLOAD_BYTES) {
-      throw new Error(`File must be under ${Math.floor(MAX_UPLOAD_BYTES / (1024 * 1024))}MB.`);
-    }
-
-    const supabase = await getServiceRoleClient();
-    const tokenHash = await hashToken(token);
-
-    const { data: request } = await supabase
-      .from("vendor_upload_requests")
-      .select("id, status, expires_at, vendor_id, company_id, vendors ( name )")
-      .eq("token_hash", tokenHash)
-      .maybeSingle();
-
-    if (!request) throw new Error(INVALID_TOKEN_MESSAGE);
-
-    const row = request as unknown as {
-      id: string;
-      status: string;
-      expires_at: string;
-      vendor_id: string;
-      company_id: string;
-      vendors: { name: string } | null;
-    };
-
-    if (isExpired(row.expires_at) || !canUploadToRequest(row.status)) {
-      throw new Error(INVALID_TOKEN_MESSAGE);
-    }
-
-    const bytes = await file.arrayBuffer();
-    const sha256 = await hashFileBytes(bytes);
-
-    // The one integration in this project that blocks rather than degrades
-    // gracefully: every other provider (email, extraction) still lets the
-    // request through when unconfigured or failing, because nothing else
-    // in this app is unsafe to proceed without. A confirmed-malicious file
-    // is different - refused before anything is written, not stored and
-    // flagged for later. not_configured/unknown/error all still proceed;
-    // only a positive "malicious" result stops the upload.
-    const scanResult = await getMalwareScanner().scan(sha256);
-    if (scanResult.status === "malicious") {
-      throw new Error(
-        "This file was flagged by a malware scan and could not be uploaded. Contact support if you believe this is an error.",
-      );
-    }
-
-    // documentId is generated before the object is written so the storage path
-    // and the vendor_documents row it will be inserted under always agree -
-    // never derived from the client-supplied file name.
-    const documentId = crypto.randomUUID();
-    const storagePath = buildStoragePath({
-      companyId: row.company_id,
-      vendorId: row.vendor_id,
-      documentId,
-      mimeType: file.type,
-    });
-
-    // Checked before inserting, scoped per vendor rather than globally - the
-    // same COI legitimately gets re-uploaded for different vendors (a
-    // broker's template). If an earlier upload for this vendor already has a
-    // successful extraction, that result is copied instead of paying for a
-    // second identical extraction call.
-    const { data: existingDuplicate } = await supabase
-      .from("vendor_documents")
-      .select("id, processing_status, parsed_data, extraction_confidence")
-      .eq("vendor_id", row.vendor_id)
-      .eq("sha256", sha256)
-      .order("created_at", { ascending: true })
-      .limit(1)
-      .maybeSingle();
-
-    const { error: uploadError } = await supabase.storage
-      .from("vendor-documents")
-      .upload(storagePath, bytes, { contentType: file.type, upsert: false });
-
-    if (uploadError) throw new Error("Could not store the file. Try again.");
-
-    // Shared with the applyExtractionResult() call below, so the admin
-    // notification email names exactly the file this row records - not a
-    // second, independently-computed fallback that could drift from it.
-    const fileName = file.name || `certificate.${file.type.split("/")[1] ?? "pdf"}`;
-
-    const { error: docError } = await supabase.from("vendor_documents").insert({
-      id: documentId,
-      company_id: row.company_id,
-      vendor_id: row.vendor_id,
-      upload_request_id: row.id,
-      storage_path: storagePath,
-      file_name: fileName,
-      mime_type: file.type,
-      file_size: file.size,
-      sha256,
-      source: "vendor_portal",
-      duplicate_of_document_id: existingDuplicate?.id ?? null,
-      malware_scan_status: scanResult.status,
-      malware_scan_detail: scanResult.detail,
-      scanned_at: new Date().toISOString(),
-    });
-
-    if (docError) throw new Error("Could not record the upload. Try again.");
-
-    await supabase
-      .from("vendor_upload_requests")
-      .update({ status: "uploaded", uploaded_at: new Date().toISOString() })
-      .eq("id", row.id);
-
-    // Gives staff visibility through the admin Compliance Queue page, which
-    // already reads compliance_queue_items - Phase 1 wires the upload into
-    // that existing screen rather than building a new one. document_id links
-    // this row back to the exact document it was created for (migration 12) -
-    // reprocessDocument() and the review screen both rely on this being exact,
-    // not an approximation.
-    const { data: queueItem } = await supabase
-      .from("compliance_queue_items")
-      .insert({
-        company_id: row.company_id,
-        vendor_id: row.vendor_id,
-        document_id: documentId,
-        document_label: file.name || "Uploaded certificate",
-        state: "queued",
-      })
-      .select("id")
-      .single();
-
-    // Duplicate of an already-successfully-processed document: reuse its
-    // result rather than re-running extraction. Any other outcome (no
-    // duplicate, or the duplicate itself never finished processing) runs a
-    // fresh extraction below.
-    const reusableDuplicate =
-      existingDuplicate?.processing_status === "processed" ? existingDuplicate : null;
-
-    const extraction = reusableDuplicate
-      ? ({
-          status: "processed",
-          data: reusableDuplicate.parsed_data,
-          confidence: reusableDuplicate.extraction_confidence,
-          error: null,
-        } as ExtractDocumentResult)
-      : await runExtractionSafely({ fileBytes: bytes, mimeType: file.type });
-
-    await applyExtractionResult(supabase, {
-      documentId,
-      companyId: row.company_id,
-      vendorId: row.vendor_id,
-      documentFileName: fileName,
-      queueItemId: queueItem?.id ?? null,
-      extraction,
-    });
-
-    return { documentId };
+    const ipAddress = await currentClientIp();
+    return uploadDocumentForTokenHandler(formData, ipAddress);
   });
 
 /**
