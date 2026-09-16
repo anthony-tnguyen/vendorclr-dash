@@ -188,6 +188,35 @@ export function evaluateExhaustedRetryAlert(params: { exhaustedCount: number }):
   };
 }
 
+/**
+ * 4b. Task 8b - any document_processing_jobs row that ran out of attempts
+ * (status = 'exhausted'). A DIFFERENT signal from evaluateExhaustedRetryAlert()
+ * above, not a duplicate of it: that one reads vendor_documents.retry_count,
+ * the OLD Phase 4 automated-retry mechanism (documents_due_for_retry ->
+ * retry-failed-documents, hours-scale backoff, only ever re-processes a
+ * document that already failed once and is already in review). This one
+ * reads the NEW document_processing_jobs queue Task 8a/8b built
+ * (seconds-to-minutes backoff, first-time extraction for a freshly-submitted
+ * document - see process-document-jobs/index.ts's own docblock). The two
+ * queues are independent and can each exhaust independently for the same or
+ * different documents, so they get independent alert keys/counts rather
+ * than being folded together - collapsing them would hide which pipeline
+ * actually needs attention.
+ */
+export function evaluateExhaustedProcessingJobsAlert(params: {
+  exhaustedCount: number;
+}): AlertState {
+  const firing = params.exhaustedCount > 0;
+  return {
+    key: "exhausted_processing_jobs",
+    firing,
+    severity: "warning",
+    message: firing
+      ? `${params.exhaustedCount} document processing job(s) exhausted all their attempts and need a human look.`
+      : "No document processing jobs have exhausted their attempt budget.",
+  };
+}
+
 /** 5. Bounce/complaint rate over the 24-hour window - firing above 5%. Zero sends in the window never fires. */
 export function evaluateBounceRateAlert(params: {
   totalSent: number;
@@ -307,12 +336,25 @@ export interface ScheduledJobHealth {
   alert: AlertState;
 }
 
+/** Task 8b - a document_processing_jobs row that reached 'exhausted' (see evaluateExhaustedProcessingJobsAlert()'s docblock for why this is a separate signal from FailedExtractionJob above). */
+export interface ExhaustedProcessingJob {
+  jobId: string;
+  companyId: string;
+  vendorId: string;
+  documentId: string;
+  attemptCount: number;
+  maxAttempts: number;
+  lastError: string | null;
+  exhaustedAt: string | null;
+}
+
 export interface OperationalFailuresSummary {
   generatedAt: string;
   failedExtractionJobs: FailedExtractionJob[];
   staleReviewItems: StaleReviewItem[];
   bouncedEmail: BouncedEmailEvent[];
   malwareFlagged: MalwareFlaggedDocument[];
+  exhaustedProcessingJobs: ExhaustedProcessingJob[];
   scheduledJobs: ScheduledJobHealth[];
   oldestQueueAgeHours: number | null;
   storage: { usedBytes: number; capacityBytes: number };
@@ -365,6 +407,7 @@ export const getOperationalFailures = createServerFn({ method: "GET" }).handler(
           cronRunsResult,
           oldestQueueResult,
           dbSizeResult,
+          exhaustedProcessingJobsResult,
         ] = await Promise.all([
           supabase
             .from("vendor_documents")
@@ -423,6 +466,18 @@ export const getOperationalFailures = createServerFn({ method: "GET" }).handler(
           // pg_database_size() lives in pg_catalog, same reasoning -
           // get_database_size_bytes() is the public-schema wrapper.
           supabase.rpc("get_database_size_bytes"),
+          // Task 8b - document_processing_jobs rows that ran out of
+          // attempts. Its own SELECT RLS policy already carries the same
+          // `company_id in current_company_ids() or is_platform_admin()`
+          // shape as every other table here (20260917000400), so the
+          // service-role read below returns every company's exhausted rows
+          // uniformly, matching this function's existing pattern.
+          supabase
+            .from("document_processing_jobs")
+            .select(
+              "id, company_id, vendor_id, target_document_id, attempt_count, max_attempts, last_error, exhausted_at",
+            )
+            .eq("status", "exhausted"),
         ]);
 
         const cronJobs = groupCronRunsByJob((cronRunsResult.data ?? []) as CronJobRunRow[]);
@@ -495,6 +550,19 @@ export const getOperationalFailures = createServerFn({ method: "GET" }).handler(
 
         const exhaustedCount = failedExtractionJobs.filter((d) => d.exhausted).length;
 
+        const exhaustedProcessingJobs: ExhaustedProcessingJob[] = (
+          exhaustedProcessingJobsResult.data ?? []
+        ).map((row) => ({
+          jobId: row.id as string,
+          companyId: row.company_id as string,
+          vendorId: row.vendor_id as string,
+          documentId: row.target_document_id as string,
+          attemptCount: row.attempt_count as number,
+          maxAttempts: row.max_attempts as number,
+          lastError: row.last_error as string | null,
+          exhaustedAt: row.exhausted_at as string | null,
+        }));
+
         const scheduledJobs: ScheduledJobHealth[] = cronJobs.map((job) => ({
           jobName: job.jobName,
           recentRuns: job.recentRuns.map((r) => ({
@@ -515,6 +583,9 @@ export const getOperationalFailures = createServerFn({ method: "GET" }).handler(
           ...scheduledJobs.map((j) => j.alert),
           evaluateExtractionFailureRateAlert({ totalProcessed, totalFailed }),
           evaluateExhaustedRetryAlert({ exhaustedCount }),
+          evaluateExhaustedProcessingJobsAlert({
+            exhaustedCount: exhaustedProcessingJobs.length,
+          }),
           evaluateBounceRateAlert({ totalSent, totalBounced }),
           evaluateStorageCapacityAlert({
             usedBytes,
@@ -539,6 +610,7 @@ export const getOperationalFailures = createServerFn({ method: "GET" }).handler(
           staleReviewItems,
           bouncedEmail,
           malwareFlagged,
+          exhaustedProcessingJobs,
           scheduledJobs,
           oldestQueueAgeHours,
           storage: { usedBytes, capacityBytes: STORAGE_CAPACITY_PLACEHOLDER_BYTES },

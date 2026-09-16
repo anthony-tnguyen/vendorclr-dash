@@ -190,7 +190,7 @@ export type PackageDocumentRow = Omit<Row<"package_documents">, "document_kind">
 /** document_processing_jobs.job_type - Task 8a. Only one value exists today; widen when a second job type is needed. */
 export type DocumentProcessingJobType = "extract_document";
 
-/** document_processing_jobs.status - Task 8a. 'exhausted' is a valid value now even though the retry/backoff logic that produces it is Task 8b's - see that migration's own docblock. */
+/** document_processing_jobs.status - Task 8a defined the CHECK constraint including 'exhausted'; Task 8b (20260917000600_document_processing_job_worker.sql) added attempt_count/max_attempts/next_attempt_at/claimed_at/claimed_by/last_error/exhausted_at and the worker that actually drives a row through these states. */
 export type DocumentProcessingJobStatus =
   "queued" | "processing" | "succeeded" | "failed" | "exhausted";
 
