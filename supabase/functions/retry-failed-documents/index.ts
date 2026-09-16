@@ -164,7 +164,7 @@ Deno.serve(async (req: Request) => {
       // vendor_documents.parsed_data/extraction_confidence/
       // current_extraction_id in one call - see that function's migration
       // docblock (20260917000900_versioned_extractions.sql).
-      await supabase.rpc("record_document_extraction", {
+      const { error: recordExtractionError } = await supabase.rpc("record_document_extraction", {
         p_document_id: row.document_id,
         p_company_id: row.company_id,
         p_source: "model",
@@ -175,6 +175,21 @@ Deno.serve(async (req: Request) => {
         p_parsed_data: extraction.data,
         p_error: null,
       });
+
+      if (recordExtractionError) {
+        // Same treatment as a download/extraction failure above: this
+        // attempt did not produce a usable, recorded result, so it must
+        // not be silently treated as recovered - schedule a backoff retry
+        // instead of falling through to mark the document needs_review
+        // with no extraction data actually behind it.
+        await recordFailedAttempt(
+          supabase,
+          row,
+          `Could not record the extraction result: ${recordExtractionError.message}`,
+        );
+        failed++;
+        continue;
+      }
 
       // Always needs_review, never processed - see this function's docblock.
       await supabase

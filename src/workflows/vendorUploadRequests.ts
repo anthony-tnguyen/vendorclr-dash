@@ -1370,12 +1370,12 @@ async function applyExtractionResult(
   // document_extractions row for this attempt AND refreshes
   // vendor_documents.parsed_data/extraction_confidence/current_extraction_id
   // in one call - see that function's migration docblock
-  // (20260916000900_versioned_extractions.sql) for why this replaced a
+  // (20260917000900_versioned_extractions.sql) for why this replaced a
   // direct .update() of those two columns. Recorded even for a
   // not_configured/failed attempt (data/confidence both null) - "the model
   // path was tried and this is what happened" is itself worth keeping in
   // the history, same as any other attempt.
-  await supabase.rpc("record_document_extraction", {
+  const { error: recordExtractionError } = await supabase.rpc("record_document_extraction", {
     p_document_id: documentId,
     p_company_id: companyId,
     p_source: "model",
@@ -1387,16 +1387,44 @@ async function applyExtractionResult(
     p_error: extraction.error,
   });
 
-  await supabase
-    .from("vendor_documents")
-    .update({
-      processing_status: finalStatus,
-      processing_error: extraction.error,
-      review_reason: reviewReason,
-      applied_policy_id: appliedPolicyId,
-      processed_at: new Date().toISOString(),
-    })
-    .eq("id", documentId);
+  // If the immutable attempt row/cache refresh above failed to write, the
+  // document must NOT be marked processed/needs_review anyway - that would
+  // leave a queue item that looks fully handled with no extraction data
+  // backing it (vendor_documents.current_extraction_id still pointing at
+  // whatever it pointed at before, or nothing at all). Downgrade to
+  // 'failed' and surface the real cause rather than silently proceeding.
+  const documentUpdate = recordExtractionError
+    ? {
+        processing_status: "failed" as const,
+        processing_error: `Could not record the extraction result: ${recordExtractionError.message}`,
+        review_reason: null,
+        applied_policy_id: null,
+        processed_at: new Date().toISOString(),
+      }
+    : {
+        processing_status: finalStatus,
+        processing_error: extraction.error,
+        review_reason: reviewReason,
+        applied_policy_id: appliedPolicyId,
+        processed_at: new Date().toISOString(),
+      };
+
+  if (recordExtractionError) {
+    const { logOperational, newRequestId } = await import("@/lib/observability/logger.server");
+    logOperational({
+      level: "error",
+      event: "record_document_extraction_failed",
+      requestId: newRequestId(),
+      companyId,
+      route: "uploadDocumentForToken",
+      outcome: "failure",
+      errorCode: "record_document_extraction_rpc_error",
+    });
+  }
+
+  await supabase.from("vendor_documents").update(documentUpdate).eq("id", documentId);
+
+  finalStatus = documentUpdate.processing_status;
 
   if (queueItemId && (finalStatus === "needs_review" || finalStatus === "failed")) {
     await supabase

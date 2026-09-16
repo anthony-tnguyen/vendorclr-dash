@@ -557,7 +557,7 @@ async function finalizeSuccess(
   // direct .update() of those two columns, and why this Edge Function calls
   // the same RPC the Node app does rather than duplicating the
   // insert-plus-cache-refresh logic here.
-  await supabase.rpc("record_document_extraction", {
+  const { error: recordExtractionError } = await supabase.rpc("record_document_extraction", {
     p_document_id: job.target_document_id,
     p_company_id: job.company_id,
     p_source: "model",
@@ -569,11 +569,32 @@ async function finalizeSuccess(
     p_error: extraction.error,
   });
 
+  // If the immutable attempt row/cache refresh above failed to write, do
+  // not mark the document processed/needs_review anyway - that would leave
+  // a queue item that looks fully handled with no extraction data backing
+  // it. Downgrade to 'failed' and surface the real cause instead.
+  if (recordExtractionError) {
+    finalStatus = "failed";
+    reviewReason = null;
+    appliedPolicyId = null;
+    logOperational({
+      level: "error",
+      event: "record_document_extraction_failed",
+      requestId: newRequestId(),
+      companyId: job.company_id,
+      route: "process-document-jobs",
+      outcome: "failure",
+      errorCode: "record_document_extraction_rpc_error",
+    });
+  }
+
   await supabase
     .from("vendor_documents")
     .update({
       processing_status: finalStatus,
-      processing_error: extraction.error,
+      processing_error: recordExtractionError
+        ? `Could not record the extraction result: ${recordExtractionError.message}`
+        : extraction.error,
       review_reason: reviewReason,
       applied_policy_id: appliedPolicyId,
       processed_at: new Date().toISOString(),
