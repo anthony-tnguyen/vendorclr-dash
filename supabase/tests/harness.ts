@@ -122,6 +122,13 @@ const DEFAULT_GRANTS = `
 export const SKIPPED_IN_PGLITE: readonly string[] = [
   "20260902000600_schedule_renewal_reminders.sql",
   "20260903000400_schedule_automated_retries.sql",
+  // Grants on the `cron` schema/tables, which PGlite never creates (see that
+  // migration's own docblock) - same reason as the two above.
+  "20260917000100_operations_cron_grants.sql",
+  // References the `cron` schema (get_scheduled_job_run_history()) and is
+  // only meaningful against the real project (get_database_size_bytes()) -
+  // same reasoning.
+  "20260917000200_operations_scheduled_job_functions.sql",
 ];
 
 export function migrationFiles(): string[] {

@@ -7,6 +7,7 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 
 import { verifySvixSignature } from "./svixSignature.ts";
+import { logOperational, newRequestId } from "./operationalLog.ts";
 
 /**
  * Public HTTP endpoint Resend calls directly on an email's delivery
@@ -60,9 +61,18 @@ const EVENT_TYPE_MAP: Record<string, string> = {
 const STATUS_OVERRIDING_EVENTS = new Set(["delivered", "bounced", "complained"]);
 
 Deno.serve(async (req: Request) => {
+  const requestId = newRequestId();
+  const route = "resend-webhook";
+
   const secret = Deno.env.get("RESEND_WEBHOOK_SECRET")?.trim();
   if (!secret) {
-    console.warn("[resend-webhook] RESEND_WEBHOOK_SECRET is not set - refusing this call.");
+    logOperational({
+      level: "warn",
+      event: "webhook_not_configured",
+      requestId,
+      route,
+      outcome: "failure",
+    });
     return new Response(JSON.stringify({ error: "Webhook not configured" }), { status: 401 });
   }
 
@@ -83,6 +93,13 @@ Deno.serve(async (req: Request) => {
     svixSignature,
   });
   if (!verified) {
+    logOperational({
+      level: "warn",
+      event: "webhook_signature_invalid",
+      requestId,
+      route,
+      outcome: "failure",
+    });
     return new Response(JSON.stringify({ error: "Invalid signature" }), { status: 401 });
   }
 
@@ -133,6 +150,20 @@ Deno.serve(async (req: Request) => {
   if (STATUS_OVERRIDING_EVENTS.has(eventType)) {
     await supabase.from("email_outbox").update({ status: eventType }).eq("id", outboxRow.id);
   }
+
+  // Deliberately does not log event.data - it can carry the recipient's
+  // email address, which is exactly what this project's redaction rules
+  // (see operationalLog.ts) exist to keep out of logs in the first place;
+  // the event_type/company_id pair is everything the bounce-rate alert
+  // (evaluateBounceRateAlert(), src/workflows/operations.ts) needs.
+  logOperational({
+    level: eventType === "bounced" || eventType === "complained" ? "warn" : "info",
+    event: "email_delivery_event_recorded",
+    requestId,
+    companyId: outboxRow.company_id,
+    route,
+    outcome: "success",
+  });
 
   return new Response(JSON.stringify({ ok: true }), {
     headers: { "Content-Type": "application/json" },

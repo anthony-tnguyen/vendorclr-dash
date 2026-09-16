@@ -12,6 +12,7 @@ import { useEffect, type ReactNode } from "react";
 import appCss from "../styles.css?url";
 import { App } from "../app/App";
 import { reportLovableError } from "../lib/lovable-error-reporting";
+import { captureClientError } from "../lib/observability/sentryClient";
 
 function NotFoundComponent() {
   return (
@@ -39,7 +40,12 @@ function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
   console.error(error);
   const router = useRouter();
   useEffect(() => {
+    // Lovable-editor-preview-only telemetry, unrelated to Sentry - kept
+    // exactly as it was.
     reportLovableError(error, { boundary: "tanstack_root_error_component" });
+    // Real error tracking, alongside it - no-ops when VITE_SENTRY_DSN is
+    // unset (see sentryClient.ts). Never touches what the user sees below.
+    captureClientError(error, { boundary: "tanstack_root_error_component" });
   }, [error]);
 
   return (

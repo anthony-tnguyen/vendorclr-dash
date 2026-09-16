@@ -12,6 +12,7 @@ import {
   renewalReminderText,
 } from "./emailTemplates.ts";
 import { generateUploadToken, hashToken, newExpiryDate } from "./uploadTokens.ts";
+import { logOperational, newRequestId } from "./operationalLog.ts";
 
 /**
  * Triggered daily by pg_cron -> pg_net (see
@@ -104,7 +105,17 @@ function daysUntil(expirationDate: string): number {
 }
 
 Deno.serve(async (req: Request) => {
+  const requestId = newRequestId();
+  const route = "send-renewal-reminders";
+
   if (!isServiceRoleRequest(req)) {
+    logOperational({
+      level: "warn",
+      event: "forbidden_caller",
+      requestId,
+      route,
+      outcome: "failure",
+    });
     return new Response(JSON.stringify({ error: "Forbidden" }), { status: 403 });
   }
 
@@ -272,16 +283,51 @@ Deno.serve(async (req: Request) => {
           days_threshold: row.days_threshold,
         });
         sent++;
+        logOperational({
+          level: "info",
+          event: "renewal_reminder_sent",
+          requestId,
+          companyId: row.company_id,
+          route,
+          outcome: "success",
+        });
       } else if (sendStatus === "not_configured") {
         notConfigured++;
       } else {
         failed++;
+        logOperational({
+          level: "warn",
+          event: "renewal_reminder_send_failed",
+          requestId,
+          companyId: row.company_id,
+          route,
+          outcome: "failure",
+        });
       }
     } catch (error) {
-      console.error(`[send-renewal-reminders] unhandled error for policy ${row.policy_id}:`, error);
+      logOperational(
+        {
+          level: "error",
+          event: "renewal_reminder_unhandled_error",
+          requestId,
+          companyId: row.company_id,
+          route,
+          outcome: "failure",
+          errorCode: error instanceof Error ? error.name : "unknown_error",
+        },
+        { message: error instanceof Error ? error.message : String(error) },
+      );
       failed++;
     }
   }
+
+  logOperational({
+    level: failed > 0 ? "warn" : "info",
+    event: "renewal_reminders_run_complete",
+    requestId,
+    route,
+    outcome: "success",
+  });
 
   return new Response(
     // notConfigured is deliberately separate from failed: it means "no
