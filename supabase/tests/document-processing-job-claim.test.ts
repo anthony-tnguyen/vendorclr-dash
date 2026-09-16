@@ -210,6 +210,40 @@ describe("claim_document_processing_jobs - eligibility", () => {
     const claimed = await claim(50, "worker-b");
     expect(claimed.map((r) => r.id)).not.toContain(jobId);
   });
+
+  it("exhausts (rather than reclaims forever) a stale 'processing' job that already used its full attempt budget - crash-loop protection", async () => {
+    const documentId = await seedDocument("eligibility-stale-exhausted-processing");
+    const jobId = await seedJob(documentId, {
+      status: "processing",
+      claimed_at: new Date(Date.now() - 10 * 60_000).toISOString(),
+      attempt_count: 5,
+      max_attempts: 5,
+    });
+
+    const claimed = await claim(50, "worker-c");
+    expect(claimed.map((r) => r.id)).not.toContain(jobId);
+
+    const row = await db.query<{ status: string; exhausted_at: string | null }>(
+      `select status, exhausted_at from public.document_processing_jobs where id = $1`,
+      [jobId],
+    );
+    expect(row.rows[0]?.status).toBe("exhausted");
+    expect(row.rows[0]?.exhausted_at).not.toBeNull();
+  });
+
+  it("never reclaims that exhausted-by-sweep job again on a later claim call", async () => {
+    const documentId = await seedDocument("eligibility-stale-exhausted-processing-2");
+    const jobId = await seedJob(documentId, {
+      status: "processing",
+      claimed_at: new Date(Date.now() - 10 * 60_000).toISOString(),
+      attempt_count: 5,
+      max_attempts: 5,
+    });
+
+    await claim(50, "worker-c");
+    const secondClaim = await claim(50, "worker-d");
+    expect(secondClaim.map((r) => r.id)).not.toContain(jobId);
+  });
 });
 
 describe("claim_document_processing_jobs - concurrency-shaped: no duplicate claims", () => {
