@@ -74,26 +74,43 @@ import {
  *                            use the service-role client and re-validate the
  *                            token by hand before touching anything.
  *
- * uploadDocumentForToken() and reprocessDocument() now go further than
- * storing and extracting a document: a `processed` extraction is run through
- * complianceEngine.ts's deterministic matching rule, and only a clean match -
- * same carrier, same policy number, a later expiration date, against an
- * existing active policy of that type - is applied to vendor_policies and
- * rolls the compliance rail forward. Everything else (a new carrier, a
- * changed policy number, a coverage type the vendor has never had before, an
- * unrecognized coverage type on the certificate) leaves vendor_policies and
- * vendor_compliance_items untouched and routes the document to
- * needs_review with a reason recorded on vendor_documents.review_reason.
- * Confidence (Phase 2) and this match (Phase 3) are independent gates - a
- * confident extraction that fails the match still needs a human decision.
+ * reprocessDocument() (the admin retry action) still extracts synchronously
+ * on its own request - it is a signed-in staff action against an already-
+ * stored file, not something a waiting vendor's browser blocks on, so there
+ * is no "hold the request open" concern for it to avoid. uploadDocumentForToken()
+ * used to extract synchronously too, but Task 8a moved that off the
+ * critical path: it now stores/scans the file, records vendor_documents, and
+ * enqueues a document_processing_jobs row (enqueueExtractionJob()) instead
+ * of calling the extraction provider inline - a future worker
+ * (process-document-jobs, Task 8b) does the actual extraction out of band.
+ * The one exception is an exact-duplicate re-upload (same sha256, an
+ * already-'processed' document elsewhere) - that result is copied in-
+ * database immediately, which is cheap and does not reintroduce the
+ * hold-the-request-open problem.
+ *
+ * A `processed` extraction (whichever path produces it - reprocessDocument(),
+ * a copied duplicate, or eventually Task 8b's worker) is run through
+ * complianceEngine.ts's deterministic matching rule in applyExtractionResult(),
+ * and only a clean match - same carrier, same policy number, a later
+ * expiration date, against an existing active policy of that type - is
+ * applied to vendor_policies and rolls the compliance rail forward.
+ * Everything else (a new carrier, a changed policy number, a coverage type
+ * the vendor has never had before, an unrecognized coverage type on the
+ * certificate) leaves vendor_policies and vendor_compliance_items untouched
+ * and routes the document to needs_review with a reason recorded on
+ * vendor_documents.review_reason. Confidence (Phase 2) and this match
+ * (Phase 3) are independent gates - a confident extraction that fails the
+ * match still needs a human decision.
  *
  * Extraction and matching failing never fails the upload itself - the vendor
  * still sees "thanks, we received your document" regardless; the file is
  * safely stored either way, and vendor_documents records what happened
- * separately. The one exception is the malware scan (Phase 4,
- * malwareScanner.ts), run before anything is written: a confirmed-malicious
- * file is refused outright, not stored and flagged for later - see the
- * comment at its call site in uploadDocumentForToken().
+ * separately (once a worker has actually run - before that it simply reads
+ * 'uploaded', same as any other not-yet-processed document). The one
+ * exception is the malware scan (Phase 4, malwareScanner.ts), run before
+ * anything is written: a confirmed-malicious file is refused outright, not
+ * stored and flagged for later - see the comment at its call site in
+ * uploadDocumentForToken().
  */
 
 /**
@@ -394,8 +411,12 @@ export interface ResolvedUploadRequest {
 const resolveUploadTokenSchema = z.object({ token: z.string().min(1) });
 
 /** Thrown for every invalid-token case. Deliberately one message: telling an
- *  attacker "expired" vs "not found" vs "already used" narrows their guesses. */
-const INVALID_TOKEN_MESSAGE = "This link is no longer valid. Ask your contact to send a new one.";
+ *  attacker "expired" vs "not found" vs "already used" narrows their guesses.
+ *  Exported so submissionPackages.ts's own token-resolution paths (Task 8a)
+ *  throw the identical message rather than a second, slightly different one
+ *  that would itself become a distinguishing signal. */
+export const INVALID_TOKEN_MESSAGE =
+  "This link is no longer valid. Ask your contact to send a new one.";
 
 /**
  * The caller's real IP, read from the actual incoming Request inside a
@@ -411,8 +432,12 @@ const INVALID_TOKEN_MESSAGE = "This link is no longer valid. Ask your contact to
  * "@tanstack/react-start/server") with a real Request carrying a
  * cf-connecting-ip header and asserts the extracted value matches - see
  * that test for why this was checked rather than trusted.
+ *
+ * Exported so submissionPackages.ts's server-function handlers (Task 8a) can
+ * read the same real client IP for their own assertUploadAllowed() calls,
+ * rather than re-deriving it a second way.
  */
-async function currentClientIp(): Promise<string> {
+export async function currentClientIp(): Promise<string> {
   const { getRequest } = await import("@tanstack/react-start/server");
   const { extractClientIp } = await getUploadAbuseModule();
   return extractClientIp(getRequest().headers);
@@ -431,10 +456,72 @@ async function currentClientIp(): Promise<string> {
  * from that IP would see regardless of which token (or non-token) they most
  * recently guessed.
  */
-async function rejectInvalidToken(ipAddress: string): Promise<never> {
+export async function rejectInvalidToken(ipAddress: string): Promise<never> {
   const { assertUploadAllowed } = await getUploadAbuseModule();
   await assertUploadAllowed({ operation: "invalid_token", ipAddress });
   throw new Error(INVALID_TOKEN_MESSAGE);
+}
+
+export interface ResolvedTokenRow {
+  id: string;
+  status: string;
+  expiresAt: string;
+  vendorId: string;
+  companyId: string;
+}
+
+/**
+ * Shared token resolution for the package-based upload workflow
+ * (submissionPackages.ts, Task 8a) - validates a magic-link token exactly
+ * like uploadDocumentForTokenHandler() below (same hash lookup, same
+ * expiry/status check via canUploadToRequest(), same rejectInvalidToken()
+ * on any failure so a caller can never distinguish "wrong token" from
+ * "package flow unavailable for this token"), and returns the resolved row
+ * instead of proceeding to store a file the way uploadDocumentForToken()
+ * does. Uses the same "resolve" assertUploadAllowed() bucket
+ * resolveUploadToken() already uses - createPackage()/finalizePackage()/
+ * replaceDeficientDocument() do not themselves touch a file, so they are
+ * rate-limited like a resolve, not like an upload; addPackageDocument()
+ * (which does touch a file) layers its own "upload" bucket check on top,
+ * exactly like uploadDocumentForTokenHandler() does below.
+ */
+export async function resolveActiveUploadRequestByToken(
+  token: string,
+  ipAddress: string,
+): Promise<ResolvedTokenRow> {
+  const { assertUploadAllowed } = await getUploadAbuseModule();
+  await assertUploadAllowed({ operation: "resolve", ipAddress });
+
+  const supabase = await getServiceRoleClient();
+  const tokenHash = await hashToken(token);
+
+  const { data: request } = await supabase
+    .from("vendor_upload_requests")
+    .select("id, status, expires_at, vendor_id, company_id")
+    .eq("token_hash", tokenHash)
+    .maybeSingle();
+
+  if (!request) await rejectInvalidToken(ipAddress);
+
+  const row = request as unknown as {
+    id: string;
+    status: string;
+    expires_at: string;
+    vendor_id: string;
+    company_id: string;
+  };
+
+  if (isExpired(row.expires_at) || !canUploadToRequest(row.status)) {
+    await rejectInvalidToken(ipAddress);
+  }
+
+  return {
+    id: row.id,
+    status: row.status,
+    expiresAt: row.expires_at,
+    vendorId: row.vendor_id,
+    companyId: row.company_id,
+  };
 }
 
 export const resolveUploadToken = createServerFn({ method: "GET" })
@@ -738,31 +825,80 @@ export async function uploadDocumentForTokenHandler(
     .single();
 
   // Duplicate of an already-successfully-processed document: reuse its
-  // result rather than re-running extraction. Any other outcome (no
-  // duplicate, or the duplicate itself never finished processing) runs a
-  // fresh extraction below.
+  // result rather than re-running extraction, applied immediately (this is
+  // a cheap in-database copy, not a call to the extraction provider - it
+  // does not reintroduce the "hold the browser open" problem below).
   const reusableDuplicate =
     existingDuplicate?.processing_status === "processed" ? existingDuplicate : null;
 
-  const extraction = reusableDuplicate
-    ? ({
-        status: "processed",
-        data: reusableDuplicate.parsed_data,
-        confidence: reusableDuplicate.extraction_confidence,
-        error: null,
-      } as ExtractDocumentResult)
-    : await runExtractionSafely({ fileBytes: bytes, mimeType: detectedMime });
+  if (reusableDuplicate) {
+    const extraction: ExtractDocumentResult = {
+      status: "processed",
+      data: reusableDuplicate.parsed_data,
+      confidence: reusableDuplicate.extraction_confidence,
+      error: null,
+    };
+    await applyExtractionResult(supabase, {
+      documentId,
+      companyId: row.company_id,
+      vendorId: row.vendor_id,
+      documentFileName: fileName,
+      queueItemId: queueItem?.id ?? null,
+      extraction,
+    });
+    return { documentId };
+  }
 
-  await applyExtractionResult(supabase, {
-    documentId,
+  // No reusable duplicate: extraction against the real provider can take
+  // several seconds, and this task's own checklist ("do not hold the
+  // browser request open for provider processing") applies to this legacy
+  // single-file path exactly as much as it does to the new package flow in
+  // submissionPackages.ts - this function used to call
+  // runExtractionSafely()/applyExtractionResult() synchronously right here,
+  // which meant the vendor's browser sat on this POST for however long the
+  // provider took. Instead, enqueue one document_processing_jobs row and
+  // return immediately; a future worker (process-document-jobs, Task 8b)
+  // claims it and calls the equivalent of applyExtractionResult() out of
+  // band. `on conflict (idempotency_key) do nothing` makes this enqueue
+  // idempotent per document - see that table's own migration docblock.
+  await enqueueExtractionJob(supabase, {
     companyId: row.company_id,
     vendorId: row.vendor_id,
-    documentFileName: fileName,
-    queueItemId: queueItem?.id ?? null,
-    extraction,
+    documentId,
+    packageId: null,
   });
 
   return { documentId };
+}
+
+/**
+ * Inserts one 'extract_document' document_processing_jobs row, or silently
+ * does nothing if one already exists for this document (idempotency_key is
+ * unique - see 20260917000400_document_processing_jobs.sql). Shared by
+ * uploadDocumentForTokenHandler() above and submissionPackages.ts's
+ * finalizePackage()/replaceDeficientDocument(), which is why this lives
+ * here rather than being private to either caller - both need the exact
+ * same idempotent-enqueue shape, and duplicating it risks the key format
+ * drifting between the two.
+ */
+export async function enqueueExtractionJob(
+  supabase: SupabaseClient,
+  params: { companyId: string; vendorId: string; documentId: string; packageId: string | null },
+): Promise<void> {
+  const { companyId, vendorId, documentId, packageId } = params;
+  const jobType = "extract_document";
+  await supabase.from("document_processing_jobs").upsert(
+    {
+      company_id: companyId,
+      vendor_id: vendorId,
+      target_document_id: documentId,
+      target_package_id: packageId,
+      job_type: jobType,
+      status: "queued",
+      idempotency_key: `${documentId}:${jobType}`,
+    },
+    { onConflict: "idempotency_key", ignoreDuplicates: true },
+  );
 }
 
 export const uploadDocumentForToken = createServerFn({ method: "POST" })

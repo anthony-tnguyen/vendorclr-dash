@@ -459,6 +459,95 @@ export type Database = {
           },
         ];
       };
+      document_processing_jobs: {
+        Row: {
+          company_id: string;
+          created_at: string;
+          id: string;
+          idempotency_key: string;
+          job_type: string;
+          status: string;
+          target_document_id: string;
+          target_package_id: string | null;
+          updated_at: string;
+          vendor_id: string;
+        };
+        Insert: {
+          company_id: string;
+          created_at?: string;
+          id?: string;
+          idempotency_key: string;
+          job_type?: string;
+          status?: string;
+          target_document_id: string;
+          target_package_id?: string | null;
+          updated_at?: string;
+          vendor_id: string;
+        };
+        Update: {
+          company_id?: string;
+          created_at?: string;
+          id?: string;
+          idempotency_key?: string;
+          job_type?: string;
+          status?: string;
+          target_document_id?: string;
+          target_package_id?: string | null;
+          updated_at?: string;
+          vendor_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "document_processing_jobs_company_id_fkey";
+            columns: ["company_id"];
+            isOneToOne: false;
+            referencedRelation: "admin_company_stats";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "document_processing_jobs_company_id_fkey";
+            columns: ["company_id"];
+            isOneToOne: false;
+            referencedRelation: "companies";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "document_processing_jobs_target_document_id_fkey";
+            columns: ["target_document_id"];
+            isOneToOne: false;
+            referencedRelation: "documents_due_for_retry";
+            referencedColumns: ["document_id"];
+          },
+          {
+            foreignKeyName: "document_processing_jobs_target_document_id_fkey";
+            columns: ["target_document_id"];
+            isOneToOne: false;
+            referencedRelation: "vendor_documents";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "document_processing_jobs_target_package_id_fkey";
+            columns: ["target_package_id"];
+            isOneToOne: false;
+            referencedRelation: "submission_packages";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "document_processing_jobs_vendor_id_fkey";
+            columns: ["vendor_id"];
+            isOneToOne: false;
+            referencedRelation: "vendor_compliance_summary";
+            referencedColumns: ["vendor_id"];
+          },
+          {
+            foreignKeyName: "document_processing_jobs_vendor_id_fkey";
+            columns: ["vendor_id"];
+            isOneToOne: false;
+            referencedRelation: "vendors";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       email_delivery_events: {
         Row: {
           company_id: string;
@@ -624,6 +713,86 @@ export type Database = {
           updated_at?: string;
         };
         Relationships: [];
+      };
+      package_documents: {
+        Row: {
+          company_id: string;
+          created_at: string;
+          document_id: string;
+          document_kind: string;
+          id: string;
+          package_id: string;
+          vendor_id: string;
+        };
+        Insert: {
+          company_id: string;
+          created_at?: string;
+          document_id: string;
+          document_kind: string;
+          id?: string;
+          package_id: string;
+          vendor_id: string;
+        };
+        Update: {
+          company_id?: string;
+          created_at?: string;
+          document_id?: string;
+          document_kind?: string;
+          id?: string;
+          package_id?: string;
+          vendor_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "package_documents_company_id_fkey";
+            columns: ["company_id"];
+            isOneToOne: false;
+            referencedRelation: "admin_company_stats";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "package_documents_company_id_fkey";
+            columns: ["company_id"];
+            isOneToOne: false;
+            referencedRelation: "companies";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "package_documents_document_id_fkey";
+            columns: ["document_id"];
+            isOneToOne: false;
+            referencedRelation: "documents_due_for_retry";
+            referencedColumns: ["document_id"];
+          },
+          {
+            foreignKeyName: "package_documents_document_id_fkey";
+            columns: ["document_id"];
+            isOneToOne: false;
+            referencedRelation: "vendor_documents";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "package_documents_package_id_fkey";
+            columns: ["package_id"];
+            isOneToOne: false;
+            referencedRelation: "submission_packages";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "package_documents_vendor_id_fkey";
+            columns: ["vendor_id"];
+            isOneToOne: false;
+            referencedRelation: "vendor_compliance_summary";
+            referencedColumns: ["vendor_id"];
+          },
+          {
+            foreignKeyName: "package_documents_vendor_id_fkey";
+            columns: ["vendor_id"];
+            isOneToOne: false;
+            referencedRelation: "vendors";
+            referencedColumns: ["id"];
+          },
+        ];
       };
       platform_admins: {
         Row: {
@@ -1097,6 +1266,88 @@ export type Database = {
           },
         ];
       };
+      submission_packages: {
+        Row: {
+          company_id: string;
+          created_at: string;
+          finalized_at: string | null;
+          id: string;
+          previous_package_id: string | null;
+          status: string;
+          updated_at: string;
+          upload_request_id: string;
+          vendor_id: string;
+          version: number;
+        };
+        Insert: {
+          company_id: string;
+          created_at?: string;
+          finalized_at?: string | null;
+          id?: string;
+          previous_package_id?: string | null;
+          status?: string;
+          updated_at?: string;
+          upload_request_id: string;
+          vendor_id: string;
+          version?: number;
+        };
+        Update: {
+          company_id?: string;
+          created_at?: string;
+          finalized_at?: string | null;
+          id?: string;
+          previous_package_id?: string | null;
+          status?: string;
+          updated_at?: string;
+          upload_request_id?: string;
+          vendor_id?: string;
+          version?: number;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "submission_packages_company_id_fkey";
+            columns: ["company_id"];
+            isOneToOne: false;
+            referencedRelation: "admin_company_stats";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "submission_packages_company_id_fkey";
+            columns: ["company_id"];
+            isOneToOne: false;
+            referencedRelation: "companies";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "submission_packages_previous_package_id_fkey";
+            columns: ["previous_package_id"];
+            isOneToOne: false;
+            referencedRelation: "submission_packages";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "submission_packages_upload_request_id_fkey";
+            columns: ["upload_request_id"];
+            isOneToOne: false;
+            referencedRelation: "vendor_upload_requests";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "submission_packages_vendor_id_fkey";
+            columns: ["vendor_id"];
+            isOneToOne: false;
+            referencedRelation: "vendor_compliance_summary";
+            referencedColumns: ["vendor_id"];
+          },
+          {
+            foreignKeyName: "submission_packages_vendor_id_fkey";
+            columns: ["vendor_id"];
+            isOneToOne: false;
+            referencedRelation: "vendors";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       suppressed_recipients: {
         Row: {
           company_id: string;
@@ -1237,6 +1488,72 @@ export type Database = {
           window_start?: string;
         };
         Relationships: [];
+      };
+      upload_request_checklist_items: {
+        Row: {
+          company_id: string;
+          created_at: string;
+          document_kind: string;
+          id: string;
+          is_required: boolean;
+          upload_request_id: string;
+          vendor_id: string;
+        };
+        Insert: {
+          company_id: string;
+          created_at?: string;
+          document_kind: string;
+          id?: string;
+          is_required?: boolean;
+          upload_request_id: string;
+          vendor_id: string;
+        };
+        Update: {
+          company_id?: string;
+          created_at?: string;
+          document_kind?: string;
+          id?: string;
+          is_required?: boolean;
+          upload_request_id?: string;
+          vendor_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "upload_request_checklist_items_company_id_fkey";
+            columns: ["company_id"];
+            isOneToOne: false;
+            referencedRelation: "admin_company_stats";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "upload_request_checklist_items_company_id_fkey";
+            columns: ["company_id"];
+            isOneToOne: false;
+            referencedRelation: "companies";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "upload_request_checklist_items_upload_request_id_fkey";
+            columns: ["upload_request_id"];
+            isOneToOne: false;
+            referencedRelation: "vendor_upload_requests";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "upload_request_checklist_items_vendor_id_fkey";
+            columns: ["vendor_id"];
+            isOneToOne: false;
+            referencedRelation: "vendor_compliance_summary";
+            referencedColumns: ["vendor_id"];
+          },
+          {
+            foreignKeyName: "upload_request_checklist_items_vendor_id_fkey";
+            columns: ["vendor_id"];
+            isOneToOne: false;
+            referencedRelation: "vendors";
+            referencedColumns: ["id"];
+          },
+        ];
       };
       vendor_compliance_items: {
         Row: {
@@ -1384,6 +1701,7 @@ export type Database = {
           processed_at: string | null;
           processing_error: string | null;
           processing_status: string;
+          replaces_document_id: string | null;
           retry_count: number;
           review_reason: string | null;
           scanned_at: string | null;
@@ -1412,6 +1730,7 @@ export type Database = {
           processed_at?: string | null;
           processing_error?: string | null;
           processing_status?: string;
+          replaces_document_id?: string | null;
           retry_count?: number;
           review_reason?: string | null;
           scanned_at?: string | null;
@@ -1440,6 +1759,7 @@ export type Database = {
           processed_at?: string | null;
           processing_error?: string | null;
           processing_status?: string;
+          replaces_document_id?: string | null;
           retry_count?: number;
           review_reason?: string | null;
           scanned_at?: string | null;
@@ -1490,6 +1810,20 @@ export type Database = {
           {
             foreignKeyName: "vendor_documents_duplicate_of_document_id_fkey";
             columns: ["duplicate_of_document_id"];
+            isOneToOne: false;
+            referencedRelation: "vendor_documents";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "vendor_documents_replaces_document_id_fkey";
+            columns: ["replaces_document_id"];
+            isOneToOne: false;
+            referencedRelation: "documents_due_for_retry";
+            referencedColumns: ["document_id"];
+          },
+          {
+            foreignKeyName: "vendor_documents_replaces_document_id_fkey";
+            columns: ["replaces_document_id"];
             isOneToOne: false;
             referencedRelation: "vendor_documents";
             referencedColumns: ["id"];
