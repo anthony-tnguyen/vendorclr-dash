@@ -25,19 +25,19 @@ function AlertsSection({ alerts }: { alerts: OperationalFailuresSummary["alerts"
     );
   }
   return (
-    <ul className="space-y-2">
+    <ul aria-label="Active operational alerts" className="grid gap-2 lg:grid-cols-2">
       {firing.map((alert) => (
         <li
           key={alert.key}
           role="alert"
-          className={`rounded-sm border px-3 py-2 text-xs ${
+          className={`rounded-sm border px-3 py-3 text-xs ${
             alert.severity === "critical"
               ? "border-destructive/40 bg-danger-soft text-destructive"
               : "border-warn/40 bg-warn-soft text-warn"
           }`}
         >
-          <span className="font-semibold uppercase tracking-wide">{alert.severity}</span> ·{" "}
-          {alert.message}
+          <span className="block font-semibold uppercase tracking-[0.12em]">{alert.severity}</span>
+          <span className="mt-1 block text-foreground">{alert.message}</span>
         </li>
       ))}
     </ul>
@@ -65,6 +65,10 @@ function Section({
       )}
     </section>
   );
+}
+
+function formatStorage(bytes: number) {
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
 export function OperationsPage() {
@@ -101,16 +105,40 @@ export function OperationsPage() {
           <EmptyState title="No data" description="Nothing was returned." />
         ) : (
           <div className="space-y-8">
-            <p className="text-xs text-muted-foreground">
-              Generated {new Date(operations.data.generatedAt).toLocaleString()} · Oldest open queue
-              item:{" "}
-              {operations.data.oldestQueueAgeHours === null
-                ? "none open"
-                : `${operations.data.oldestQueueAgeHours}h ago`}{" "}
-              · Database size: {(operations.data.storage.usedBytes / (1024 * 1024)).toFixed(1)} MB
-              of {(operations.data.storage.capacityBytes / (1024 * 1024 * 1024)).toFixed(0)} GiB
-              placeholder capacity
-            </p>
+            <section aria-label="Operations snapshot" className="border-y border-border py-4">
+              <dl className="grid gap-4 sm:grid-cols-3 sm:divide-x sm:divide-border">
+                <div className="sm:pr-4">
+                  <dt className="text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground">
+                    Active signals
+                  </dt>
+                  <dd className="numeric mt-1 text-2xl font-semibold tracking-tight text-foreground">
+                    {operations.data.alerts.filter((alert) => alert.firing).length}
+                  </dd>
+                </div>
+                <div className="sm:px-4">
+                  <dt className="text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground">
+                    Oldest open review
+                  </dt>
+                  <dd className="numeric mt-1 text-2xl font-semibold tracking-tight text-foreground">
+                    {operations.data.oldestQueueAgeHours === null
+                      ? "None"
+                      : `${operations.data.oldestQueueAgeHours}h`}
+                  </dd>
+                </div>
+                <div className="sm:pl-4">
+                  <dt className="text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground">
+                    Database usage
+                  </dt>
+                  <dd className="numeric mt-1 text-2xl font-semibold tracking-tight text-foreground">
+                    {formatStorage(operations.data.storage.usedBytes)}
+                  </dd>
+                </div>
+              </dl>
+              <p className="mt-4 text-xs text-muted-foreground">
+                Snapshot generated {new Date(operations.data.generatedAt).toLocaleString()} ·
+                Capacity is an operational placeholder until the provider quota is configured.
+              </p>
+            </section>
 
             <section aria-labelledby="ops-alerts" className="space-y-2">
               <h2 id="ops-alerts" className="text-sm font-semibold text-foreground">
