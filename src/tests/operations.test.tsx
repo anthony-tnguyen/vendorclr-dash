@@ -352,6 +352,10 @@ describe("OperationsPage", () => {
     renderPage();
 
     expect(await main().findByText(/no alerts are currently firing/i)).toBeInTheDocument();
+    expect(main().getByRole("region", { name: "Operations snapshot" })).toHaveTextContent(
+      "Active signals",
+    );
+    expect(main().getByText("0.0 MB")).toBeInTheDocument();
     expect(main().getAllByText(/nothing here right now/i).length).toBeGreaterThan(0);
   });
 
