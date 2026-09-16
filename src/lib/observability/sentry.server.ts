@@ -4,7 +4,7 @@
  * the envelope POST instead of adding @sentry/cloudflare.
  *
  * No-ops safely when VITE_SENTRY_DSN is unset - same convention as
- * sentry.client.ts and every other optional integration in this project.
+ * sentryClient.ts and every other optional integration in this project.
  *
  * *.server.ts by this project's own naming convention (see
  * serverClient.server.ts, documentExtraction.ts's getDocumentExtractor()
@@ -21,7 +21,7 @@ function readDsn(): string {
   return (import.meta.env["VITE_SENTRY_DSN"] as string | undefined)?.trim() ?? "";
 }
 
-/** See sentry.client.ts's readRelease() - same var, same fallback, read identically on both sides since Vite inlines VITE_-prefixed vars into the server/Workers bundle too. A future CI deploy step sets this from $GITHUB_SHA; nothing does yet (no CD pipeline - Task 13). */
+/** See sentryClient.ts's readRelease() - same var, same fallback, read identically on both sides since Vite inlines VITE_-prefixed vars into the server/Workers bundle too. A future CI deploy step sets this from $GITHUB_SHA; nothing does yet (no CD pipeline - Task 13). */
 function readRelease(): string {
   return (import.meta.env["VITE_RELEASE_SHA"] as string | undefined)?.trim() || "unknown";
 }

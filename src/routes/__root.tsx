@@ -44,7 +44,7 @@ function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
     // exactly as it was.
     reportLovableError(error, { boundary: "tanstack_root_error_component" });
     // Real error tracking, alongside it - no-ops when VITE_SENTRY_DSN is
-    // unset (see sentry.client.ts). Never touches what the user sees below.
+    // unset (see sentryClient.ts). Never touches what the user sees below.
     captureClientError(error, { boundary: "tanstack_root_error_component" });
   }, [error]);
 

@@ -155,7 +155,7 @@ Deno.serve(async (req: Request) => {
   // email address, which is exactly what this project's redaction rules
   // (see operationalLog.ts) exist to keep out of logs in the first place;
   // the event_type/company_id pair is everything the bounce-rate alert
-  // (evaluateBounceRateAlert(), src/server/operations.ts) needs.
+  // (evaluateBounceRateAlert(), src/workflows/operations.ts) needs.
   logOperational({
     level: eventType === "bounced" || eventType === "complained" ? "warn" : "info",
     event: "email_delivery_event_recorded",

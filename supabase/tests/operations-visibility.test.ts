@@ -4,7 +4,7 @@ import { beforeAll, describe, expect, it } from "vitest";
 import { asUser, companyIdFor, createTestDb, signUp } from "./harness";
 
 /**
- * getOperationalFailures() (src/server/operations.ts) is staff-only,
+ * getOperationalFailures() (src/workflows/operations.ts) is staff-only,
  * cross-tenant-by-design data: it reads vendor_documents,
  * compliance_queue_items and email_delivery_events - the sources behind
  * "failed/exhausted extraction jobs," "stale review items" and "bounced/
