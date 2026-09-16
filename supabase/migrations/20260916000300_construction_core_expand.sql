@@ -14,10 +14,11 @@
 -- project-level surgical override - without touching a single existing table,
 -- column or row. vendors.project / vendors.contract_value keep being written by
 -- existing code untouched; nothing here is load-bearing for the app yet. The
--- expand/contract split (see supabase/README.md) means the "contract" migration
--- that would retire those legacy columns is deliberately a separate, later
--- migration, gated on two successful production reconciliations against the
--- backfill this pairs with (20260916000400_construction_core_backfill.sql).
+-- expand/contract split this migration's own filename names ("_expand") means
+-- the "contract" migration that would retire those legacy columns is
+-- deliberately a separate, later migration, gated on two successful
+-- production reconciliations against the backfill this pairs with
+-- (20260916000400_construction_core_backfill.sql).
 -- Nothing here is reachable from the app either: it all sits behind the
 -- 'construction_core' company feature flag added in migration 19, which every
 -- company reads as disabled until a human flips it.
