@@ -6,12 +6,12 @@ hosted environment, email provider, or Supabase migration is deployed.
 
 ## Classification rules
 
-| Status | Meaning |
-| --- | --- |
-| `live` | The UI invokes a backend-backed operation when Supabase is configured. |
-| `demo-preview` | Intentionally operates only on the in-memory preview repository. |
-| `disabled` | The UI names an unavailable workflow and cannot imply it completed. |
-| `unfinished` | No complete user-safe action exists yet; it must not be exposed as successful. |
+| Status         | Meaning                                                                        |
+| -------------- | ------------------------------------------------------------------------------ |
+| `live`         | The UI invokes a backend-backed operation when Supabase is configured.         |
+| `demo-preview` | Intentionally operates only on the in-memory preview repository.               |
+| `disabled`     | The UI names an unavailable workflow and cannot imply it completed.            |
+| `unfinished`   | No complete user-safe action exists yet; it must not be exposed as successful. |
 
 ## Auth and navigation
 
@@ -54,12 +54,12 @@ hosted environment, email provider, or Supabase migration is deployed.
 
 ## Cross-cutting states
 
-| State | Status | Rule |
-| --- | --- | --- |
-| Loading | `live` | Names the actual data being loaded and makes no success claim. |
-| Backend errors | `live` | Use generic recovery copy such as “Could not load report data,” never “demo” in a live environment. |
-| Empty data | `live` | Explain the true absence of records; do not suggest an unfinished action is available. |
-| Demo errors and empty data | `demo-preview` | Preview messaging may say demo only when the repository is actually the in-memory preview. |
+| State                      | Status         | Rule                                                                                                |
+| -------------------------- | -------------- | --------------------------------------------------------------------------------------------------- |
+| Loading                    | `live`         | Names the actual data being loaded and makes no success claim.                                      |
+| Backend errors             | `live`         | Use generic recovery copy such as “Could not load report data,” never “demo” in a live environment. |
+| Empty data                 | `live`         | Explain the true absence of records; do not suggest an unfinished action is available.              |
+| Demo errors and empty data | `demo-preview` | Preview messaging may say demo only when the repository is actually the in-memory preview.          |
 
 ## Engineer B regression guard
 

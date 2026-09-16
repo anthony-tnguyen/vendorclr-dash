@@ -15,7 +15,7 @@ with a valid, admin-issued invite code.
 
 ## Non-goals
 
-- Not gating staff/teammate invites into an *existing* company. That's the
+- Not gating staff/teammate invites into an _existing_ company. That's the
   demo-only "Invite teammate" button on [AccessPage](../../../src/features/admin/AccessPage.tsx),
   which is unimplemented today and, if built later, needs its own mechanism
   (joining a company vs. creating one) — out of scope here.
@@ -38,6 +38,7 @@ and can't be bypassed by calling the Supabase JS/REST API directly instead of
 the form, because the gate lives in the database, not the client.
 
 Rejected alternatives:
+
 - **Supabase "Before User Created" Auth Hook** — the purpose-built mechanism
   for this, but requires configuring a hook in the Supabase project
   (dashboard/config), new infra this repo doesn't otherwise use.
@@ -50,18 +51,18 @@ Rejected alternatives:
 
 New table `public.signup_invites`:
 
-| column        | type        | notes                                              |
-|---------------|-------------|-----------------------------------------------------|
-| id            | uuid pk     | `gen_random_uuid()`                                  |
-| code          | text unique | generated, uppercase hex, human-shareable            |
-| email         | text        | normalized lowercase; only this address may redeem   |
-| company_name  | text        | used to create the company on redemption              |
-| status        | text        | `pending` \| `used` \| `revoked`, default `pending`   |
-| expires_at    | timestamptz | `created_at + 14 days`, set at insert time            |
-| created_by    | uuid        | references `platform_admins.user_id`                  |
-| created_at    | timestamptz | default `now()`                                        |
-| used_at       | timestamptz | null until redeemed                                     |
-| used_by       | uuid        | references `auth.users.id`, null until redeemed          |
+| column       | type        | notes                                               |
+| ------------ | ----------- | --------------------------------------------------- |
+| id           | uuid pk     | `gen_random_uuid()`                                 |
+| code         | text unique | generated, uppercase hex, human-shareable           |
+| email        | text        | normalized lowercase; only this address may redeem  |
+| company_name | text        | used to create the company on redemption            |
+| status       | text        | `pending` \| `used` \| `revoked`, default `pending` |
+| expires_at   | timestamptz | `created_at + 14 days`, set at insert time          |
+| created_by   | uuid        | references `platform_admins.user_id`                |
+| created_at   | timestamptz | default `now()`                                     |
+| used_at      | timestamptz | null until redeemed                                 |
+| used_by      | uuid        | references `auth.users.id`, null until redeemed     |
 
 Code generation: `upper(replace(gen_random_uuid()::text, '-', ''))` truncated
 to 10 hex characters, generated in a `BEFORE INSERT` trigger on
@@ -148,6 +149,7 @@ update signup_invites set status = 'used', used_at = now(), used_by = new.id
 ```
 
 Edge cases:
+
 - **Double redemption race**: `for update` locks the invite row for the
   duration of the transaction; a second concurrent signup attempting the
   same code waits for the lock, then sees `status = 'used'` and fails.

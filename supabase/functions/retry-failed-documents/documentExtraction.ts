@@ -112,7 +112,12 @@ export async function extractDocument(
 
   const text = response.content.find((block) => block.type === "text")?.text;
   if (!text) {
-    return { status: "failed", data: null, confidence: null, error: "No text in the model response." };
+    return {
+      status: "failed",
+      data: null,
+      confidence: null,
+      error: "No text in the model response.",
+    };
   }
 
   const parsed = parseExtractionResponse(text);
