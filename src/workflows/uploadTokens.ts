@@ -17,13 +17,29 @@ const TOKEN_BYTES = 32;
 /** How long a vendor has to act on an upload request before it lapses. */
 export const UPLOAD_REQUEST_TTL_DAYS = 14;
 
-const MIME_EXTENSIONS: Record<string, string> = {
+const MIME_EXTENSIONS = {
   "application/pdf": "pdf",
   "image/jpeg": "jpg",
   "image/png": "png",
-};
+} as const;
 
-export const ALLOWED_UPLOAD_MIME_TYPES = Object.keys(MIME_EXTENSIONS);
+/**
+ * The three content types a byte signature can ever resolve to - shared
+ * with fileValidation.server.ts's validateUploadedFile() so the "what's
+ * allowed" vocabulary is defined in exactly one place, not duplicated as a
+ * second hard-coded union there. Deliberately the same three keys as
+ * MIME_EXTENSIONS: a mime type this app accepts always has a known storage
+ * extension, and vice versa.
+ */
+export type AllowedUploadMimeType = keyof typeof MIME_EXTENSIONS;
+
+// Deliberately string[], not AllowedUploadMimeType[]: existing callers (e.g.
+// VendorUploadPortal.tsx's client-side pre-check) call
+// .includes(file.type), and file.type is a plain string - narrowing this
+// array's element type would just push a cast onto every such call site for
+// no real safety gain, since the check itself is exactly what's proving
+// membership.
+export const ALLOWED_UPLOAD_MIME_TYPES: string[] = Object.keys(MIME_EXTENSIONS);
 
 /** Matches the bucket's file_size_limit in the migration - keep these in sync. */
 export const MAX_UPLOAD_BYTES = 25 * 1024 * 1024;
@@ -66,7 +82,7 @@ export async function hashFileBytes(bytes: ArrayBuffer): Promise<string> {
 }
 
 export function extensionForMimeType(mimeType: string): string | null {
-  return MIME_EXTENSIONS[mimeType] ?? null;
+  return (MIME_EXTENSIONS as Record<string, string>)[mimeType] ?? null;
 }
 
 export function isAllowedUploadMimeType(mimeType: string): boolean {

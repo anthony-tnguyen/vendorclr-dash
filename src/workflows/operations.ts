@@ -381,10 +381,20 @@ export const getOperationalFailures = createServerFn({ method: "GET" }).handler(
             .in("event_type", ["bounced", "complained"])
             .order("occurred_at", { ascending: false })
             .limit(50),
+          // Task 3 (Engineer A): "unknown"/"not_configured"/"error" are all
+          // visible-but-not-clean scan states per that task's own checklist
+          // ("treat unknown, not_configured, and error as visible
+          // review/operations states, not clean") - a document that was
+          // never actually scanned (VIRUSTOTAL_API_KEY unset) is exactly as
+          // worth an operator's attention as one VirusTotal has never
+          // analyzed or one whose scan call itself failed. Only "clean"
+          // (analyzed, zero engines flagged it) and "malicious" (already
+          // blocked outright at upload time - see uploadDocumentForToken())
+          // are excluded here.
           supabase
             .from("vendor_documents")
             .select("id, company_id, vendor_id, file_name, malware_scan_status")
-            .in("malware_scan_status", ["unknown", "error"]),
+            .in("malware_scan_status", ["unknown", "not_configured", "error"]),
           supabase
             .from("vendor_documents")
             .select("processing_status")
