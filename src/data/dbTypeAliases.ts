@@ -17,15 +17,6 @@ import type { Database } from "./db-types";
  * either way - see "No CI job regenerates..." in supabase/README.md's Known
  * compromises - but this file would stay hand-maintained even once one
  * exists, since it's not generated output at all.)
- *
- * signup_invites is the one table below NOT derived from Database: the live
- * project this file was generated against had not yet had
- * 20260915000100_gated_signup_invites.sql applied when
- * 20260916000100_company_feature_flags.sql was deployed and types were
- * regenerated (a pre-existing deploy gap, unrelated to feature flags - see
- * that PR/task for remediation). Once that migration is live and types are
- * regenerated, SignupInviteRow should move to the derived form below, same
- * as every other table.
  */
 
 type Row<T extends keyof Database["public"]["Tables"]> = Database["public"]["Tables"][T]["Row"];
@@ -94,27 +85,12 @@ export type ComplianceRequirementRow = Omit<
 
 export type LeadRow = Omit<Row<"leads">, "stage"> & { stage: LeadStage };
 
+export type SignupInviteRow = Omit<Row<"signup_invites">, "status"> & {
+  status: SignupInviteStatus;
+};
+
 export type CompanyReportRowView = NonNullableRow<ViewRow<"company_report_rows">>;
 
 export type AdminCompanyStatsView = Omit<NonNullableRow<ViewRow<"admin_company_stats">>, "plan"> & {
   plan: CompanyPlan;
 };
-
-/**
- * Not derived from Database - see the file-level comment above. Matches the
- * columns supabase/migrations/20260915000100_gated_signup_invites.sql
- * defines on public.signup_invites.
- */
-export interface SignupInviteRow {
-  id: string;
-  code: string;
-  email: string;
-  company_name: string;
-  status: SignupInviteStatus;
-  expires_at: string;
-  created_by: string | null;
-  used_at: string | null;
-  used_by: string | null;
-  created_at: string;
-  updated_at: string;
-}

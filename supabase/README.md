@@ -1078,15 +1078,12 @@ update` on the invite row before checking and marking it used, so two
   `fzrcowwonezflydicpbd`) to CI secrets, then add a step that runs
   `supabase gen types typescript --project-id "$SUPABASE_PROJECT_ID" >
 src/data/db-types.ts` followed by `git diff --exit-code src/data/db-types.ts`.
-- **The live project was missing `20260915000100_gated_signup_invites.sql`
-  when migration 21 was applied** - discovered while applying migration 21,
-  not caused by it. `signup_invites`/`create_signup_invite()` exist in this
-  repo's migrations and in `db-types.ts`'s hand-authored `SignupInviteRow`
-  alias (`dbTypeAliases.ts`, not derived from `Database` for exactly this
-  reason - see above), but not yet on the live schema migration 21's types
-  were generated from. Apply that migration live and regenerate
-  `db-types.ts` to close this; at that point `SignupInviteRow` should move
-  to the derived form every other row type in `dbTypeAliases.ts` uses.
+- **The live project was briefly missing `20260915000100_gated_signup_invites.sql`
+  after migration 21 was applied** - discovered while applying migration 21,
+  not caused by it, and closed the same day: the migration was applied live
+  and `db-types.ts` regenerated, so `signup_invites` is now real generated
+  output and `SignupInviteRow` in `dbTypeAliases.ts` uses the derived form
+  like every other row type, instead of a hand-authored placeholder.
 - **`notifyDocumentOutcome()` emails every company owner individually**,
   rather than one email with every recipient, or a digest. Fine at current
   scale (a company typically has one owner); revisit if a company with

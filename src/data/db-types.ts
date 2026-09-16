@@ -611,6 +611,56 @@ export type Database = {
         };
         Relationships: [];
       };
+      signup_invites: {
+        Row: {
+          code: string;
+          company_name: string;
+          created_at: string;
+          created_by: string | null;
+          email: string;
+          expires_at: string;
+          id: string;
+          status: string;
+          updated_at: string;
+          used_at: string | null;
+          used_by: string | null;
+        };
+        Insert: {
+          code: string;
+          company_name: string;
+          created_at?: string;
+          created_by?: string | null;
+          email: string;
+          expires_at: string;
+          id?: string;
+          status?: string;
+          updated_at?: string;
+          used_at?: string | null;
+          used_by?: string | null;
+        };
+        Update: {
+          code?: string;
+          company_name?: string;
+          created_at?: string;
+          created_by?: string | null;
+          email?: string;
+          expires_at?: string;
+          id?: string;
+          status?: string;
+          updated_at?: string;
+          used_at?: string | null;
+          used_by?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "signup_invites_created_by_fkey";
+            columns: ["created_by"];
+            isOneToOne: false;
+            referencedRelation: "platform_admins";
+            referencedColumns: ["user_id"];
+          },
+        ];
+      };
       tasks: {
         Row: {
           company_id: string;
@@ -1365,6 +1415,28 @@ export type Database = {
       create_company_for_current_user: {
         Args: { company_name: string; member_name?: string };
         Returns: string;
+      };
+      create_signup_invite: {
+        Args: { company_name: string; email: string };
+        Returns: {
+          code: string;
+          company_name: string;
+          created_at: string;
+          created_by: string | null;
+          email: string;
+          expires_at: string;
+          id: string;
+          status: string;
+          updated_at: string;
+          used_at: string | null;
+          used_by: string | null;
+        };
+        SetofOptions: {
+          from: "*";
+          to: "signup_invites";
+          isOneToOne: true;
+          isSetofReturn: false;
+        };
       };
       current_company_ids: { Args: never; Returns: string[] };
       current_reminder_threshold: {
