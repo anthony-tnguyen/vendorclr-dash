@@ -116,6 +116,17 @@ export type SignupInviteRow = Omit<Row<"signup_invites">, "status"> & {
   status: SignupInviteStatus;
 };
 
+/** company_invitations.status - Task 6. Distinct from SignupInviteStatus above: this gates a teammate invite to an existing company, not a new-company signup. */
+export type CompanyInvitationStatus = "pending" | "accepted" | "expired" | "revoked";
+
+export type CompanyInvitationRow = Omit<Row<"company_invitations">, "status" | "role"> & {
+  status: CompanyInvitationStatus;
+  role: CompanyRole;
+};
+
+/** company_members with Task 6's deactivated_at/deactivated_by soft-removal columns folded into CompanyRole's literal union for `role`. */
+export type CompanyMemberRow = Omit<Row<"company_members">, "role"> & { role: CompanyRole };
+
 export type CompanyReportRowView = NonNullableRow<ViewRow<"company_report_rows">>;
 
 export type AdminCompanyStatsView = Omit<NonNullableRow<ViewRow<"admin_company_stats">>, "plan"> & {

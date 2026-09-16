@@ -1,4 +1,4 @@
-﻿export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[];
+export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[];
 
 export type Database = {
   // Allows to automatically instantiate createClient with right options
@@ -119,10 +119,81 @@ export type Database = {
           },
         ];
       };
+      company_invitations: {
+        Row: {
+          accepted_at: string | null;
+          accepted_by: string | null;
+          company_id: string;
+          created_at: string;
+          email: string;
+          expires_at: string;
+          id: string;
+          invited_by: string | null;
+          resend_count: number;
+          revoked_at: string | null;
+          revoked_by: string | null;
+          role: string;
+          status: string;
+          token_hash: string;
+          updated_at: string;
+        };
+        Insert: {
+          accepted_at?: string | null;
+          accepted_by?: string | null;
+          company_id: string;
+          created_at?: string;
+          email: string;
+          expires_at: string;
+          id?: string;
+          invited_by?: string | null;
+          resend_count?: number;
+          revoked_at?: string | null;
+          revoked_by?: string | null;
+          role: string;
+          status?: string;
+          token_hash: string;
+          updated_at?: string;
+        };
+        Update: {
+          accepted_at?: string | null;
+          accepted_by?: string | null;
+          company_id?: string;
+          created_at?: string;
+          email?: string;
+          expires_at?: string;
+          id?: string;
+          invited_by?: string | null;
+          resend_count?: number;
+          revoked_at?: string | null;
+          revoked_by?: string | null;
+          role?: string;
+          status?: string;
+          token_hash?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "company_invitations_company_id_fkey";
+            columns: ["company_id"];
+            isOneToOne: false;
+            referencedRelation: "admin_company_stats";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "company_invitations_company_id_fkey";
+            columns: ["company_id"];
+            isOneToOne: false;
+            referencedRelation: "companies";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       company_members: {
         Row: {
           company_id: string;
           created_at: string;
+          deactivated_at: string | null;
+          deactivated_by: string | null;
           id: string;
           last_active_at: string | null;
           role: string;
@@ -133,6 +204,8 @@ export type Database = {
         Insert: {
           company_id: string;
           created_at?: string;
+          deactivated_at?: string | null;
+          deactivated_by?: string | null;
           id?: string;
           last_active_at?: string | null;
           role: string;
@@ -143,6 +216,8 @@ export type Database = {
         Update: {
           company_id?: string;
           created_at?: string;
+          deactivated_at?: string | null;
+          deactivated_by?: string | null;
           id?: string;
           last_active_at?: string | null;
           role?: string;
@@ -1723,6 +1798,10 @@ export type Database = {
       };
     };
     Functions: {
+      accept_company_invitation: {
+        Args: { p_token_hash: string };
+        Returns: Json;
+      };
       apply_policy_renewal: {
         Args: {
           p_additional_insured: boolean;
@@ -1743,9 +1822,62 @@ export type Database = {
         Returns: string;
       };
       can_write_company: { Args: { target_company: string }; Returns: boolean };
+      change_company_member_role: {
+        Args: { new_role: string; target_member_id: string };
+        Returns: {
+          company_id: string;
+          created_at: string;
+          deactivated_at: string | null;
+          deactivated_by: string | null;
+          id: string;
+          last_active_at: string | null;
+          role: string;
+          scope: string;
+          updated_at: string;
+          user_id: string;
+        };
+        SetofOptions: {
+          from: "*";
+          to: "company_members";
+          isOneToOne: true;
+          isSetofReturn: false;
+        };
+      };
       create_company_for_current_user: {
         Args: { company_name: string; member_name?: string };
         Returns: string;
+      };
+      create_company_invitation: {
+        Args: {
+          invitee_email: string;
+          invitee_role: string;
+          p_expires_at: string;
+          p_token_hash: string;
+          target_company: string;
+        };
+        Returns: {
+          accepted_at: string | null;
+          accepted_by: string | null;
+          company_id: string;
+          created_at: string;
+          email: string;
+          expires_at: string;
+          id: string;
+          invited_by: string | null;
+          resend_count: number;
+          revoked_at: string | null;
+          revoked_by: string | null;
+          role: string;
+          status: string;
+          token_hash: string;
+          updated_at: string;
+        };
+        SetofOptions: {
+          from: "*";
+          to: "company_invitations";
+          isOneToOne: true;
+          isSetofReturn: false;
+        };
       };
       create_signup_invite: {
         Args: { company_name: string; email: string };
@@ -1793,6 +1925,57 @@ export type Database = {
         Returns: number;
       };
       is_platform_admin: { Args: never; Returns: boolean };
+      remove_company_member: {
+        Args: { target_member_id: string };
+        Returns: {
+          company_id: string;
+          created_at: string;
+          deactivated_at: string | null;
+          deactivated_by: string | null;
+          id: string;
+          last_active_at: string | null;
+          role: string;
+          scope: string;
+          updated_at: string;
+          user_id: string;
+        };
+        SetofOptions: {
+          from: "*";
+          to: "company_members";
+          isOneToOne: true;
+          isSetofReturn: false;
+        };
+      };
+      resend_company_invitation: {
+        Args: {
+          invitation_id: string;
+          p_expires_at: string;
+          p_token_hash: string;
+        };
+        Returns: {
+          accepted_at: string | null;
+          accepted_by: string | null;
+          company_id: string;
+          created_at: string;
+          email: string;
+          expires_at: string;
+          id: string;
+          invited_by: string | null;
+          resend_count: number;
+          revoked_at: string | null;
+          revoked_by: string | null;
+          role: string;
+          status: string;
+          token_hash: string;
+          updated_at: string;
+        };
+        SetofOptions: {
+          from: "*";
+          to: "company_invitations";
+          isOneToOne: true;
+          isSetofReturn: false;
+        };
+      };
       resolve_assignment_requirements: {
         Args: { assignment_id: string };
         Returns: {
@@ -1803,6 +1986,32 @@ export type Database = {
           required: boolean;
           source: string;
         }[];
+      };
+      revoke_company_invitation: {
+        Args: { invitation_id: string };
+        Returns: {
+          accepted_at: string | null;
+          accepted_by: string | null;
+          company_id: string;
+          created_at: string;
+          email: string;
+          expires_at: string;
+          id: string;
+          invited_by: string | null;
+          resend_count: number;
+          revoked_at: string | null;
+          revoked_by: string | null;
+          role: string;
+          status: string;
+          token_hash: string;
+          updated_at: string;
+        };
+        SetofOptions: {
+          from: "*";
+          to: "company_invitations";
+          isOneToOne: true;
+          isSetofReturn: false;
+        };
       };
       set_company_feature_flag: {
         Args: {
@@ -1824,6 +2033,31 @@ export type Database = {
         };
       };
       shares_company_with: { Args: { target_user: string }; Returns: boolean };
+      transfer_company_ownership: {
+        Args: {
+          demoted_role?: string;
+          from_member_id: string;
+          to_member_id: string;
+        };
+        Returns: {
+          company_id: string;
+          created_at: string;
+          deactivated_at: string | null;
+          deactivated_by: string | null;
+          id: string;
+          last_active_at: string | null;
+          role: string;
+          scope: string;
+          updated_at: string;
+          user_id: string;
+        }[];
+        SetofOptions: {
+          from: "*";
+          to: "company_members";
+          isOneToOne: false;
+          isSetofReturn: true;
+        };
+      };
     };
     Enums: {
       [_ in never]: never;
