@@ -53,6 +53,19 @@ describe("authenticated-demo route behavior", () => {
     expect((await screen.findAllByText("Delgado Concrete Works")).length).toBeGreaterThan(0);
   });
 
+  it("moves keyboard focus to dashboard content through the skip link", async () => {
+    const { user } = await renderRoute("/dashboard/vendors");
+
+    await screen.findByText("Corbett Structural Steel");
+    await user.tab();
+
+    const skipLink = screen.getByRole("link", { name: "Skip to main content" });
+    expect(skipLink).toHaveFocus();
+
+    await user.keyboard("{Enter}");
+    expect(screen.getByRole("main")).toHaveFocus();
+  });
+
   it("renders the vendor roster with a compliance rail per vendor", async () => {
     await renderRoute("/dashboard/vendors");
 

@@ -168,6 +168,7 @@ export function AppShell({ title, subtitle, actions, children }: AppShellProps) 
     <div className="min-h-screen bg-background">
       <a
         href="#main-content"
+        onClick={() => document.getElementById("main-content")?.focus()}
         className="focusable sr-only focus:not-sr-only focus:absolute focus:left-3 focus:top-3 focus:z-50 focus:rounded-sm focus:bg-card focus:px-3 focus:py-2 focus:text-sm"
       >
         Skip to main content
@@ -224,7 +225,11 @@ export function AppShell({ title, subtitle, actions, children }: AppShellProps) 
               </div>
             </div>
           </header>
-          <main id="main-content" className="mx-auto w-full max-w-[100rem] px-4 py-6 sm:px-6">
+          <main
+            id="main-content"
+            tabIndex={-1}
+            className="mx-auto w-full max-w-[100rem] px-4 py-6 sm:px-6"
+          >
             {children}
           </main>
           <footer className="border-t border-border px-4 py-4 text-xs text-muted-foreground sm:px-6">
