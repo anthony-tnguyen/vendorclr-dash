@@ -60,15 +60,22 @@ export function DocumentReviewPage({ queueItemId }: { queueItemId: string }) {
   const resolve = useMutation({
     mutationFn: (
       data: { decision: "approve"; selectedPolicyTypes: PolicyType[] } | { decision: "reject" },
-    ) =>
-      resolveReviewItem({
-        data: {
-          queueItemId,
-          decision: data.decision,
-          note: note.trim() || undefined,
-          ...(data.decision === "approve" ? { selectedPolicyTypes: data.selectedPolicyTypes } : {}),
-        },
-      }),
+    ) => {
+      const trimmedNote = note.trim() || undefined;
+      if (data.decision === "approve") {
+        return resolveReviewItem({
+          data: {
+            queueItemId,
+            decision: "approve",
+            selectedPolicyTypes: data.selectedPolicyTypes,
+            note: trimmedNote,
+          },
+        });
+      }
+      return resolveReviewItem({
+        data: { queueItemId, decision: "reject", note: trimmedNote },
+      });
+    },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["review-queue-item", queueItemId] });
       void queryClient.invalidateQueries({ queryKey: ["queue"] });
