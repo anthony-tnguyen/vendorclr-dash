@@ -522,7 +522,20 @@ async function notifyDocumentOutcome(
 // Per-job processing
 // ---------------------------------------------------------------------------
 
-/** A job reached a terminal SUCCESS outcome - writes vendor_documents, nudges compliance_queue_items, notifies, and marks the job 'succeeded'. */
+/**
+ * A job's attempt reached extraction success - writes vendor_documents,
+ * nudges compliance_queue_items, notifies, and marks the job 'succeeded'.
+ *
+ * Returns "succeeded" on the normal path. If record_document_extraction()
+ * itself fails to write (see below), this is no longer a success at all -
+ * it defers to recordJobFailure() and returns whatever THAT returns
+ * ("retrying" or "exhausted"), exactly like every other attempt failure in
+ * this file (download/extraction failures, an unhandled exception). This
+ * keeps the retry-budget self-healing property intact for a transient RPC
+ * blip, and keeps vendor_documents.processing_status = 'failed' reserved
+ * for genuine exhaustion only - see this file's top docblock's backoff
+ * section for why writing 'failed' mid-retry would be wrong.
+ */
 async function finalizeSuccess(
   // deno-lint-ignore no-explicit-any
   supabase: any,
@@ -530,7 +543,7 @@ async function finalizeSuccess(
   job: ClaimedJob,
   doc: { file_name: string },
   extraction: ExtractDocumentResult,
-): Promise<void> {
+): Promise<"succeeded" | "retrying" | "exhausted"> {
   let finalStatus: "processed" | "needs_review" | "failed" = extraction.status;
   let reviewReason: string | null = null;
   let appliedPolicyId: string | null = null;
@@ -569,14 +582,11 @@ async function finalizeSuccess(
     p_error: extraction.error,
   });
 
-  // If the immutable attempt row/cache refresh above failed to write, do
-  // not mark the document processed/needs_review anyway - that would leave
-  // a queue item that looks fully handled with no extraction data backing
-  // it. Downgrade to 'failed' and surface the real cause instead.
+  // The attempt row/cache refresh above failed to write - this attempt did
+  // not produce a usable, recorded result, so it must not be treated as a
+  // success. Hand off to the exact same bounded-backoff path as any other
+  // attempt failure, rather than writing vendor_documents ourselves here.
   if (recordExtractionError) {
-    finalStatus = "failed";
-    reviewReason = null;
-    appliedPolicyId = null;
     logOperational({
       level: "error",
       event: "record_document_extraction_failed",
@@ -586,15 +596,20 @@ async function finalizeSuccess(
       outcome: "failure",
       errorCode: "record_document_extraction_rpc_error",
     });
+    return recordJobFailure(
+      supabase,
+      resendApiKey,
+      job,
+      doc,
+      `Could not record the extraction result: ${recordExtractionError.message}`,
+    );
   }
 
   await supabase
     .from("vendor_documents")
     .update({
       processing_status: finalStatus,
-      processing_error: recordExtractionError
-        ? `Could not record the extraction result: ${recordExtractionError.message}`
-        : extraction.error,
+      processing_error: extraction.error,
       review_reason: reviewReason,
       applied_policy_id: appliedPolicyId,
       processed_at: new Date().toISOString(),
@@ -628,6 +643,8 @@ async function finalizeSuccess(
     .from("document_processing_jobs")
     .update({ status: "succeeded", last_error: null })
     .eq("id", job.id);
+
+  return "succeeded";
 }
 
 /** A job's attempt failed (extraction error, download error, or an unexpected exception) - schedules a backoff retry, or exhausts the job and finalizes vendor_documents/notifies if the attempt budget is spent. */
@@ -824,16 +841,22 @@ Deno.serve(async (req: Request) => {
         continue;
       }
 
-      await finalizeSuccess(supabase, resendApiKey, job, doc, extraction);
-      succeeded++;
-      logOperational({
-        level: "info",
-        event: "document_processing_job_succeeded",
-        requestId,
-        companyId: job.company_id,
-        route,
-        outcome: "success",
-      });
+      const outcome = await finalizeSuccess(supabase, resendApiKey, job, doc, extraction);
+      if (outcome === "succeeded") {
+        succeeded++;
+        logOperational({
+          level: "info",
+          event: "document_processing_job_succeeded",
+          requestId,
+          companyId: job.company_id,
+          route,
+          outcome: "success",
+        });
+      } else if (outcome === "exhausted") {
+        exhausted++;
+      } else {
+        failed++;
+      }
     } catch (error) {
       logOperational(
         {

@@ -4,7 +4,10 @@
 // imported: this function runs in Supabase's Deno Edge Runtime, a separate
 // deployment target from the Node/Cloudflare app, with no shared build step
 // across that boundary in this project - same reasoning as
-// send-renewal-reminders/uploadTokens.ts. If one changes, check the other.
+// send-renewal-reminders/uploadTokens.ts. Two other byte-for-byte copies
+// exist (src/workflows/insuranceExtractionSchema.ts,
+// process-document-jobs/insuranceExtractionSchema.ts) - if one changes,
+// check the other two.
 import { z } from "npm:zod@3.25.76";
 
 export const POLICY_TYPES = [
