@@ -14,7 +14,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "db:verify": "vitest run --config vitest.db.config.ts",
-    "e2e": "playwright test"
+    "e2e": "playwright test",
+    "check:email-deliverability": "bun scripts/check-email-deliverability.ts"
   },
   "overrides": {
     "rolldown": "1.2.1"

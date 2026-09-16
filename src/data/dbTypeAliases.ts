@@ -132,3 +132,33 @@ export type CompanyReportRowView = NonNullableRow<ViewRow<"company_report_rows">
 export type AdminCompanyStatsView = Omit<NonNullableRow<ViewRow<"admin_company_stats">>, "plan"> & {
   plan: CompanyPlan;
 };
+
+/** email_outbox.status - Phase 1 send-time value, widened by migration 19 (email_bounce_handling) to also carry the latest delivery outcome. */
+export type EmailOutboxStatus =
+  "queued" | "sent" | "failed" | "delivered" | "bounced" | "complained";
+export type EmailOutboxTemplate = "vendor_onboarding" | "renewal_request";
+export type EmailOutboxRow = Omit<Row<"email_outbox">, "status" | "template"> & {
+  status: EmailOutboxStatus;
+  template: EmailOutboxTemplate;
+};
+
+/** email_delivery_events.event_type - migration 19. Append-only post-send history; see that migration's own docblock for why this is separate from EmailOutboxStatus above. */
+export type EmailDeliveryEventType =
+  "sent" | "delivered" | "delivery_delayed" | "bounced" | "complained";
+export type EmailDeliveryEventRow = Omit<Row<"email_delivery_events">, "event_type"> & {
+  event_type: EmailDeliveryEventType;
+};
+
+/** vendor_contacts.role - Task 7 (20260916000600_contacts_and_suppression.sql). */
+export type VendorContactRole = "operational" | "broker" | "secondary";
+
+export type ContactRow = Row<"contacts">;
+
+export type VendorContactRow = Omit<Row<"vendor_contacts">, "role"> & { role: VendorContactRole };
+
+/** suppressed_recipients.reason - Task 7. 'bounced'/'complained' are written by handle_bounce_suppression(); 'manual' is a direct company-writer insert. */
+export type SuppressionReason = "bounced" | "complained" | "manual";
+
+export type SuppressedRecipientRow = Omit<Row<"suppressed_recipients">, "reason"> & {
+  reason: SuppressionReason;
+};
