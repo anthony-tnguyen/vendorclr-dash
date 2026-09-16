@@ -36,6 +36,7 @@ describe("migrations", () => {
       "compliance_queue_items",
       "compliance_requirements",
       "contacts",
+      "document_extractions",
       "document_processing_jobs",
       "email_delivery_events",
       "email_outbox",

@@ -37,6 +37,9 @@ import { logOperational, newRequestId } from "./operationalLog.ts";
  * it must see every company's due documents, not one tenant's.
  */
 
+/** Matches EXTRACTION_SCHEMA_VERSION in src/workflows/insuranceExtractionSchema.ts exactly - keep the two in sync. */
+const EXTRACTION_SCHEMA_VERSION = "2026-09-16-task9a";
+
 const MAX_AUTO_RETRIES = 5;
 const BACKOFF_HOURS_BY_ATTEMPT = [1, 4, 12, 24, 48];
 
@@ -156,13 +159,28 @@ Deno.serve(async (req: Request) => {
         continue;
       }
 
+      // Task 9a: record_document_extraction() inserts the immutable
+      // document_extractions row for this attempt AND refreshes
+      // vendor_documents.parsed_data/extraction_confidence/
+      // current_extraction_id in one call - see that function's migration
+      // docblock (20260917000900_versioned_extractions.sql).
+      await supabase.rpc("record_document_extraction", {
+        p_document_id: row.document_id,
+        p_company_id: row.company_id,
+        p_source: "model",
+        p_provider: "anthropic",
+        p_model: "claude-opus-5",
+        p_prompt_version: EXTRACTION_SCHEMA_VERSION,
+        p_confidence: extraction.confidence,
+        p_parsed_data: extraction.data,
+        p_error: null,
+      });
+
       // Always needs_review, never processed - see this function's docblock.
       await supabase
         .from("vendor_documents")
         .update({
           processing_status: "needs_review",
-          parsed_data: extraction.data,
-          extraction_confidence: extraction.confidence,
           processing_error: null,
           review_reason: "Recovered by an automated retry - awaiting review.",
           processed_at: new Date().toISOString(),

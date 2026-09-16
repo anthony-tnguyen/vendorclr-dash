@@ -81,7 +81,7 @@ describe("apply_policy_renewal - the write-role happy path", () => {
     const rows = await asUser<{ apply_policy_renewal: string }>(
       db,
       OWNER,
-      `select apply_policy_renewal($1,$2,$3,'general_liability','Travelers','GL-8841-2266','2026-11-30','2027-11-30',2000000,4000000,true,true,'Halstead Builders','500 Harbor Point Way, Boston, MA 02110')`,
+      `select apply_policy_renewal($1,$2,$3,'general_liability','Travelers','GL-8841-2266','2026-11-30','2027-11-30',2000000,4000000,true,true,'Halstead Builders','500 Harbor Point Way, Boston, MA 02110',true)`,
       [companyId, vendorId, before.id],
     );
     const newPolicyId = rows[0]?.apply_policy_renewal;
@@ -129,7 +129,7 @@ describe("apply_policy_renewal - the write-role happy path", () => {
     const rows = await asUser<{ apply_policy_renewal: string }>(
       db,
       OWNER,
-      `select apply_policy_renewal($1,$2,$3,'general_liability','Travelers','GL-8841-2266','2026-11-30','2030-11-30',null,null,true,true,null,null)`,
+      `select apply_policy_renewal($1,$2,$3,'general_liability','Travelers','GL-8841-2266','2026-11-30','2030-11-30',null,null,true,true,null,null,null)`,
       [companyId, vendorId, before.id],
     );
     const newPolicyId = rows[0]?.apply_policy_renewal;
@@ -154,7 +154,7 @@ describe("apply_policy_renewal - the write-role happy path", () => {
         OWNER,
         // An out-of-range confidence-style bad value: this policy_type does
         // not exist in the CHECK constraint, so the INSERT fails.
-        `select apply_policy_renewal($1,$2,$3,'not_a_real_policy_type','Travelers','GL-8841-2266','2026-11-30','2027-11-30',null,null,true,true,null,null)`,
+        `select apply_policy_renewal($1,$2,$3,'not_a_real_policy_type','Travelers','GL-8841-2266','2026-11-30','2027-11-30',null,null,true,true,null,null,null)`,
         [companyId, vendorId, before.id],
       ),
     ).rejects.toThrow();
@@ -179,7 +179,7 @@ describe("apply_policy_renewal - RLS boundary (not security definer)", () => {
       asUser(
         db,
         READER,
-        `select apply_policy_renewal($1,$2,$3,'general_liability','Travelers','GL-8841-2266','2026-11-30','2028-11-30',null,null,true,true,null,null)`,
+        `select apply_policy_renewal($1,$2,$3,'general_liability','Travelers','GL-8841-2266','2026-11-30','2028-11-30',null,null,true,true,null,null,null)`,
         [companyId, vendorId, before.id],
       ),
     );
@@ -200,7 +200,7 @@ describe("apply_policy_renewal - RLS boundary (not security definer)", () => {
         RIVAL_OWNER,
         // Names Halstead's own company_id/vendor_id/policy_id from outside -
         // can_write_company(companyId) fails for the rival owner regardless.
-        `select apply_policy_renewal($1,$2,$3,'general_liability','Travelers','GL-8841-2266','2026-11-30','2029-11-30',null,null,true,true,null,null)`,
+        `select apply_policy_renewal($1,$2,$3,'general_liability','Travelers','GL-8841-2266','2026-11-30','2029-11-30',null,null,true,true,null,null,null)`,
         [companyId, vendorId, before.id],
       ),
     );
@@ -210,7 +210,7 @@ describe("apply_policy_renewal - RLS boundary (not security definer)", () => {
     const result = await db.query<{ can_exec: boolean }>(
       `select has_function_privilege('anon', $1::regprocedure, 'EXECUTE') as can_exec`,
       [
-        "public.apply_policy_renewal(uuid,uuid,uuid,text,text,text,date,date,int8,int8,bool,bool,text,text)",
+        "public.apply_policy_renewal(uuid,uuid,uuid,text,text,text,date,date,int8,int8,bool,bool,text,text,bool)",
       ],
     );
     expect(result.rows[0]?.can_exec).toBe(false);

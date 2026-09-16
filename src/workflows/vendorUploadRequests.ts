@@ -34,7 +34,12 @@ import {
   type ExistingPolicySnapshot,
   type RequirementSnapshot,
 } from "./complianceEngine";
-import { getDocumentExtractor, type ExtractDocumentResult } from "./documentExtraction";
+import {
+  EXTRACTION_MODEL,
+  EXTRACTION_PROVIDER,
+  getDocumentExtractor,
+  type ExtractDocumentResult,
+} from "./documentExtraction";
 import { getEmailSender } from "./emailSender";
 import { getMalwareScanner } from "./malwareScanner";
 import {
@@ -48,6 +53,7 @@ import {
   renewalRequestSubject,
   renewalRequestText,
 } from "./emailTemplates";
+import { EXTRACTION_SCHEMA_VERSION } from "./insuranceExtractionSchema";
 import type { ExtractedPolicy } from "./insuranceExtractionSchema";
 import {
   buildStoragePath,
@@ -1070,6 +1076,7 @@ export async function applyOnePolicyLine(
     p_waiver_of_subrogation: policy.waiver_of_subrogation,
     p_certificate_holder_name: certificateHolder.name,
     p_certificate_holder_address: certificateHolder.address,
+    p_primary_noncontributory: policy.primary_noncontributory,
   });
 
   if (rpcError || !newPolicyId) {
@@ -1359,12 +1366,31 @@ async function applyExtractionResult(
     }
   }
 
+  // Task 9a: record_document_extraction() inserts the immutable
+  // document_extractions row for this attempt AND refreshes
+  // vendor_documents.parsed_data/extraction_confidence/current_extraction_id
+  // in one call - see that function's migration docblock
+  // (20260916000900_versioned_extractions.sql) for why this replaced a
+  // direct .update() of those two columns. Recorded even for a
+  // not_configured/failed attempt (data/confidence both null) - "the model
+  // path was tried and this is what happened" is itself worth keeping in
+  // the history, same as any other attempt.
+  await supabase.rpc("record_document_extraction", {
+    p_document_id: documentId,
+    p_company_id: companyId,
+    p_source: "model",
+    p_provider: EXTRACTION_PROVIDER,
+    p_model: EXTRACTION_MODEL,
+    p_prompt_version: EXTRACTION_SCHEMA_VERSION,
+    p_confidence: extraction.confidence,
+    p_parsed_data: extraction.data,
+    p_error: extraction.error,
+  });
+
   await supabase
     .from("vendor_documents")
     .update({
       processing_status: finalStatus,
-      parsed_data: extraction.data,
-      extraction_confidence: extraction.confidence,
       processing_error: extraction.error,
       review_reason: reviewReason,
       applied_policy_id: appliedPolicyId,

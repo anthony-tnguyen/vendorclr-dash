@@ -459,6 +459,83 @@ export type Database = {
           },
         ];
       };
+      document_extractions: {
+        Row: {
+          attempted_at: string;
+          company_id: string;
+          confidence: number | null;
+          created_at: string;
+          document_id: string;
+          error: string | null;
+          id: string;
+          model: string | null;
+          parsed_data: Json | null;
+          prompt_version: string | null;
+          provider: string | null;
+          reviewer_id: string | null;
+          source: string;
+        };
+        Insert: {
+          attempted_at?: string;
+          company_id: string;
+          confidence?: number | null;
+          created_at?: string;
+          document_id: string;
+          error?: string | null;
+          id?: string;
+          model?: string | null;
+          parsed_data?: Json | null;
+          prompt_version?: string | null;
+          provider?: string | null;
+          reviewer_id?: string | null;
+          source: string;
+        };
+        Update: {
+          attempted_at?: string;
+          company_id?: string;
+          confidence?: number | null;
+          created_at?: string;
+          document_id?: string;
+          error?: string | null;
+          id?: string;
+          model?: string | null;
+          parsed_data?: Json | null;
+          prompt_version?: string | null;
+          provider?: string | null;
+          reviewer_id?: string | null;
+          source?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "document_extractions_company_id_fkey";
+            columns: ["company_id"];
+            isOneToOne: false;
+            referencedRelation: "admin_company_stats";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "document_extractions_company_id_fkey";
+            columns: ["company_id"];
+            isOneToOne: false;
+            referencedRelation: "companies";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "document_extractions_document_id_fkey";
+            columns: ["document_id"];
+            isOneToOne: false;
+            referencedRelation: "documents_due_for_retry";
+            referencedColumns: ["document_id"];
+          },
+          {
+            foreignKeyName: "document_extractions_document_id_fkey";
+            columns: ["document_id"];
+            isOneToOne: false;
+            referencedRelation: "vendor_documents";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       document_processing_jobs: {
         Row: {
           attempt_count: number;
@@ -1709,6 +1786,7 @@ export type Database = {
           applied_policy_id: string | null;
           company_id: string;
           created_at: string;
+          current_extraction_id: string | null;
           duplicate_of_document_id: string | null;
           extraction_confidence: number | null;
           file_name: string;
@@ -1738,6 +1816,7 @@ export type Database = {
           applied_policy_id?: string | null;
           company_id: string;
           created_at?: string;
+          current_extraction_id?: string | null;
           duplicate_of_document_id?: string | null;
           extraction_confidence?: number | null;
           file_name: string;
@@ -1767,6 +1846,7 @@ export type Database = {
           applied_policy_id?: string | null;
           company_id?: string;
           created_at?: string;
+          current_extraction_id?: string | null;
           duplicate_of_document_id?: string | null;
           extraction_confidence?: number | null;
           file_name?: string;
@@ -1819,6 +1899,13 @@ export type Database = {
             columns: ["company_id"];
             isOneToOne: false;
             referencedRelation: "companies";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "vendor_documents_current_extraction_id_fkey";
+            columns: ["current_extraction_id"];
+            isOneToOne: false;
+            referencedRelation: "document_extractions";
             referencedColumns: ["id"];
           },
           {
@@ -2337,6 +2424,7 @@ export type Database = {
           p_general_aggregate_limit: number;
           p_policy_number: string;
           p_policy_type: string;
+          p_primary_noncontributory: boolean;
           p_vendor_id: string;
           p_waiver_of_subrogation: boolean;
         };
@@ -2478,6 +2566,21 @@ export type Database = {
         Returns: number;
       };
       is_platform_admin: { Args: never; Returns: boolean };
+      record_document_extraction: {
+        Args: {
+          p_company_id: string;
+          p_confidence: number;
+          p_document_id: string;
+          p_error: string;
+          p_model: string;
+          p_parsed_data: Json;
+          p_prompt_version: string;
+          p_provider: string;
+          p_reviewer_id?: string;
+          p_source: string;
+        };
+        Returns: string;
+      };
       remove_company_member: {
         Args: { target_member_id: string };
         Returns: {

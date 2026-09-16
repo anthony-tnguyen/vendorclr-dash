@@ -201,3 +201,10 @@ export type DocumentProcessingJobRow = Omit<
   job_type: DocumentProcessingJobType;
   status: DocumentProcessingJobStatus;
 };
+
+/** document_extractions.source - Task 9a (20260917000900_versioned_extractions.sql). 'model' rows have no reviewer_id; 'reviewer_edit' rows always do - enforced at the DB level by that table's own CHECK constraint, not just by this type. */
+export type DocumentExtractionSource = "model" | "reviewer_edit";
+
+export type DocumentExtractionRow = Omit<Row<"document_extractions">, "source"> & {
+  source: DocumentExtractionSource;
+};

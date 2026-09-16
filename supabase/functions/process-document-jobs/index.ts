@@ -115,6 +115,9 @@ import { logOperational, newRequestId } from "./operationalLog.ts";
  * a claimed batch can span multiple companies in one invocation.
  */
 
+/** Matches EXTRACTION_SCHEMA_VERSION in src/workflows/insuranceExtractionSchema.ts exactly - keep the two in sync. */
+const EXTRACTION_SCHEMA_VERSION = "2026-09-16-task9a";
+
 const BATCH_SIZE = 10;
 const BACKOFF_SECONDS_BY_ATTEMPT = [15, 45, 120, 300];
 const RESEND_ENDPOINT = "https://api.resend.com/emails";
@@ -251,6 +254,7 @@ async function applyOnePolicyLine(
     p_waiver_of_subrogation: policy.waiver_of_subrogation,
     p_certificate_holder_name: certificateHolder.name,
     p_certificate_holder_address: certificateHolder.address,
+    p_primary_noncontributory: policy.primary_noncontributory,
   });
 
   if (rpcError || !newPolicyId) {
@@ -545,12 +549,30 @@ async function finalizeSuccess(
     }
   }
 
+  // Task 9a: record_document_extraction() inserts the immutable
+  // document_extractions row for this attempt AND refreshes
+  // vendor_documents.parsed_data/extraction_confidence/current_extraction_id
+  // in one call - see that function's migration docblock
+  // (20260917000900_versioned_extractions.sql) for why this replaced a
+  // direct .update() of those two columns, and why this Edge Function calls
+  // the same RPC the Node app does rather than duplicating the
+  // insert-plus-cache-refresh logic here.
+  await supabase.rpc("record_document_extraction", {
+    p_document_id: job.target_document_id,
+    p_company_id: job.company_id,
+    p_source: "model",
+    p_provider: "anthropic",
+    p_model: "claude-opus-5",
+    p_prompt_version: EXTRACTION_SCHEMA_VERSION,
+    p_confidence: extraction.confidence,
+    p_parsed_data: extraction.data,
+    p_error: extraction.error,
+  });
+
   await supabase
     .from("vendor_documents")
     .update({
       processing_status: finalStatus,
-      parsed_data: extraction.data,
-      extraction_confidence: extraction.confidence,
       processing_error: extraction.error,
       review_reason: reviewReason,
       applied_policy_id: appliedPolicyId,

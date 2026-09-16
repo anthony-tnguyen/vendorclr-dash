@@ -7,6 +7,7 @@ async function getServiceRoleClient() {
 }
 import { isGeneralLiability } from "./complianceEngine";
 import {
+  InsuranceExtractionSchema,
   POLICY_TYPES,
   PolicyTypeSchema,
   type ExtractedPolicy,
@@ -408,4 +409,100 @@ export const resolveReviewItem = createServerFn({ method: "POST" })
     });
 
     return { decision: data.decision, appliedCount, skippedPolicyTypes, errors };
+  });
+
+// ---------------------------------------------------------------------------
+// saveExtractionEdit - reviewer correction, Task 9a
+// ---------------------------------------------------------------------------
+
+const saveExtractionEditSchema = z.object({
+  documentId: z.string().uuid(),
+  // The full corrected extraction, not a partial patch - validated against
+  // the same schema a model attempt must pass, so a reviewer-authored
+  // revision is exactly as structurally trustworthy as a model one (same
+  // tri-state discipline: a field the reviewer leaves undetermined must be
+  // explicit null, not silently coerced by a partial-merge that could paper
+  // over a field the reviewer never actually looked at).
+  correctedData: InsuranceExtractionSchema,
+});
+
+export interface SaveExtractionEditResult {
+  /** The new document_extractions row id - the reviewer-authored revision, never a mutation of the model's own row. */
+  extractionId: string;
+}
+
+/**
+ * "Saving an edit creates a reviewer-authored extraction revision; it never
+ * overwrites model output" (Task 9a's own checklist wording). Staff-only,
+ * same assertPlatformAdmin()-first discipline as every other service-role
+ * handler in this file and vendorUploadRequests.ts - a reviewer correcting
+ * a customer's document is exactly the kind of cross-tenant action RLS's
+ * ordinary company-membership policies were never meant to grant, and
+ * record_document_extraction() below has no authorization check of its own
+ * to rely on (see that function's migration docblock for why: it is never
+ * reachable by anything but the service-role client this handler drops to
+ * only AFTER assertPlatformAdmin() succeeds).
+ *
+ * record_document_extraction() does the actual work in one call: inserts an
+ * immutable document_extractions row (source = 'reviewer_edit', attributed
+ * to this reviewer's own user id - "edits are attributable"), and moves
+ * vendor_documents.current_extraction_id (and its parsed_data/
+ * extraction_confidence cache) to point at it. The ORIGINAL model-authored
+ * row this superseded is untouched and still queryable - it is a new row,
+ * never an UPDATE of the old one. confidence is recorded as null for a
+ * reviewer_edit row: a human correction carries no model self-assessment to
+ * report, and null here means exactly what it means everywhere else in this
+ * schema - "not applicable / not determined by a model", not zero
+ * confidence.
+ *
+ * Does not itself touch compliance_queue_items or vendor_policies - saving
+ * a correction is a distinct action from resolveReviewItem()'s
+ * approve/reject decision, which still re-reads vendor_documents.parsed_data
+ * fresh (now reflecting this edit, since the cache was just updated) when a
+ * reviewer goes on to approve.
+ */
+export const saveExtractionEdit = createServerFn({ method: "POST" })
+  .validator(saveExtractionEditSchema)
+  .handler(async ({ data }): Promise<SaveExtractionEditResult> => {
+    const actorId = await assertPlatformAdmin();
+    const supabase = await getServiceRoleClient();
+
+    const { data: docRow, error: docError } = await supabase
+      .from("vendor_documents")
+      .select("id, company_id")
+      .eq("id", data.documentId)
+      .maybeSingle();
+
+    if (docError || !docRow) throw new Error("Document not found.");
+
+    const { data: extractionId, error: rpcError } = await supabase.rpc(
+      "record_document_extraction",
+      {
+        p_document_id: docRow.id,
+        p_company_id: docRow.company_id,
+        p_source: "reviewer_edit",
+        p_provider: null,
+        p_model: null,
+        p_prompt_version: null,
+        p_confidence: null,
+        p_parsed_data: data.correctedData,
+        p_error: null,
+        p_reviewer_id: actorId,
+      },
+    );
+
+    if (rpcError || !extractionId) {
+      throw new Error(rpcError?.message ?? "Could not save this correction. Try again.");
+    }
+
+    await supabase.from("audit_log").insert({
+      company_id: docRow.company_id,
+      actor_id: actorId,
+      action: "extraction_reviewer_edit",
+      target_type: "vendor_document",
+      target_id: docRow.id,
+      detail: { extractionId },
+    });
+
+    return { extractionId: extractionId as string };
   });
