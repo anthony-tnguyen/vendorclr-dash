@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   evaluateBounceRateAlert,
+  evaluateExhaustedProcessingJobsAlert,
   evaluateExhaustedRetryAlert,
   evaluateExtractionFailureRateAlert,
   evaluateMissedScheduledJobAlert,
@@ -126,6 +127,22 @@ describe("alert conditions", () => {
     it("mentions the retry cap in its message", () => {
       const result = evaluateExhaustedRetryAlert({ exhaustedCount: 2 });
       expect(result.message).toContain(String(RETRY_CAP));
+    });
+  });
+
+  describe("evaluateExhaustedProcessingJobsAlert() - Task 8b's document_processing_jobs queue, any exhausted job", () => {
+    it("fires on a single exhausted job", () => {
+      expect(evaluateExhaustedProcessingJobsAlert({ exhaustedCount: 1 }).firing).toBe(true);
+    });
+
+    it("does not fire on zero", () => {
+      expect(evaluateExhaustedProcessingJobsAlert({ exhaustedCount: 0 }).firing).toBe(false);
+    });
+
+    it("has its own alert key, distinct from the old retry-queue signal", () => {
+      const result = evaluateExhaustedProcessingJobsAlert({ exhaustedCount: 2 });
+      expect(result.key).toBe("exhausted_processing_jobs");
+      expect(result.key).not.toBe(evaluateExhaustedRetryAlert({ exhaustedCount: 2 }).key);
     });
   });
 
@@ -306,6 +323,7 @@ function summaryFixture(
     staleReviewItems: [],
     bouncedEmail: [],
     malwareFlagged: [],
+    exhaustedProcessingJobs: [],
     scheduledJobs: [],
     oldestQueueAgeHours: null,
     storage: { usedBytes: 1024, capacityBytes: 1024 * 1024 * 1024 },

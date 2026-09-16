@@ -129,6 +129,9 @@ export const SKIPPED_IN_PGLITE: readonly string[] = [
   // only meaningful against the real project (get_database_size_bytes()) -
   // same reasoning.
   "20260917000200_operations_scheduled_job_functions.sql",
+  // Task 8b - schedules process-document-jobs via cron.schedule()/pg_net,
+  // same reasoning as the two scheduled-job migrations above.
+  "20260917000700_schedule_document_processing_jobs.sql",
 ];
 
 export function migrationFiles(): string[] {

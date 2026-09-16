@@ -124,6 +124,42 @@ beforeAll(async () => {
      values ($1, $2, 'bounced', now())`,
     [bobsCompany, bobOutbox.rows[0]!.id],
   );
+
+  // Task 8b - an exhausted document_processing_jobs row per company - what
+  // evaluateExhaustedProcessingJobsAlert()'s data source reads. Needs a
+  // vendor_documents row to target.
+  const aliceDoc = await db.query<{ id: string }>(
+    `insert into public.vendor_documents
+       (company_id, vendor_id, storage_path, file_name, mime_type, file_size, sha256)
+     values ($1, $2, 'company/a/job-doc-a.pdf', 'alice-job.pdf', 'application/pdf', 1000, repeat('a', 64))
+     returning id`,
+    [alicesCompany, alicesVendorId],
+  );
+  await db.query(
+    `insert into public.document_processing_jobs
+       (company_id, vendor_id, target_document_id, idempotency_key, status)
+     values ($1, $2, $3, $4, 'exhausted')`,
+    [
+      alicesCompany,
+      alicesVendorId,
+      aliceDoc.rows[0]!.id,
+      `${aliceDoc.rows[0]!.id}:extract_document`,
+    ],
+  );
+
+  const bobDoc = await db.query<{ id: string }>(
+    `insert into public.vendor_documents
+       (company_id, vendor_id, storage_path, file_name, mime_type, file_size, sha256)
+     values ($1, $2, 'company/b/job-doc-b.pdf', 'bob-job.pdf', 'application/pdf', 1000, repeat('b', 64))
+     returning id`,
+    [bobsCompany, bobsVendorId],
+  );
+  await db.query(
+    `insert into public.document_processing_jobs
+       (company_id, vendor_id, target_document_id, idempotency_key, status)
+     values ($1, $2, $3, $4, 'exhausted')`,
+    [bobsCompany, bobsVendorId, bobDoc.rows[0]!.id, `${bobDoc.rows[0]!.id}:extract_document`],
+  );
 }, 60_000);
 
 describe("assertPlatformAdmin()'s gate - is_platform_admin()", () => {
@@ -231,6 +267,29 @@ describe("email_delivery_events (bounced/complained email)", () => {
       db,
       STAFF,
       `select company_id from public.email_delivery_events where event_type = 'bounced' order by company_id`,
+    );
+    const companyIds = new Set(rows.map((r) => r.company_id));
+    expect(companyIds.has(alicesCompany)).toBe(true);
+    expect(companyIds.has(bobsCompany)).toBe(true);
+  });
+});
+
+describe("document_processing_jobs (Task 8b - exhausted processing jobs)", () => {
+  it("hides another company's exhausted jobs from an ordinary member", async () => {
+    const rows = await asUser<{ n: number }>(
+      db,
+      BOB,
+      `select count(*)::int n from public.document_processing_jobs where company_id = $1 and status = 'exhausted'`,
+      [alicesCompany],
+    );
+    expect(rows[0]?.n).toBe(0);
+  });
+
+  it("shows a platform admin exhausted jobs across every company", async () => {
+    const rows = await asUser<{ company_id: string }>(
+      db,
+      STAFF,
+      `select company_id from public.document_processing_jobs where status = 'exhausted' order by company_id`,
     );
     const companyIds = new Set(rows.map((r) => r.company_id));
     expect(companyIds.has(alicesCompany)).toBe(true);

@@ -461,11 +461,18 @@ export type Database = {
       };
       document_processing_jobs: {
         Row: {
+          attempt_count: number;
+          claimed_at: string | null;
+          claimed_by: string | null;
           company_id: string;
           created_at: string;
+          exhausted_at: string | null;
           id: string;
           idempotency_key: string;
           job_type: string;
+          last_error: string | null;
+          max_attempts: number;
+          next_attempt_at: string;
           status: string;
           target_document_id: string;
           target_package_id: string | null;
@@ -473,11 +480,18 @@ export type Database = {
           vendor_id: string;
         };
         Insert: {
+          attempt_count?: number;
+          claimed_at?: string | null;
+          claimed_by?: string | null;
           company_id: string;
           created_at?: string;
+          exhausted_at?: string | null;
           id?: string;
           idempotency_key: string;
           job_type?: string;
+          last_error?: string | null;
+          max_attempts?: number;
+          next_attempt_at?: string;
           status?: string;
           target_document_id: string;
           target_package_id?: string | null;
@@ -485,11 +499,18 @@ export type Database = {
           vendor_id: string;
         };
         Update: {
+          attempt_count?: number;
+          claimed_at?: string | null;
+          claimed_by?: string | null;
           company_id?: string;
           created_at?: string;
+          exhausted_at?: string | null;
           id?: string;
           idempotency_key?: string;
           job_type?: string;
+          last_error?: string | null;
+          max_attempts?: number;
+          next_attempt_at?: string;
           status?: string;
           target_document_id?: string;
           target_package_id?: string | null;
@@ -2341,6 +2362,38 @@ export type Database = {
           to: "company_members";
           isOneToOne: true;
           isSetofReturn: false;
+        };
+      };
+      claim_document_processing_jobs: {
+        Args: {
+          p_batch_size?: number;
+          p_claimed_by?: string;
+          p_stale_processing_minutes?: number;
+        };
+        Returns: {
+          attempt_count: number;
+          claimed_at: string | null;
+          claimed_by: string | null;
+          company_id: string;
+          created_at: string;
+          exhausted_at: string | null;
+          id: string;
+          idempotency_key: string;
+          job_type: string;
+          last_error: string | null;
+          max_attempts: number;
+          next_attempt_at: string;
+          status: string;
+          target_document_id: string;
+          target_package_id: string | null;
+          updated_at: string;
+          vendor_id: string;
+        }[];
+        SetofOptions: {
+          from: "*";
+          to: "document_processing_jobs";
+          isOneToOne: false;
+          isSetofReturn: true;
         };
       };
       create_company_for_current_user: {
