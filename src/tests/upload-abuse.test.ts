@@ -15,8 +15,18 @@ const rpcMock = vi.fn((_fn: string, args: { p_bucket_key: string; p_window_start
   return Promise.resolve({ data: next, error: null });
 });
 
+/**
+ * Only used by the "IP bucket cannot be dodged" regression suite near the
+ * bottom of this file, which drives the real uploadDocumentForToken()
+ * end-to-end and needs its vendor_upload_requests lookup to resolve to a
+ * real-looking row. Every other test in this file only ever calls
+ * assertUploadAllowed() directly, which never touches `.from()` - adding it
+ * to the shared mock is harmless for them.
+ */
+const fromMock = vi.fn();
+
 vi.mock("@/lib/supabase/serverClient.server", () => ({
-  getServiceRoleClient: () => ({ rpc: rpcMock }),
+  getServiceRoleClient: () => ({ rpc: rpcMock, from: fromMock }),
 }));
 
 const {
@@ -49,6 +59,7 @@ beforeEach(() => {
   process.env["UPLOAD_ABUSE_IP_HMAC_SECRET"] = "test-secret-value";
   delete process.env["TURNSTILE_SECRET_KEY"];
   rpcMock.mockClear();
+  fromMock.mockReset();
 });
 
 afterEach(() => {
@@ -393,4 +404,102 @@ describe("assertUploadAllowed - concurrency (Definition of Done)", () => {
     const succeeded = outcomes.filter((o) => o.status === "fulfilled").length;
     expect(succeeded).toBe(UPLOAD_COMPANY_DAILY_LIMIT);
   }, 20_000);
+});
+
+describe("uploadDocumentForToken - the upload:ip bucket cannot be dodged with a malformed request (regression)", () => {
+  /**
+   * Drives uploadDocumentForTokenHandler() - the plain function
+   * uploadDocumentForToken()'s createServerFn wrapper delegates to, taking
+   * ipAddress explicitly rather than reading it from a request context (see
+   * that function's own docblock in vendorUploadRequests.ts for why: calling
+   * the createServerFn-wrapped export directly needs a "Start context"
+   * (@tanstack/start-storage-context) that this file's own
+   * requestHandler()/getRequest() IP-extraction tests above do NOT
+   * establish - confirmed empirically, not assumed, while writing this
+   * exact test). Proves the fix for a real bug a code review caught:
+   * file-shape/size guards used to run BEFORE any abuse check, so a caller
+   * who always sent a missing or oversized file never touched the
+   * upload:ip bucket at all - an unthrottled path into the handler. The fix
+   * moved the token lookup and the single "upload" assertUploadAllowed()
+   * call ahead of the file checks, so this now proves the bucket is
+   * consumed on every request regardless of the file.
+   */
+  it("throttles a caller who repeatedly sends a resolvable token with no file attached", async () => {
+    const { uploadDocumentForTokenHandler } = await import("@/workflows/vendorUploadRequests");
+
+    fromMock.mockImplementation((table: string) => {
+      if (table !== "vendor_upload_requests") {
+        throw new Error(`unexpected table in this regression test's mock: ${table}`);
+      }
+      return {
+        select: () => ({
+          eq: () => ({
+            maybeSingle: async () => ({
+              data: {
+                id: "req-regression-1",
+                status: "opened",
+                expires_at: new Date(Date.now() + 86_400_000).toISOString(),
+                vendor_id: "vendor-regression-1",
+                company_id: "company-regression-1",
+                vendors: { name: "Regression Test Vendor" },
+              },
+              error: null,
+            }),
+          }),
+        }),
+      };
+    });
+
+    // freshIp(), not a hardcoded literal: this file's rpcCounters map is
+    // module-level and never reset between tests, so a hardcoded IP here
+    // could collide with one an earlier test's own freshIp() call already
+    // happened to generate (confirmed the hard way - it did).
+    const ip = freshIp();
+    let tokenCounter = 0;
+    const attempt = () => {
+      const formData = new FormData();
+      // A fresh token every call - and thus a fresh upload:token bucket
+      // every call - so only the upload:ip bucket (shared by every call,
+      // same IP) ever accumulates past its own limit. No "file" field at
+      // all: the same file.size <= 0 guard an oversized file would also
+      // hit (file.size > MAX_UPLOAD_BYTES is the other branch of that same
+      // condition), without allocating a real 25MB+ buffer per call just to
+      // prove it.
+      tokenCounter += 1;
+      formData.set("token", `regression-token-${tokenCounter}`);
+      return uploadDocumentForTokenHandler(formData, ip);
+    };
+
+    const outcomes: Array<{ ok: boolean; message: string }> = [];
+    for (let i = 0; i < UPLOAD_IP_LIMIT + 3; i++) {
+      try {
+        await attempt();
+        outcomes.push({ ok: true, message: "" });
+      } catch (error) {
+        outcomes.push({
+          ok: false,
+          message: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
+
+    // Every one of the first UPLOAD_IP_LIMIT attempts must fail on the file
+    // guard itself, not before it - proving each one actually reached, and
+    // was counted by, the upload:ip bucket rather than being silently free.
+    const withinLimit = outcomes.slice(0, UPLOAD_IP_LIMIT);
+    for (const outcome of withinLimit) {
+      expect(outcome.ok).toBe(false);
+      expect(outcome.message).toMatch(/No file was attached/);
+    }
+
+    // Every attempt past the limit must fail with the generic throttle
+    // message instead of the file-guard message - the ip:upload bucket
+    // itself is what stops them now, before the file is even inspected.
+    const pastLimit = outcomes.slice(UPLOAD_IP_LIMIT);
+    expect(pastLimit.length).toBeGreaterThan(0);
+    for (const outcome of pastLimit) {
+      expect(outcome.ok).toBe(false);
+      expect(outcome.message).toMatch(/Too many attempts/);
+    }
+  });
 });

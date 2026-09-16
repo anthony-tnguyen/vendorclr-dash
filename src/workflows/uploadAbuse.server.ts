@@ -287,14 +287,26 @@ function isTurnstileConfigured(): boolean {
  * other *.server module in this project already documents at its own
  * lazy-import call site.
  *
- * The dynamic import() itself is memoized (one in-flight promise shared by
- * every caller) rather than re-invoked per call: assertUploadAllowed()
- * checks every applicable rule concurrently (Promise.all in rulesFor()'s
- * caller below), so a single "upload" call can already fire two or three
- * simultaneous getServiceRoleClient() calls, and real traffic can have many
- * such calls in flight across different requests at once on a Workers
- * instance. One shared import() avoids redundant module resolution under
- * that concurrency rather than relying on the module loader to coalesce it.
+ * The dynamic import() is memoized (one in-flight promise shared by every
+ * caller) specifically because of an empirically-observed problem, not a
+ * theoretical one: a real Node/Workers module loader already caches
+ * import() by specifier on its own, so this would be unnecessary in
+ * production. But under Vitest's module-mocking layer (vi.mock on this
+ * exact specifier in src/tests/upload-abuse.test.ts), a large burst of
+ * concurrent import() calls against the SAME mocked specifier occasionally
+ * resolved a few of them to the real, unmocked module instead of the mock -
+ * reproduced reliably by that file's own concurrency tests (up to 275
+ * parallel assertUploadAllowed() calls, each firing up to three simultaneous
+ * getServiceRoleClient() calls via rulesFor()'s Promise.all - i.e. hundreds
+ * of concurrent import()s of one specifier in a single test). Removing this
+ * memoization reintroduces those intermittent failures (confirmed by
+ * temporarily reverting it while diagnosing); adding it back fixes them
+ * with zero flakes across repeated runs. Not needed by
+ * getUploadAbuseModule()/getFileValidationModule() in
+ * vendorUploadRequests.ts, or by logAbuseEvent()'s own `await import(...)`
+ * below, because none of those are ever driven by a test anywhere close to
+ * this concurrently - this file's own dedicated concurrency test is the one
+ * thing in this codebase that actually exercises the failure mode.
  */
 let serverClientModule: Promise<typeof import("@/lib/supabase/serverClient.server")> | null = null;
 async function getServiceRoleClient() {
@@ -376,43 +388,29 @@ interface RateLimitRule {
   captchaEligible: boolean;
 }
 
+/** Every rule this file has is IP-scoped except upload:token/upload:company - shared shape for the three that are, so resolve/invalid_token/upload:ip don't each repeat all five RateLimitRule fields by hand. */
+function ipRule(
+  bucketPrefix: string,
+  ipKey: string,
+  windowMs: number,
+  limit: number,
+): RateLimitRule {
+  return { bucketPrefix, identityKey: ipKey, windowMs, limit, captchaEligible: true };
+}
+
 async function rulesFor(input: AssertUploadAllowedInput): Promise<RateLimitRule[]> {
   const ipKey = await hmacIpAddress(input.ipAddress);
 
   if (input.operation === "resolve") {
-    return [
-      {
-        bucketPrefix: "resolve:ip",
-        identityKey: ipKey,
-        windowMs: RESOLVE_IP_WINDOW_MS,
-        limit: RESOLVE_IP_LIMIT,
-        captchaEligible: true,
-      },
-    ];
+    return [ipRule("resolve:ip", ipKey, RESOLVE_IP_WINDOW_MS, RESOLVE_IP_LIMIT)];
   }
 
   if (input.operation === "invalid_token") {
-    return [
-      {
-        bucketPrefix: "invalid_token:ip",
-        identityKey: ipKey,
-        windowMs: INVALID_TOKEN_IP_WINDOW_MS,
-        limit: INVALID_TOKEN_IP_LIMIT,
-        captchaEligible: true,
-      },
-    ];
+    return [ipRule("invalid_token:ip", ipKey, INVALID_TOKEN_IP_WINDOW_MS, INVALID_TOKEN_IP_LIMIT)];
   }
 
   // "upload"
-  const rules: RateLimitRule[] = [
-    {
-      bucketPrefix: "upload:ip",
-      identityKey: ipKey,
-      windowMs: UPLOAD_IP_WINDOW_MS,
-      limit: UPLOAD_IP_LIMIT,
-      captchaEligible: true,
-    },
-  ];
+  const rules: RateLimitRule[] = [ipRule("upload:ip", ipKey, UPLOAD_IP_WINDOW_MS, UPLOAD_IP_LIMIT)];
   if (input.tokenHash) {
     rules.push({
       bucketPrefix: "upload:token",
