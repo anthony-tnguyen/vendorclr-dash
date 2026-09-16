@@ -41,6 +41,8 @@ Four phases so far:
 | `20260903000400_schedule_automated_retries.sql`           | Schedules an hourly call into the `retry-failed-documents` Edge Function via `pg_cron`/`pg_net` — see [Automated retry queue](#automated-retry-queue)                                               |
 | `20260903000500_email_bounce_handling.sql`                | Widens `email_outbox.status`; adds `email_delivery_events` — see [Email bounce handling](#email-bounce-handling)                                                                                    |
 | `20260903000600_certificate_holder_on_file.sql`           | Adds `vendor_policies.certificate_holder_name`/`certificate_holder_address`; widens `apply_policy_renewal()` to two more parameters — see [Certificate holder on file](#certificate-holder-on-file) |
+| `20260915000100_gated_signup_invites.sql`                 | `signup_invites`, `create_signup_invite()`; gates self-serve business signup behind an admin-issued invite code                                                                                     |
+| `20260916000100_company_feature_flags.sql`                | `company_feature_flags`, `set_company_feature_flag()` — see [Feature flags](#feature-flags)                                                                                                         |
 
 The headline modelling change: **a vendor no longer owns one flat policy.**
 `Vendor.policyNumber` / `Vendor.expiresOn` in `src/data/contracts.ts` could hold
@@ -766,6 +768,61 @@ always shown regardless, and nothing here blocks approval or auto-apply.
 A false "doesn't match" costs a glance; a missed real mismatch is exactly
 what a human reviewer is there to catch.
 
+### Feature flags
+
+`company_feature_flags` (migration 21) is a per-company kill switch table,
+built ahead of the features it will gate rather than alongside the first one
+of them. Seven typed keys exist today - `construction_core`,
+`requirement_profiles`, `team_invites`, `submission_packages`,
+`deficiency_cases`, `exceptions`, `reports_v2` (`FEATURE_FLAG_KEYS` in
+`src/domain/featureFlags.ts`) - none of which back a real schema or screen
+yet. **Nothing in the app checks any of them today**; this migration only
+adds the switch itself, so a new company cannot be routed into a flow that
+doesn't exist.
+
+```sql
+create table public.company_feature_flags (
+  company_id uuid not null references public.companies (id) on delete cascade,
+  key        text not null check (key in (...)),
+  enabled    boolean not null default false,
+  updated_at timestamptz not null default now(),
+  primary key (company_id, key)
+);
+```
+
+Absence of a row reads as disabled - flags default off, and a company need
+not have every key populated for that default to hold. Every flag is off
+for every company immediately after this migration runs; no rollout has
+happened yet.
+
+- **Read**: `isCompanyFeatureEnabled(companyId, key)` in
+  `src/domain/featureFlags.ts`. Server-only (it lazily imports
+  `getRequestScopedClient()` the same way `vendorUploadRequests.ts` does,
+  rather than statically, so this file can stay usable from client code for
+  its plain key union without pulling server-only secrets into the client
+  bundle). Runs as the signed-in caller, so RLS decides visibility exactly
+  as any other read.
+- **Write**: `set_company_feature_flag(company_id, key, enabled)`, a
+  `SECURITY DEFINER` RPC, same shape as `create_signup_invite()`. It is the
+  _only_ way a row is ever written - the table has no insert/update/delete
+  policy at all, so a direct write from any client, at any company role, is
+  refused by RLS. The function itself re-checks `is_platform_admin()`
+  before writing. This is deliberate: these flags gate which incomplete
+  product surfaces a company can reach, a platform-staff rollout decision,
+  not a tenant self-service setting - a company owner cannot toggle their
+  own company's flags, on purpose.
+- **RLS**: a member reads only their own company's flags
+  (`company_id in (select current_company_ids())`); a platform admin reads
+  every company's. Proven in `supabase/tests/feature-flags.test.ts` -
+  cross-tenant isolation on select, and that insert/update/delete are all
+  refused for a non-admin regardless of company role.
+
+Rollout, when the features behind these flags actually exist, is meant to
+go through `set_company_feature_flag()` by hand (or a future admin
+screen): the staging tenant first, then named pilot companies one at a
+time - never a blanket enable. No company has been enabled for anything as
+of this migration.
+
 ## Security model
 
 Tenancy is enforced in the database, not in React.
@@ -998,11 +1055,35 @@ update` on the invite row before checking and marking it used, so two
   [Cancelling an upload request](#cancelling-an-upload-request)), but there
   is no one-click "resend" - an admin who wants a fresh link has to cancel
   the old request and create a new one as two separate actions.
-- **`db-types.ts` is hand-written**, and the client is intentionally not
-  parameterised with it. Run
-  `supabase gen types typescript --project-id <ref> > src/data/db-types.ts`, then
-  add the generic back to `VendorClrClient` and drop the casts in
-  `supabaseRepository.ts`.
+- **`db-types.ts` is now genuinely generated** (`generate_typescript_types`
+  against the live project, migration 21), but `VendorClrClient` is still
+  intentionally not parameterised with it, and `supabaseRepository.ts` still
+  casts rather than relying on inference - flipping that switch is real,
+  separate follow-up work (broader blast radius than this migration wants
+  to carry) rather than a mechanical next step. `src/data/dbTypeAliases.ts`
+  now sits between the two: `supabase gen types` widens every
+  CHECK-constrained `text` column to plain `string` (it can't see a CHECK
+  expression's allowed values, only real Postgres enums), so that file
+  restores the literal unions (`PolicyType`, `CompanyRole`, etc.)
+  `supabaseRepository.ts` relies on, by hand, from `Database`. It is
+  deliberately separate from db-types.ts's generated output and needs
+  updating by hand if a CHECK constraint changes - see the next item for
+  why there's no automated check standing in for that yet.
+- **No CI job regenerates and diff-checks `db-types.ts`.** The plan for
+  migration 21 called for one, but running `supabase gen types typescript`
+  non-interactively needs a `SUPABASE_ACCESS_TOKEN` and project ref as CI
+  secrets, and neither is configured in this repo's CI yet. Documented here
+  rather than wired up with a job that would only fail outright - add
+  `SUPABASE_ACCESS_TOKEN` (and a `SUPABASE_PROJECT_ID` var, currently
+  `fzrcowwonezflydicpbd`) to CI secrets, then add a step that runs
+  `supabase gen types typescript --project-id "$SUPABASE_PROJECT_ID" >
+src/data/db-types.ts` followed by `git diff --exit-code src/data/db-types.ts`.
+- **The live project was briefly missing `20260915000100_gated_signup_invites.sql`
+  after migration 21 was applied** - discovered while applying migration 21,
+  not caused by it, and closed the same day: the migration was applied live
+  and `db-types.ts` regenerated, so `signup_invites` is now real generated
+  output and `SignupInviteRow` in `dbTypeAliases.ts` uses the derived form
+  like every other row type, instead of a hand-authored placeholder.
 - **`notifyDocumentOutcome()` emails every company owner individually**,
   rather than one email with every recipient, or a digest. Fine at current
   scale (a company typically has one owner); revisit if a company with
@@ -1136,3 +1217,12 @@ Nothing here claims otherwise: a `processed` extraction that fails
 `matchExtractedPolicy()` for even one coverage type on the certificate leaves
 `vendor_policies` and `vendor_compliance_items` completely untouched for the
 whole document, and `vendor_documents.review_reason` says why.
+
+`company_feature_flags` (migration 21, see [Feature flags](#feature-flags))
+adds the kill-switch table and its seven typed keys ahead of the features
+they will gate - `construction_core`, `requirement_profiles`,
+`team_invites`, `submission_packages`, `deficiency_cases`, `exceptions`,
+`reports_v2` back no schema or screen yet, and nothing in the app checks
+any of them. They currently gate nothing; a company reading any key today
+gets `false` because no row exists, which is correct and by design, not a
+gap to close.
