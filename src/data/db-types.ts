@@ -239,6 +239,22 @@ export interface LeadRow {
   updated_at: string;
 }
 
+export type SignupInviteStatus = "pending" | "used" | "revoked";
+
+export interface SignupInviteRow {
+  id: string;
+  code: string;
+  email: string;
+  company_name: string;
+  status: SignupInviteStatus;
+  expires_at: string;
+  created_by: string | null;
+  used_at: string | null;
+  used_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface CompanyReportRowView {
   id: string;
   company_id: string;
@@ -326,6 +342,10 @@ export interface Database {
           Partial<EmailOutboxRow>
       >;
       leads: Table<LeadRow, Pick<LeadRow, "company_name"> & Partial<LeadRow>>;
+      signup_invites: Table<
+        SignupInviteRow,
+        Pick<SignupInviteRow, "email" | "company_name"> & Partial<SignupInviteRow>
+      >;
     };
     Views: {
       company_report_rows: View<CompanyReportRowView>;
@@ -335,6 +355,10 @@ export interface Database {
       create_company_for_current_user: {
         Args: { company_name: string; member_name?: string | null };
         Returns: string;
+      };
+      create_signup_invite: {
+        Args: { company_name: string; email: string };
+        Returns: SignupInviteRow;
       };
       is_platform_admin: { Args: Record<string, never>; Returns: boolean };
     };

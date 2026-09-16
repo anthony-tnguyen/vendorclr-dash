@@ -39,6 +39,7 @@ describe("migrations", () => {
       "platform_admins",
       "policy_reminder_log",
       "profiles",
+      "signup_invites",
       "tasks",
       "vendor_compliance_items",
       "vendor_documents",

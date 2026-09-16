@@ -10,6 +10,8 @@ import type {
   OverviewMetric,
   QueueItem,
   ReportRow,
+  SignupInvite,
+  SignupInviteDraft,
   TaskItem,
   Vendor,
   VendorDraft,
@@ -21,6 +23,7 @@ import type {
   CompanyRole,
   ComplianceRequirementRow,
   LeadRow,
+  SignupInviteRow,
   VendorComplianceItemRow,
   VendorPolicyRow,
   VendorRow,
@@ -163,6 +166,18 @@ function isoDate(value: string | null): string {
   return value ?? NO_EXPIRY;
 }
 
+function toSignupInvite(row: SignupInviteRow): SignupInvite {
+  return {
+    id: row.id,
+    companyName: row.company_name,
+    email: row.email,
+    code: row.code,
+    status: row.status,
+    expiresOn: row.expires_at,
+    createdOn: row.created_at,
+  };
+}
+
 export function createSupabaseRepository(
   clientFactory: () => VendorClrClient = getSupabaseClient,
 ): DashboardRepository {
@@ -187,7 +202,7 @@ export function createSupabaseRepository(
         if (error) throw new Error(error.message);
         if (!data) {
           throw new Error(
-            "Signed-in user belongs to no company. Call create_company_for_current_user() during signup.",
+            "Signed-in user belongs to no company. Business accounts are created via an admin-issued signup invite (see /signup); this user has none.",
           );
         }
         return data.company_id;
@@ -506,6 +521,39 @@ export function createSupabaseRepository(
           lastActiveOn: row.last_active_at ? row.last_active_at.slice(0, 10) : "Never",
         };
       });
+    },
+
+    async listSignupInvites(): Promise<SignupInvite[]> {
+      const supabase = clientFactory();
+      const rows = unwrap(
+        await supabase.from("signup_invites").select("*").order("created_at", { ascending: false }),
+      ) as SignupInviteRow[];
+
+      return rows.map(toSignupInvite);
+    },
+
+    async createSignupInvite(draft: SignupInviteDraft): Promise<SignupInvite> {
+      const supabase = clientFactory();
+      const row = unwrap(
+        await supabase.rpc("create_signup_invite", {
+          company_name: draft.companyName,
+          email: draft.email,
+        }),
+      ) as SignupInviteRow;
+
+      return toSignupInvite(row);
+    },
+
+    async revokeSignupInvite(inviteId: string): Promise<void> {
+      const supabase = clientFactory();
+      unwrap(
+        await supabase
+          .from("signup_invites")
+          .update({ status: "revoked" })
+          .eq("id", inviteId)
+          .select("id")
+          .single(),
+      );
     },
   };
 }

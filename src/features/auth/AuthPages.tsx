@@ -216,15 +216,18 @@ export function SignupPage() {
   const live = hasBackendEnv();
 
   const { notice, error, pending, onSubmit } = useAuthForm(async (form) => {
-    // company_name rides along in user metadata. The handle_new_user trigger reads
-    // it and provisions the company plus the owner membership, so this works
-    // whether or not email confirmation is enabled.
+    // The invite code rides along in user metadata. The handle_new_user
+    // trigger redeems it against signup_invites and provisions the company
+    // (using the invite's own company name, not anything entered here) plus
+    // the owner membership - a missing or invalid code fails the whole
+    // signUp() call server-side, so this works whether or not email
+    // confirmation is enabled.
     const { data, error: signUpError } = await getSupabaseClient().auth.signUp({
       email: text(form, "signup-email"),
       password: String(form.get("signup-password") ?? ""),
       options: {
         data: {
-          company_name: text(form, "company"),
+          invite_code: text(form, "invite-code"),
           full_name: text(form, "full-name"),
         },
       },
@@ -252,7 +255,13 @@ export function SignupPage() {
       }
     >
       <form onSubmit={onSubmit} className="mt-4 space-y-4">
-        <Field id="company" label="Company name" required={live} />
+        <Field
+          id="invite-code"
+          label="Invite code"
+          autoComplete="off"
+          required={live}
+          hint="Provided by your VendorClr contact."
+        />
         <Field id="full-name" label="Your name" autoComplete="name" />
         <Field
           id="signup-email"
@@ -260,6 +269,7 @@ export function SignupPage() {
           type="email"
           autoComplete="email"
           required={live}
+          hint="Must match the email the invite was sent to."
         />
         <Field
           id="signup-password"

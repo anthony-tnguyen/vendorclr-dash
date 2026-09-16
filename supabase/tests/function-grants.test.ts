@@ -48,8 +48,8 @@ describe("RLS-primitive functions: authenticated yes, anon no", () => {
     "public.has_company_role(uuid, text[])",
     "public.can_write_company(uuid)",
     "public.shares_company_with(uuid)",
-    "public.create_company_for_current_user(text, text)",
     "public.current_user_id()",
+    "public.create_signup_invite(text, text)",
   ];
 
   it.each(fns)("anon cannot execute %s", async (fn) => {
@@ -61,6 +61,23 @@ describe("RLS-primitive functions: authenticated yes, anon no", () => {
   });
 });
 
+describe("create_company_for_current_user(): no longer callable directly", () => {
+  // Used to sit in the "authenticated yes" group above. It bypassed the
+  // signup_invites gate entirely (no invite check of its own), and nothing
+  // in the app calls it, so its EXECUTE grant was revoked - see the gated
+  // signup migration. Its own describe block, not folded into the
+  // trigger-only group below, because it isn't a trigger function at all.
+  const fn = "public.create_company_for_current_user(text, text)";
+
+  it("anon cannot execute it", async () => {
+    expect(await canExecute("anon", fn)).toBe(false);
+  });
+
+  it("authenticated cannot execute it either, now", async () => {
+    expect(await canExecute("authenticated", fn)).toBe(false);
+  });
+});
+
 describe("trigger-only functions: no one calls these directly", () => {
   const fns = [
     "public.assert_company_matches_vendor()",
@@ -69,6 +86,7 @@ describe("trigger-only functions: no one calls these directly", () => {
     "public.seed_vendor_compliance_items()",
     "public.set_audit_log_actor()",
     "public.assert_company_matches_email_outbox()",
+    "public.set_signup_invite_defaults()",
   ];
 
   it.each(fns)("anon cannot execute %s", async (fn) => {

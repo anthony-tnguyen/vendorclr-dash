@@ -972,6 +972,28 @@ Deliberate, and worth revisiting as later phases grow on top of them:
   uploads in flight.
 - **One company per user.** `resolveCompanyId()` takes the oldest membership.
   Multi-company users need a company switcher in the session context first.
+- **The double-redemption race on `signup_invites` is closed by a lock,
+  verified only by review.** `handle_new_user()` takes `select ... for
+  update` on the invite row before checking and marking it used, so two
+  concurrent signups racing the same still-pending code should serialize
+  rather than both succeeding — see the comment near "rejects a code that
+  has already been used" in `supabase/tests/signup-invites.test.ts`. PGlite
+  is a single in-memory instance with no genuinely overlapping in-flight
+  transactions to race against each other, so nothing here is an automated
+  test of the lock itself — the guarantee rests on documented Postgres
+  row-locking semantics, verified by manual review, the same category of
+  gap as the pg_net/pg_cron skip list and the GoTrue-stub caveat above.
+- **Whether GoTrue forwards `handle_new_user()`'s exact rejection text
+  end-to-end is untested.** The trigger raises a specific message (e.g.
+  `'Invalid or expired invite code.'`) on an invalid or already-used invite
+  code, but whether Supabase's real GoTrue service passes that string
+  through verbatim into the client-visible `signUpError.message`, or wraps
+  or genericizes it, can't be exercised from this repo — `harness.ts`'s
+  PGlite-based tests insert directly into `auth.users`, bypassing GoTrue's
+  HTTP layer entirely, the same class of gap already noted above for
+  production JWT claim contents and `service_role` behavior. Confirm
+  against a live/staging project before depending on that exact string in
+  support docs or QA scripts.
 - **No resend UI.** Cancelling an outstanding request is now built (see
   [Cancelling an upload request](#cancelling-an-upload-request)), but there
   is no one-click "resend" - an admin who wants a fresh link has to cancel

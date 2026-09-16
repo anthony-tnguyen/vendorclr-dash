@@ -1,5 +1,5 @@
 import { createMemoryHistory, RouterProvider } from "@tanstack/react-router";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 import { getRouter } from "@/router";
@@ -34,6 +34,13 @@ describe("authenticated-demo route behavior", () => {
 
     expect(await screen.findByRole("heading", { level: 1, name: heading })).toBeInTheDocument();
     expect(screen.getByText(/does not authenticate anyone/i)).toBeInTheDocument();
+  });
+
+  it("asks for an invite code on signup instead of a free-text company name", async () => {
+    await renderRoute("/signup");
+
+    expect(await screen.findByLabelText("Invite code")).toBeInTheDocument();
+    expect(screen.queryByLabelText("Company name")).not.toBeInTheDocument();
   });
 
   it("renders command-center metrics and a vendor needing attention", async () => {
@@ -139,6 +146,7 @@ describe("administrator route behavior", () => {
     ["/dashboard/admin/compliance", "Compliance queue"],
     ["/dashboard/admin/leads", "Leads"],
     ["/dashboard/admin/access", "Access management"],
+    ["/dashboard/admin/invites", "Signup invites"],
   ])("denies %s for the customer demo role", async (path) => {
     await renderRoute(path);
 
@@ -187,5 +195,32 @@ describe("administrator route behavior", () => {
     expect(await screen.findByRole("status")).toHaveTextContent(
       /no invitation was created or emailed/i,
     );
+  });
+
+  // Mutates the shared demo repository singleton (creates then revokes a real
+  // invite in its in-memory store). Kept last in this describe block since
+  // nothing resets the repository between tests in this file - a test added
+  // after this one would otherwise silently inherit the extra revoked invite.
+  it("creates and revokes a signup invite through the demo repository", async () => {
+    const { user } = await renderAdminRoute("/dashboard/admin/invites");
+
+    await screen.findByText("Meridian Fabrication");
+
+    await user.click(screen.getByRole("button", { name: /create invite/i }));
+    await user.type(screen.getByLabelText("Company name"), "Cedar Ridge Contracting");
+    await user.type(screen.getByLabelText("Email"), "owner@cedarridge.example");
+    await user.click(screen.getByRole("button", { name: /^create invite$/i }));
+
+    expect(
+      await screen.findByText(/invite code .+ created for cedar ridge contracting/i),
+    ).toBeInTheDocument();
+    expect(await screen.findByText("Cedar Ridge Contracting")).toBeInTheDocument();
+
+    const row = screen.getByText("Cedar Ridge Contracting").closest("tr");
+    if (!row) throw new Error("expected a table row for the new invite");
+    await user.click(within(row).getByRole("button", { name: /revoke/i }));
+
+    await waitFor(() => expect(within(row).queryByRole("button", { name: /revoke/i })).toBeNull());
+    expect(within(row).getByText("revoked")).toBeInTheDocument();
   });
 });

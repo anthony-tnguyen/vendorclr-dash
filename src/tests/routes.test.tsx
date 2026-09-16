@@ -19,6 +19,7 @@ const expectedRouteIds = [
   "/dashboard/admin/compliance",
   "/dashboard/admin/leads",
   "/dashboard/admin/access",
+  "/dashboard/admin/invites",
 ] as const;
 
 function createTestRouter(initialEntry: string) {
