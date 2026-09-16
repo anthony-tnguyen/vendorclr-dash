@@ -19,12 +19,15 @@ import { Route as DashboardReportsRouteImport } from './routes/dashboard.reports
 import { Route as DashboardSettingsRouteImport } from './routes/dashboard.settings'
 import { Route as DashboardTasksRouteImport } from './routes/dashboard.tasks'
 import { Route as VendorUploadTokenRouteImport } from './routes/vendor-upload.$token'
+import { Route as ApiHealthLiveRouteImport } from './routes/api.health.live'
+import { Route as ApiHealthReadyRouteImport } from './routes/api.health.ready'
 import { Route as DashboardAdminIndexRouteImport } from './routes/dashboard.admin.index'
 import { Route as DashboardAdminAccessRouteImport } from './routes/dashboard.admin.access'
 import { Route as DashboardAdminCompaniesRouteImport } from './routes/dashboard.admin.companies'
 import { Route as DashboardAdminComplianceRouteImport } from './routes/dashboard.admin.compliance'
 import { Route as DashboardAdminInvitesRouteImport } from './routes/dashboard.admin.invites'
 import { Route as DashboardAdminLeadsRouteImport } from './routes/dashboard.admin.leads'
+import { Route as DashboardAdminOperationsRouteImport } from './routes/dashboard.admin.operations'
 import { Route as DashboardVendorsIndexRouteImport } from './routes/dashboard.vendors.index'
 import { Route as DashboardVendorsVendorIdRouteImport } from './routes/dashboard.vendors.$vendorId'
 import { Route as DashboardAdminComplianceQueueItemIdRouteImport } from './routes/dashboard.admin.compliance.$queueItemId'
@@ -79,6 +82,16 @@ const VendorUploadTokenRoute = VendorUploadTokenRouteImport.update({
   path: '/vendor-upload/$token',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiHealthLiveRoute = ApiHealthLiveRouteImport.update({
+  id: '/api/health/live',
+  path: '/api/health/live',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiHealthReadyRoute = ApiHealthReadyRouteImport.update({
+  id: '/api/health/ready',
+  path: '/api/health/ready',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const DashboardAdminIndexRoute = DashboardAdminIndexRouteImport.update({
   id: '/dashboard/admin/',
   path: '/dashboard/admin/',
@@ -110,6 +123,12 @@ const DashboardAdminLeadsRoute = DashboardAdminLeadsRouteImport.update({
   path: '/dashboard/admin/leads',
   getParentRoute: () => rootRouteImport,
 } as any)
+const DashboardAdminOperationsRoute =
+  DashboardAdminOperationsRouteImport.update({
+    id: '/dashboard/admin/operations',
+    path: '/dashboard/admin/operations',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const DashboardVendorsIndexRoute = DashboardVendorsIndexRouteImport.update({
   id: '/dashboard/vendors/',
   path: '/dashboard/vendors/',
@@ -139,11 +158,14 @@ export interface FileRoutesByFullPath {
   '/dashboard/tasks': typeof DashboardTasksRoute
   '/vendor-upload/$token': typeof VendorUploadTokenRoute
   '/dashboard/': typeof DashboardIndexRoute
+  '/api/health/live': typeof ApiHealthLiveRoute
+  '/api/health/ready': typeof ApiHealthReadyRoute
   '/dashboard/admin/access': typeof DashboardAdminAccessRoute
   '/dashboard/admin/companies': typeof DashboardAdminCompaniesRoute
   '/dashboard/admin/compliance': typeof DashboardAdminComplianceRouteWithChildren
   '/dashboard/admin/invites': typeof DashboardAdminInvitesRoute
   '/dashboard/admin/leads': typeof DashboardAdminLeadsRoute
+  '/dashboard/admin/operations': typeof DashboardAdminOperationsRoute
   '/dashboard/vendors/$vendorId': typeof DashboardVendorsVendorIdRoute
   '/dashboard/admin/': typeof DashboardAdminIndexRoute
   '/dashboard/vendors/': typeof DashboardVendorsIndexRoute
@@ -160,11 +182,14 @@ export interface FileRoutesByTo {
   '/dashboard/tasks': typeof DashboardTasksRoute
   '/vendor-upload/$token': typeof VendorUploadTokenRoute
   '/dashboard': typeof DashboardIndexRoute
+  '/api/health/live': typeof ApiHealthLiveRoute
+  '/api/health/ready': typeof ApiHealthReadyRoute
   '/dashboard/admin/access': typeof DashboardAdminAccessRoute
   '/dashboard/admin/companies': typeof DashboardAdminCompaniesRoute
   '/dashboard/admin/compliance': typeof DashboardAdminComplianceRouteWithChildren
   '/dashboard/admin/invites': typeof DashboardAdminInvitesRoute
   '/dashboard/admin/leads': typeof DashboardAdminLeadsRoute
+  '/dashboard/admin/operations': typeof DashboardAdminOperationsRoute
   '/dashboard/vendors/$vendorId': typeof DashboardVendorsVendorIdRoute
   '/dashboard/admin': typeof DashboardAdminIndexRoute
   '/dashboard/vendors': typeof DashboardVendorsIndexRoute
@@ -182,11 +207,14 @@ export interface FileRoutesById {
   '/dashboard/tasks': typeof DashboardTasksRoute
   '/vendor-upload/$token': typeof VendorUploadTokenRoute
   '/dashboard/': typeof DashboardIndexRoute
+  '/api/health/live': typeof ApiHealthLiveRoute
+  '/api/health/ready': typeof ApiHealthReadyRoute
   '/dashboard/admin/access': typeof DashboardAdminAccessRoute
   '/dashboard/admin/companies': typeof DashboardAdminCompaniesRoute
   '/dashboard/admin/compliance': typeof DashboardAdminComplianceRouteWithChildren
   '/dashboard/admin/invites': typeof DashboardAdminInvitesRoute
   '/dashboard/admin/leads': typeof DashboardAdminLeadsRoute
+  '/dashboard/admin/operations': typeof DashboardAdminOperationsRoute
   '/dashboard/vendors/$vendorId': typeof DashboardVendorsVendorIdRoute
   '/dashboard/admin/': typeof DashboardAdminIndexRoute
   '/dashboard/vendors/': typeof DashboardVendorsIndexRoute
@@ -205,11 +233,14 @@ export interface FileRouteTypes {
     | '/dashboard/tasks'
     | '/vendor-upload/$token'
     | '/dashboard/'
+    | '/api/health/live'
+    | '/api/health/ready'
     | '/dashboard/admin/access'
     | '/dashboard/admin/companies'
     | '/dashboard/admin/compliance'
     | '/dashboard/admin/invites'
     | '/dashboard/admin/leads'
+    | '/dashboard/admin/operations'
     | '/dashboard/vendors/$vendorId'
     | '/dashboard/admin/'
     | '/dashboard/vendors/'
@@ -226,11 +257,14 @@ export interface FileRouteTypes {
     | '/dashboard/tasks'
     | '/vendor-upload/$token'
     | '/dashboard'
+    | '/api/health/live'
+    | '/api/health/ready'
     | '/dashboard/admin/access'
     | '/dashboard/admin/companies'
     | '/dashboard/admin/compliance'
     | '/dashboard/admin/invites'
     | '/dashboard/admin/leads'
+    | '/dashboard/admin/operations'
     | '/dashboard/vendors/$vendorId'
     | '/dashboard/admin'
     | '/dashboard/vendors'
@@ -247,11 +281,14 @@ export interface FileRouteTypes {
     | '/dashboard/tasks'
     | '/vendor-upload/$token'
     | '/dashboard/'
+    | '/api/health/live'
+    | '/api/health/ready'
     | '/dashboard/admin/access'
     | '/dashboard/admin/companies'
     | '/dashboard/admin/compliance'
     | '/dashboard/admin/invites'
     | '/dashboard/admin/leads'
+    | '/dashboard/admin/operations'
     | '/dashboard/vendors/$vendorId'
     | '/dashboard/admin/'
     | '/dashboard/vendors/'
@@ -269,11 +306,14 @@ export interface RootRouteChildren {
   DashboardTasksRoute: typeof DashboardTasksRoute
   VendorUploadTokenRoute: typeof VendorUploadTokenRoute
   DashboardIndexRoute: typeof DashboardIndexRoute
+  ApiHealthLiveRoute: typeof ApiHealthLiveRoute
+  ApiHealthReadyRoute: typeof ApiHealthReadyRoute
   DashboardAdminAccessRoute: typeof DashboardAdminAccessRoute
   DashboardAdminCompaniesRoute: typeof DashboardAdminCompaniesRoute
   DashboardAdminComplianceRoute: typeof DashboardAdminComplianceRouteWithChildren
   DashboardAdminInvitesRoute: typeof DashboardAdminInvitesRoute
   DashboardAdminLeadsRoute: typeof DashboardAdminLeadsRoute
+  DashboardAdminOperationsRoute: typeof DashboardAdminOperationsRoute
   DashboardVendorsVendorIdRoute: typeof DashboardVendorsVendorIdRoute
   DashboardAdminIndexRoute: typeof DashboardAdminIndexRoute
   DashboardVendorsIndexRoute: typeof DashboardVendorsIndexRoute
@@ -351,6 +391,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof VendorUploadTokenRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/health/live': {
+      id: '/api/health/live'
+      path: '/api/health/live'
+      fullPath: '/api/health/live'
+      preLoaderRoute: typeof ApiHealthLiveRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/health/ready': {
+      id: '/api/health/ready'
+      path: '/api/health/ready'
+      fullPath: '/api/health/ready'
+      preLoaderRoute: typeof ApiHealthReadyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/dashboard/admin/': {
       id: '/dashboard/admin/'
       path: '/dashboard/admin'
@@ -391,6 +445,13 @@ declare module '@tanstack/react-router' {
       path: '/dashboard/admin/leads'
       fullPath: '/dashboard/admin/leads'
       preLoaderRoute: typeof DashboardAdminLeadsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/dashboard/admin/operations': {
+      id: '/dashboard/admin/operations'
+      path: '/dashboard/admin/operations'
+      fullPath: '/dashboard/admin/operations'
+      preLoaderRoute: typeof DashboardAdminOperationsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/dashboard/vendors/': {
@@ -443,11 +504,14 @@ const rootRouteChildren: RootRouteChildren = {
   DashboardTasksRoute: DashboardTasksRoute,
   VendorUploadTokenRoute: VendorUploadTokenRoute,
   DashboardIndexRoute: DashboardIndexRoute,
+  ApiHealthLiveRoute: ApiHealthLiveRoute,
+  ApiHealthReadyRoute: ApiHealthReadyRoute,
   DashboardAdminAccessRoute: DashboardAdminAccessRoute,
   DashboardAdminCompaniesRoute: DashboardAdminCompaniesRoute,
   DashboardAdminComplianceRoute: DashboardAdminComplianceRouteWithChildren,
   DashboardAdminInvitesRoute: DashboardAdminInvitesRoute,
   DashboardAdminLeadsRoute: DashboardAdminLeadsRoute,
+  DashboardAdminOperationsRoute: DashboardAdminOperationsRoute,
   DashboardVendorsVendorIdRoute: DashboardVendorsVendorIdRoute,
   DashboardAdminIndexRoute: DashboardAdminIndexRoute,
   DashboardVendorsIndexRoute: DashboardVendorsIndexRoute,

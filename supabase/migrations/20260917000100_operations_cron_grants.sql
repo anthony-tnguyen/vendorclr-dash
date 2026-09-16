@@ -1,0 +1,32 @@
+-- Task 2 (Engineer A) - read-only access to pg_cron's own run-history tables,
+-- needed by getOperationalFailures() (src/server/operations.ts) for the
+-- "failed/missed scheduled jobs" operations signal.
+--
+-- Confirmed missing before adding this, not speculative: on the live project,
+--   select has_schema_privilege('service_role', 'cron', 'USAGE')
+-- returned false, and information_schema.role_table_grants showed only the
+-- `postgres` role holding SELECT on cron.job / cron.job_run_details. Without
+-- this migration, getServiceRoleClient() (which authenticates as
+-- service_role - see src/lib/supabase/serverClient.server.ts) cannot read
+-- either table: not "returns zero rows", but a permission-denied error, since
+-- these are ordinary schema/table grants, not RLS (pg_cron's own tables have
+-- no RLS policies to bypass in the first place).
+--
+-- Read-only and narrowly scoped: SELECT on exactly the two tables
+-- getOperationalFailures() reads (cron.job, to name a job; cron.job_run_details,
+-- to see its recent run history), USAGE on the schema to reach them at all.
+-- Nothing here grants service_role the ability to schedule, alter or unschedule
+-- a job - that still only ever happens via cron.schedule()/cron.unschedule()
+-- calls inside migration SQL, run as the postgres role that owns the
+-- extension, exactly as before this migration.
+--
+-- SKIPPED_IN_PGLITE (see supabase/tests/harness.ts): the `cron` schema does
+-- not exist in the PGlite harness at all - pg_cron needs a real background
+-- worker, which a single-process WASM Postgres build does not have, the same
+-- reason 20260902000600_schedule_renewal_reminders.sql and
+-- 20260903000400_schedule_automated_retries.sql are skipped there. Granting
+-- privileges on a schema/tables that do not exist would fail db:verify
+-- outright rather than usefully prove anything.
+
+grant usage on schema cron to service_role;
+grant select on cron.job, cron.job_run_details to service_role;

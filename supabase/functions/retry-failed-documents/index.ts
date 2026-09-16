@@ -8,6 +8,7 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 import Anthropic from "npm:@anthropic-ai/sdk@0.122.0";
 
 import { extractDocument } from "./documentExtraction.ts";
+import { logOperational, newRequestId } from "./operationalLog.ts";
 
 /**
  * Triggered hourly by pg_cron -> pg_net (see
@@ -85,7 +86,17 @@ async function recordFailedAttempt(
 }
 
 Deno.serve(async (req: Request) => {
+  const requestId = newRequestId();
+  const route = "retry-failed-documents";
+
   if (!isServiceRoleRequest(req)) {
+    logOperational({
+      level: "warn",
+      event: "forbidden_caller",
+      requestId,
+      route,
+      outcome: "failure",
+    });
     return new Response(JSON.stringify({ error: "Forbidden" }), { status: 403 });
   }
 
@@ -176,10 +187,26 @@ Deno.serve(async (req: Request) => {
       }
 
       succeeded++;
+      logOperational({
+        level: "info",
+        event: "automated_retry_recovered",
+        requestId,
+        companyId: row.company_id,
+        route,
+        outcome: "success",
+      });
     } catch (error) {
-      console.error(
-        `[retry-failed-documents] unhandled error for document ${row.document_id}:`,
-        error,
+      logOperational(
+        {
+          level: "error",
+          event: "automated_retry_unhandled_error",
+          requestId,
+          companyId: row.company_id,
+          route,
+          outcome: "failure",
+          errorCode: error instanceof Error ? error.name : "unknown_error",
+        },
+        { message: error instanceof Error ? error.message : String(error) },
       );
       await recordFailedAttempt(
         supabase,
@@ -189,6 +216,14 @@ Deno.serve(async (req: Request) => {
       failed++;
     }
   }
+
+  logOperational({
+    level: failed > 0 ? "warn" : "info",
+    event: "automated_retry_run_complete",
+    requestId,
+    route,
+    outcome: "success",
+  });
 
   return new Response(JSON.stringify({ processed: dueRows.length, succeeded, failed }), {
     headers: { "Content-Type": "application/json" },

@@ -22,6 +22,7 @@ export const routes = {
   adminLeads: "/dashboard/admin/leads",
   adminAccess: "/dashboard/admin/access",
   adminInvites: "/dashboard/admin/invites",
+  adminOperations: "/dashboard/admin/operations",
   help: "/dashboard/help",
 } as const;
 
@@ -54,6 +55,11 @@ export const adminNav = [
     label: "Invites",
     to: routes.adminInvites,
     description: "Codes that gate business signup",
+  },
+  {
+    label: "Operations",
+    to: routes.adminOperations,
+    description: "Failed jobs, stale reviews and delivery problems",
   },
   { label: "Help", to: routes.help, description: "FAQ and how VendorClr works" },
 ] as const satisfies readonly NavItem[];
