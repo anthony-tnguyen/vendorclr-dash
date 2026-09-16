@@ -426,13 +426,25 @@ export async function finalizePackageHandler(
     .select("document_id")
     .eq("package_id", pkg.id);
 
-  const { error: updateError } = await supabase
+  const { data: updatedRows, error: updateError } = await supabase
     .from("submission_packages")
     .update({ status: "finalized", finalized_at: new Date().toISOString() })
     .eq("id", pkg.id)
-    .eq("status", "open"); // Extra guard against a racing double-finalize; see docblock.
+    .eq("status", "open") // Guard against a racing double-finalize; see docblock.
+    .select("id");
 
   if (updateError) throw new Error("Could not finalize this submission. Try again.");
+
+  // A 0-row update means another concurrent call already flipped this
+  // package's status between our read above and this write - Supabase's
+  // client returns no error for an update matching zero rows, so an unmatched
+  // .eq("status", "open") is silent unless checked explicitly. Treat it the
+  // same as the already-finalized early return above rather than falling
+  // through to enqueue jobs and write a second audit_log row for the same
+  // finalize.
+  if (!updatedRows || updatedRows.length === 0) {
+    return { packageId: pkg.id, status: "finalized", alreadyFinalized: true };
+  }
 
   for (const doc of (documents ?? []) as Array<{ document_id: string }>) {
     await enqueueExtractionJob(supabase, {
