@@ -1,4 +1,4 @@
-export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[];
+﻿export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[];
 
 export type Database = {
   // Allows to automatically instantiate createClient with right options
@@ -611,6 +611,319 @@ export type Database = {
         };
         Relationships: [];
       };
+      project_requirement_overrides: {
+        Row: {
+          company_id: string;
+          created_at: string;
+          id: string;
+          project_id: string;
+          rule_key: string;
+          updated_at: string;
+          value: Json;
+        };
+        Insert: {
+          company_id: string;
+          created_at?: string;
+          id?: string;
+          project_id: string;
+          rule_key: string;
+          updated_at?: string;
+          value?: Json;
+        };
+        Update: {
+          company_id?: string;
+          created_at?: string;
+          id?: string;
+          project_id?: string;
+          rule_key?: string;
+          updated_at?: string;
+          value?: Json;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "project_requirement_overrides_company_id_fkey";
+            columns: ["company_id"];
+            isOneToOne: false;
+            referencedRelation: "admin_company_stats";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "project_requirement_overrides_company_id_fkey";
+            columns: ["company_id"];
+            isOneToOne: false;
+            referencedRelation: "companies";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "project_requirement_overrides_project_id_fkey";
+            columns: ["project_id"];
+            isOneToOne: false;
+            referencedRelation: "projects";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      project_vendor_assignments: {
+        Row: {
+          company_id: string;
+          contract_number: string | null;
+          contract_value: number | null;
+          created_at: string;
+          end_date: string | null;
+          id: string;
+          project_id: string;
+          requirement_profile_id: string | null;
+          risk_classification: string | null;
+          start_date: string | null;
+          status: string;
+          trade_code: string | null;
+          updated_at: string;
+          vendor_id: string;
+        };
+        Insert: {
+          company_id: string;
+          contract_number?: string | null;
+          contract_value?: number | null;
+          created_at?: string;
+          end_date?: string | null;
+          id?: string;
+          project_id: string;
+          requirement_profile_id?: string | null;
+          risk_classification?: string | null;
+          start_date?: string | null;
+          status?: string;
+          trade_code?: string | null;
+          updated_at?: string;
+          vendor_id: string;
+        };
+        Update: {
+          company_id?: string;
+          contract_number?: string | null;
+          contract_value?: number | null;
+          created_at?: string;
+          end_date?: string | null;
+          id?: string;
+          project_id?: string;
+          requirement_profile_id?: string | null;
+          risk_classification?: string | null;
+          start_date?: string | null;
+          status?: string;
+          trade_code?: string | null;
+          updated_at?: string;
+          vendor_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "project_vendor_assignments_company_id_fkey";
+            columns: ["company_id"];
+            isOneToOne: false;
+            referencedRelation: "admin_company_stats";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "project_vendor_assignments_company_id_fkey";
+            columns: ["company_id"];
+            isOneToOne: false;
+            referencedRelation: "companies";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "project_vendor_assignments_project_id_fkey";
+            columns: ["project_id"];
+            isOneToOne: false;
+            referencedRelation: "projects";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "project_vendor_assignments_requirement_profile_id_fkey";
+            columns: ["requirement_profile_id"];
+            isOneToOne: false;
+            referencedRelation: "requirement_profiles";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "project_vendor_assignments_vendor_id_fkey";
+            columns: ["vendor_id"];
+            isOneToOne: false;
+            referencedRelation: "vendor_compliance_summary";
+            referencedColumns: ["vendor_id"];
+          },
+          {
+            foreignKeyName: "project_vendor_assignments_vendor_id_fkey";
+            columns: ["vendor_id"];
+            isOneToOne: false;
+            referencedRelation: "vendors";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      projects: {
+        Row: {
+          certificate_holder_address: string;
+          certificate_holder_name: string;
+          company_id: string;
+          created_at: string;
+          default_requirement_profile_id: string | null;
+          id: string;
+          name: string;
+          project_number: string | null;
+          status: string;
+          updated_at: string;
+        };
+        Insert: {
+          certificate_holder_address?: string;
+          certificate_holder_name?: string;
+          company_id: string;
+          created_at?: string;
+          default_requirement_profile_id?: string | null;
+          id?: string;
+          name: string;
+          project_number?: string | null;
+          status?: string;
+          updated_at?: string;
+        };
+        Update: {
+          certificate_holder_address?: string;
+          certificate_holder_name?: string;
+          company_id?: string;
+          created_at?: string;
+          default_requirement_profile_id?: string | null;
+          id?: string;
+          name?: string;
+          project_number?: string | null;
+          status?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "projects_company_id_fkey";
+            columns: ["company_id"];
+            isOneToOne: false;
+            referencedRelation: "admin_company_stats";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "projects_company_id_fkey";
+            columns: ["company_id"];
+            isOneToOne: false;
+            referencedRelation: "companies";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "projects_default_requirement_profile_id_fkey";
+            columns: ["default_requirement_profile_id"];
+            isOneToOne: false;
+            referencedRelation: "requirement_profiles";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      requirement_profile_rules: {
+        Row: {
+          amount: number | null;
+          company_id: string;
+          configuration: Json;
+          created_at: string;
+          id: string;
+          policy_type: string | null;
+          profile_id: string;
+          required: boolean;
+          rule_key: string;
+          rule_kind: string;
+          updated_at: string;
+        };
+        Insert: {
+          amount?: number | null;
+          company_id: string;
+          configuration?: Json;
+          created_at?: string;
+          id?: string;
+          policy_type?: string | null;
+          profile_id: string;
+          required?: boolean;
+          rule_key: string;
+          rule_kind: string;
+          updated_at?: string;
+        };
+        Update: {
+          amount?: number | null;
+          company_id?: string;
+          configuration?: Json;
+          created_at?: string;
+          id?: string;
+          policy_type?: string | null;
+          profile_id?: string;
+          required?: boolean;
+          rule_key?: string;
+          rule_kind?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "requirement_profile_rules_company_id_fkey";
+            columns: ["company_id"];
+            isOneToOne: false;
+            referencedRelation: "admin_company_stats";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "requirement_profile_rules_company_id_fkey";
+            columns: ["company_id"];
+            isOneToOne: false;
+            referencedRelation: "companies";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "requirement_profile_rules_profile_id_fkey";
+            columns: ["profile_id"];
+            isOneToOne: false;
+            referencedRelation: "requirement_profiles";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      requirement_profiles: {
+        Row: {
+          company_id: string;
+          created_at: string;
+          id: string;
+          is_company_default: boolean;
+          name: string;
+          updated_at: string;
+        };
+        Insert: {
+          company_id: string;
+          created_at?: string;
+          id?: string;
+          is_company_default?: boolean;
+          name: string;
+          updated_at?: string;
+        };
+        Update: {
+          company_id?: string;
+          created_at?: string;
+          id?: string;
+          is_company_default?: boolean;
+          name?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "requirement_profiles_company_id_fkey";
+            columns: ["company_id"];
+            isOneToOne: false;
+            referencedRelation: "admin_company_stats";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "requirement_profiles_company_id_fkey";
+            columns: ["company_id"];
+            isOneToOne: false;
+            referencedRelation: "companies";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       signup_invites: {
         Row: {
           code: string;
@@ -728,6 +1041,24 @@ export type Database = {
             referencedColumns: ["id"];
           },
         ];
+      };
+      upload_rate_limit_counters: {
+        Row: {
+          bucket_key: string;
+          count: number;
+          window_start: string;
+        };
+        Insert: {
+          bucket_key: string;
+          count?: number;
+          window_start: string;
+        };
+        Update: {
+          bucket_key?: string;
+          count?: number;
+          window_start?: string;
+        };
+        Relationships: [];
       };
       vendor_compliance_items: {
         Row: {
@@ -1444,11 +1775,35 @@ export type Database = {
         Returns: number;
       };
       current_user_id: { Args: never; Returns: string };
+      get_database_size_bytes: { Args: never; Returns: number };
+      get_scheduled_job_run_history: {
+        Args: never;
+        Returns: {
+          job_name: string;
+          start_time: string;
+          status: string;
+        }[];
+      };
       has_company_role: {
         Args: { allowed: string[]; target_company: string };
         Returns: boolean;
       };
+      increment_upload_rate_limit_counter: {
+        Args: { p_bucket_key: string; p_window_start: string };
+        Returns: number;
+      };
       is_platform_admin: { Args: never; Returns: boolean };
+      resolve_assignment_requirements: {
+        Args: { assignment_id: string };
+        Returns: {
+          amount: number;
+          key: string;
+          kind: string;
+          policy_type: string;
+          required: boolean;
+          source: string;
+        }[];
+      };
       set_company_feature_flag: {
         Args: {
           flag_enabled: boolean;

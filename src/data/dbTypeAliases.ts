@@ -83,6 +83,33 @@ export type ComplianceRequirementRow = Omit<
   limit_field: LimitField;
 };
 
+export type ProjectStatus = "active" | "on_hold" | "closed";
+export type AssignmentStatus = "active" | "completed" | "terminated";
+export type RuleKind = "document" | "limit" | "endorsement" | "certificate_holder";
+
+export type ProjectRow = Omit<Row<"projects">, "status"> & { status: ProjectStatus };
+
+export type ProjectVendorAssignmentRow = Omit<
+  Row<"project_vendor_assignments">,
+  "trade_code" | "risk_classification" | "status"
+> & {
+  trade_code: VendorRow["trade"] | null;
+  risk_classification: VendorRow["risk_tier"] | null;
+  status: AssignmentStatus;
+};
+
+export type RequirementProfileRow = Row<"requirement_profiles">;
+
+export type RequirementProfileRuleRow = Omit<
+  Row<"requirement_profile_rules">,
+  "policy_type" | "rule_kind"
+> & {
+  policy_type: PolicyType | null;
+  rule_kind: RuleKind;
+};
+
+export type ProjectRequirementOverrideRow = Row<"project_requirement_overrides">;
+
 export type LeadRow = Omit<Row<"leads">, "stage"> & { stage: LeadStage };
 
 export type SignupInviteRow = Omit<Row<"signup_invites">, "status"> & {
