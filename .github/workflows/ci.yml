@@ -100,13 +100,10 @@ jobs:
           # paths by default and silently uploads nothing without this.
           include-hidden-files: true
 
-  # NOT a required status check yet - see docs/operations/release-process.md.
-  # e2e/smoke.spec.ts is a minimal placeholder (Task 0A); Task 0B (Engineer
-  # B) owns full role-based coverage under e2e/**. This job is kept
-  # non-blocking (continue-on-error, and deliberately left off the required
-  # checks list) until that lands, so a flake or a gap in the placeholder
-  # can't block every PR in the meantime - but it still runs on every PR so
-  # regressions are visible.
+  # Required status check. Runs the full role-based browser suite from e2e/**
+  # against the built production bundle. Task 0B added coverage for customer,
+  # administrator, public-upload-error, empty, and permission-denied states
+  # at desktop and mobile viewports, so this must now block regressions.
   #
   # Runs Playwright against the actual built Cloudflare Worker output
   # (via `wrangler dev`), not the Vite dev server - see playwright.config.ts.
@@ -115,7 +112,6 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    continue-on-error: true
 
     steps:
       - uses: actions/checkout@v4
@@ -153,8 +149,8 @@ jobs:
         if: steps.playwright-cache.outputs.cache-hit == 'true'
         run: bunx playwright install-deps chromium
 
-      - name: Run SSR smoke test against the production bundle
-        run: bunx playwright test e2e/smoke.spec.ts
+      - name: Run production-bundle browser flows
+        run: bun run e2e
 
       - name: Upload Playwright report
         if: always()
