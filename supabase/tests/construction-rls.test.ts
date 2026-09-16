@@ -186,6 +186,54 @@ describe("requirement_profile_rules: owner/risk_manager write only", () => {
   });
 });
 
+describe("project_requirement_overrides: owner/risk_manager write only", () => {
+  let projectId: string;
+
+  beforeAll(async () => {
+    const rows = await db.query<{ id: string }>(
+      `insert into public.projects (company_id, name) values ($1, 'Override Site') returning id`,
+      [companyId],
+    );
+    projectId = rows.rows[0]!.id;
+  });
+
+  it("lets an owner add an override", async () => {
+    const rows = await asUser<{ rule_key: string }>(
+      db,
+      OWNER,
+      `insert into public.project_requirement_overrides (company_id, project_id, rule_key, value)
+       values ($1, $2, 'lien_waiver', '{"required": false}'::jsonb)
+       returning rule_key`,
+      [companyId, projectId],
+    );
+    expect(rows[0]?.rule_key).toBe("lien_waiver");
+  });
+
+  it("refuses a project_engineer adding an override - narrower than project_vendor_assignments' broader write access", async () => {
+    await expectDeniedByRls(() =>
+      asUser(
+        db,
+        PROJECT_ENGINEER,
+        `insert into public.project_requirement_overrides (company_id, project_id, rule_key, value)
+         values ($1, $2, 'engineer_attempt', '{"required": false}'::jsonb)`,
+        [companyId, projectId],
+      ),
+    );
+  });
+
+  it("refuses a read_only member adding an override", async () => {
+    await expectDeniedByRls(() =>
+      asUser(
+        db,
+        READER,
+        `insert into public.project_requirement_overrides (company_id, project_id, rule_key, value)
+         values ($1, $2, 'reader_attempt', '{"required": false}'::jsonb)`,
+        [companyId, projectId],
+      ),
+    );
+  });
+});
+
 describe("projects and project_vendor_assignments: owner/risk_manager/project_engineer write", () => {
   it("lets a project_engineer create a project", async () => {
     const rows = await asUser<{ name: string }>(
@@ -288,6 +336,37 @@ describe("projects and project_vendor_assignments: owner/risk_manager/project_en
       [assignment.rows[0]!.id],
     );
     expect(rows[0]?.id).toBe(assignment.rows[0]!.id);
+  });
+
+  it("restricts project delete to owner/risk_manager - asymmetric with insert/update's broader can_write_company()", async () => {
+    const project = await db.query<{ id: string }>(
+      `insert into public.projects (company_id, name) values ($1, 'Project Delete Site') returning id`,
+      [companyId],
+    );
+
+    // Same silent-denial shape as the assignment-delete test above: a
+    // USING clause matching nothing deletes zero rows, not an error.
+    const deniedAttempt = await asUser<{ id: string }>(
+      db,
+      PROJECT_ENGINEER,
+      `delete from public.projects where id = $1 returning id`,
+      [project.rows[0]!.id],
+    );
+    expect(deniedAttempt).toEqual([]);
+
+    const stillThere = await db.query<{ n: number }>(
+      `select count(*)::int n from public.projects where id = $1`,
+      [project.rows[0]!.id],
+    );
+    expect(stillThere.rows[0]?.n).toBe(1);
+
+    const rows = await asUser<{ id: string }>(
+      db,
+      OWNER,
+      `delete from public.projects where id = $1 returning id`,
+      [project.rows[0]!.id],
+    );
+    expect(rows[0]?.id).toBe(project.rows[0]!.id);
   });
 });
 
