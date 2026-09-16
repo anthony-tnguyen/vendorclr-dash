@@ -1,5 +1,15 @@
-import type { ReactNode } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
 import { cn } from "@/lib/utils";
+
+function useAlertFocus() {
+  const alertRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    alertRef.current?.focus();
+  }, []);
+
+  return alertRef;
+}
 
 export function LoadingState({
   label = "Loading data",
@@ -47,8 +57,15 @@ export function ErrorState({
   description: string;
   onRetry?: () => void;
 }) {
+  const alertRef = useAlertFocus();
+
   return (
-    <div role="alert" className="rounded-md border border-destructive/30 bg-danger-soft p-4">
+    <div
+      ref={alertRef}
+      role="alert"
+      tabIndex={-1}
+      className="rounded-md border border-destructive/30 bg-danger-soft p-4"
+    >
       <h3 className="text-sm font-semibold text-destructive">{title}</h3>
       <p className="mt-1 text-sm text-foreground">{description}</p>
       {onRetry ? (
@@ -71,8 +88,15 @@ export function DeniedState({
   title?: string;
   description: string;
 }) {
+  const alertRef = useAlertFocus();
+
   return (
-    <div role="alert" className="rounded-md border border-warn/40 bg-warn-soft p-4">
+    <div
+      ref={alertRef}
+      role="alert"
+      tabIndex={-1}
+      className="rounded-md border border-warn/40 bg-warn-soft p-4"
+    >
       <h3 className="text-sm font-semibold text-warn">{title}</h3>
       <p className="mt-1 text-sm text-foreground">{description}</p>
     </div>
