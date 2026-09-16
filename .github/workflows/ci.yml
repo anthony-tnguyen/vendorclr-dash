@@ -96,6 +96,9 @@ jobs:
           name: production-bundle
           path: .output
           retention-days: 1
+          # .output is a dotdir - upload-artifact@v4's glob skips hidden
+          # paths by default and silently uploads nothing without this.
+          include-hidden-files: true
 
   # NOT a required status check yet - see docs/operations/release-process.md.
   # e2e/smoke.spec.ts is a minimal placeholder (Task 0A); Task 0B (Engineer
