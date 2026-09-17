@@ -52,6 +52,26 @@ export interface ApplyEvaluationResultInput {
  */
 export async function applyEvaluationResult(input: ApplyEvaluationResultInput): Promise<string> {
   const supabase = await getRequestScopedClient();
+
+  // Task 11b pilot metric: a fresh evaluation run is about to become the
+  // FIRST case ever opened for this (assignment, upload_request) pair only
+  // if no compliance_cases row exists for it yet - checked BEFORE the RPC
+  // call below, since apply_evaluation_result() itself is get-or-create and
+  // gives no signal back about which branch it took. Read-only, RLS-
+  // protected (the same company scoping every other read in this file
+  // relies on) - never assumed to gate the write itself, just observed
+  // ahead of it.
+  const existingCaseResult = (await supabase
+    .from("compliance_cases")
+    .select("id")
+    .eq("assignment_id", input.assignmentId)
+    .eq("upload_request_id", input.uploadRequestId)
+    .maybeSingle()) as unknown as {
+    data: { id: string } | null;
+    error: { message: string } | null;
+  };
+  const isNewCase = existingCaseResult.data === null;
+
   const result = (await supabase.rpc("apply_evaluation_result", {
     p_company_id: input.companyId,
     p_vendor_id: input.vendorId,
@@ -65,7 +85,25 @@ export async function applyEvaluationResult(input: ApplyEvaluationResultInput): 
     data: string | null;
     error: { message: string } | null;
   };
-  return unwrap(result);
+  const caseId = unwrap(result);
+
+  // Pilot metrics (Task 11b) - companyId + event name only, via the
+  // existing logOperational() infrastructure (src/lib/observability/
+  // logger.server.ts). No document text, policy numbers or contact PII in
+  // either payload - see supabase/README.md's Known compromises for the
+  // full "pilot metrics" interpretation.
+  const { logOperational, newRequestId } = await import("@/lib/observability/logger.server");
+  if (isNewCase) {
+    logOperational({
+      level: "info",
+      event: "pilot_metric.compliance_case_opened",
+      requestId: newRequestId(),
+      companyId: input.companyId,
+      outcome: "success",
+    });
+  }
+
+  return caseId;
 }
 
 /**
@@ -74,7 +112,10 @@ export async function applyEvaluationResult(input: ApplyEvaluationResultInput): 
  * why remainingRiskAcknowledged is required even though the plan's earlier
  * TS sketch omitted it. Returns the new compliance_exceptions.id.
  */
-export async function approveComplianceException(input: ComplianceExceptionInput): Promise<string> {
+export async function approveComplianceException(
+  input: ComplianceExceptionInput,
+  companyId?: string,
+): Promise<string> {
   const supabase = await getRequestScopedClient();
   const result = (await supabase.rpc("approve_compliance_exception", {
     p_deficiency_id: input.deficiencyId,
@@ -88,7 +129,25 @@ export async function approveComplianceException(input: ComplianceExceptionInput
     data: string | null;
     error: { message: string } | null;
   };
-  return unwrap(result);
+  const exceptionId = unwrap(result);
+
+  // Pilot metric (Task 11b) - companyId is an optional param (approve_
+  // compliance_exception()'s own authorization resolves it server-side from
+  // the deficiency's owning case, which this thin wrapper does not
+  // otherwise read back out) so existing callers keep working unchanged;
+  // when a caller has it on hand, log it - companyId + event name only.
+  if (companyId) {
+    const { logOperational, newRequestId } = await import("@/lib/observability/logger.server");
+    logOperational({
+      level: "info",
+      event: "pilot_metric.compliance_exception_approved",
+      requestId: newRequestId(),
+      companyId,
+      outcome: "success",
+    });
+  }
+
+  return exceptionId;
 }
 
 /**

@@ -89,10 +89,14 @@ describe("audit_log", () => {
   });
 
   it("rejects a target_type outside the known set", async () => {
+    // 'company' was added to the known set by Task 11b
+    // (20260917001600_reporting_audit_snapshots.sql, for company-wide report
+    // exports) - this test now uses a value that is still definitely
+    // outside the vocabulary, not the one that used to be the example.
     await expect(
       db.query(
         `insert into public.audit_log (company_id, action, target_type, target_id)
-         values ($1, 'upload_request_created', 'company', $2)`,
+         values ($1, 'upload_request_created', 'not_a_real_target_type', $2)`,
         [companyId, vendorId],
       ),
     ).rejects.toThrow();

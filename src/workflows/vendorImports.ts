@@ -784,6 +784,19 @@ export async function executeVendorImportHandler(
     detail: { totalRows: data.rows.length, acceptedRows, rejectedRows },
   });
 
+  // Pilot metric (Task 11b) - companyId + event name only, via the existing
+  // logOperational() infrastructure. Only for a REAL execution, not the
+  // idempotent-replay short-circuit above (which returns before this point)
+  // - a retried submission must not be double-counted as a second import.
+  const { logOperational, newRequestId } = await import("@/lib/observability/logger.server");
+  logOperational({
+    level: "info",
+    event: "pilot_metric.csv_import_executed",
+    requestId: newRequestId(),
+    companyId: data.companyId,
+    outcome: "success",
+  });
+
   return {
     batchId: batch.id,
     totalRows: data.rows.length,
