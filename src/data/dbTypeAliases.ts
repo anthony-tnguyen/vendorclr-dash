@@ -202,6 +202,26 @@ export type DocumentProcessingJobRow = Omit<
   status: DocumentProcessingJobStatus;
 };
 
+/** compliance_cases - Task 10a (20260917001200_compliance_cases.sql). No status column - see that migration's docblock for why "open" is a derived fact, not stored here. */
+export type ComplianceCaseRow = Row<"compliance_cases">;
+
+/** compliance_evaluation_runs.requirements_snapshot/findings_snapshot are typed loosely (Json) by the generator; callers narrow to ResolvedRequirement[]/Finding[] themselves (see complianceCaseRepository.ts) since the generator has no way to know those jsonb columns' actual shape. */
+export type ComplianceEvaluationRunRow = Row<"compliance_evaluation_runs">;
+
+/** compliance_deficiencies.status - Task 10a. Mirrors DeficiencyStatus (src/domain/compliance/cases.ts) exactly; kept as two separate declarations the same way RuleKind/PolicyKind already are in this file, since dbTypeAliases.ts never imports from src/domain. */
+export type ComplianceDeficiencyStatus = "open" | "resolved" | "waived";
+
+export type ComplianceDeficiencyRow = Omit<
+  Row<"compliance_deficiencies">,
+  "status" | "kind" | "policy_type"
+> & {
+  status: ComplianceDeficiencyStatus;
+  kind: RuleKind | null;
+  policy_type: PolicyType | null;
+};
+
+export type ComplianceExceptionRow = Row<"compliance_exceptions">;
+
 /** document_extractions.source - Task 9a (20260917000900_versioned_extractions.sql). 'model' rows have no reviewer_id; 'reviewer_edit' rows always do - enforced at the DB level by that table's own CHECK constraint, not just by this type. */
 export type DocumentExtractionSource = "model" | "reviewer_edit";
 
