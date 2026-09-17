@@ -81,3 +81,74 @@ jobs:
           name: staging-smoke-report
           path: playwright-report
           retention-days: 7
+
+  # Task 13 - runs scripts/smoke-production.ts against the same staging
+  # deployment: happy-path upload flow, expired/cancelled/used/invalid token
+  # rejection, duplicate detection, malformed/encrypted document handling,
+  # a bounce scenario, malware/provider-outage handling, and a reminder/
+  # renewal check - see that script's own docblock for why most of these
+  # call this project's workflow functions directly against a service-role
+  # Supabase client rather than driving the deployed app over HTTP (the
+  # `smoke` job above already covers "does the deployed bundle boot and
+  # render" via Playwright; this job covers "does the actual business logic
+  # behave correctly against this environment's real database").
+  #
+  # KNOWN GAP, documented rather than silently left to fail mysteriously:
+  # VENDORCLEAR_SERVICE_ROLE_KEY does not exist as a GitHub secret on the
+  # `staging` Environment yet (see docs/operations/environment-matrix.md's
+  # Vault-secret gap section for the identical underlying limitation - no
+  # tool in this project's toolchain can fetch a project's own service-role
+  # key value to set it automatically). This job is written correctly and
+  # will start passing as soon as a human adds these two secrets:
+  #   VENDORCLEAR_SUPABASE_URL      (Settings > Environments > staging > secrets)
+  #   VENDORCLEAR_SERVICE_ROLE_KEY  (same, from the staging project's own
+  #                                  Settings > API > service_role key)
+  # Until then, this job fails at the "Run smoke-production script" step
+  # with a clear "must both be set" error from the script itself, not a
+  # cryptic one - see scripts/smoke-production.ts's own main().
+  smoke-production-script:
+    name: smoke-production-script
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: staging
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - uses: oven-sh/setup-bun@v2
+
+      - name: Install dependencies from the committed Bun lockfile
+        run: bun install --frozen-lockfile
+
+      - name: Resolve staging URL
+        id: target
+        env:
+          INPUT_URL: ${{ inputs.staging_url }}
+          ENV_URL: ${{ vars.STAGING_URL }}
+        run: |
+          URL="${INPUT_URL:-$ENV_URL}"
+          # Unlike the Playwright job above, a missing app URL here is not
+          # fatal - smoke-production.ts's HTTP-reachability cases
+          # (health_endpoints) just report "skip", and every other case
+          # (which only needs Supabase credentials) still runs.
+          echo "url=$URL" >> "$GITHUB_OUTPUT"
+
+      - name: Run smoke-production script against staging
+        env:
+          SMOKE_TARGET_ENV: staging
+          SMOKE_BASE_URL: ${{ steps.target.outputs.url }}
+          VENDORCLEAR_SUPABASE_URL: ${{ secrets.VENDORCLEAR_SUPABASE_URL }}
+          VENDORCLEAR_SERVICE_ROLE_KEY: ${{ secrets.VENDORCLEAR_SERVICE_ROLE_KEY }}
+        run: bun scripts/smoke-production.ts
+
+      - name: Upload smoke-production artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-production-artifact
+          path: smoke-artifacts
+          retention-days: 30
