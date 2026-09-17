@@ -98,6 +98,7 @@ interface ResolveAssignmentRequirementsRpcRow {
   required: boolean;
   amount: number | null;
   source: string;
+  configuration: Record<string, unknown> | null;
 }
 
 /**
@@ -126,5 +127,6 @@ export async function resolveAssignmentRequirements(
     required: row.required,
     amount: row.amount,
     source: row.source as RequirementSource,
+    configuration: row.configuration ?? {},
   }));
 }

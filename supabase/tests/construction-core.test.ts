@@ -30,6 +30,7 @@ interface ResolvedRow {
   required: boolean;
   amount: number | null;
   source: string;
+  configuration: Record<string, unknown>;
 }
 
 beforeAll(async () => {
@@ -90,8 +91,83 @@ describe("resolve_assignment_requirements()", () => {
         required: true,
         amount: 2000000,
         source: "company_profile",
+        configuration: {},
       },
     ]);
+  });
+
+  it("returns configuration alongside the rest of a resolved requirement, round-tripping a limitField (Task 9b)", async () => {
+    const defaultProfile = await db.query<{ id: string }>(
+      `select id from public.requirement_profiles where company_id = $1 and is_company_default`,
+      [companyId],
+    );
+    const profileId = defaultProfile.rows[0]!.id;
+
+    await db.query(
+      `insert into public.requirement_profile_rules
+         (company_id, profile_id, rule_key, policy_type, rule_kind, required, amount, configuration)
+       values ($1, $2, 'gl_agg', 'general_liability', 'limit', true, 4000000,
+               '{"limitField": "general_aggregate"}'::jsonb)`,
+      [companyId, profileId],
+    );
+
+    const project = await db.query<{ id: string }>(
+      `insert into public.projects (company_id, name) values ($1, 'Configuration Round Trip Site') returning id`,
+      [companyId],
+    );
+    const vendor = await db.query<{ id: string }>(
+      `insert into public.vendors (company_id, name, trade) values ($1, 'Config Vendor', 'Roofing')
+       returning id`,
+      [companyId],
+    );
+    const assignment = await db.query<{ id: string }>(
+      `insert into public.project_vendor_assignments (company_id, project_id, vendor_id)
+       values ($1, $2, $3) returning id`,
+      [companyId, project.rows[0]!.id, vendor.rows[0]!.id],
+    );
+
+    const rows = await resolve(assignment.rows[0]!.id);
+    const rule = rows.find((r) => r.key === "gl_agg");
+    expect(rule).toEqual(
+      expect.objectContaining({
+        amount: 4000000,
+        configuration: { limitField: "general_aggregate" },
+      }),
+    );
+  });
+
+  it("carries a project override's own configuration onto a pure-override (extra) requirement", async () => {
+    const project = await db.query<{ id: string }>(
+      `insert into public.projects (company_id, name) values ($1, 'Override Configuration Site') returning id`,
+      [companyId],
+    );
+    const vendor = await db.query<{ id: string }>(
+      `insert into public.vendors (company_id, name, trade) values ($1, 'Override Config Vendor', 'Glazing')
+       returning id`,
+      [companyId],
+    );
+    const assignment = await db.query<{ id: string }>(
+      `insert into public.project_vendor_assignments (company_id, project_id, vendor_id)
+       values ($1, $2, $3) returning id`,
+      [companyId, project.rows[0]!.id, vendor.rows[0]!.id],
+    );
+
+    await db.query(
+      `insert into public.project_requirement_overrides (company_id, project_id, rule_key, value)
+       values ($1, $2, 'site_ai_endorsement',
+               '{"kind": "endorsement", "policyType": "general_liability", "required": true,
+                 "configuration": {"endorsementField": "additional_insured"}}'::jsonb)`,
+      [companyId, project.rows[0]!.id],
+    );
+
+    const rows = await resolve(assignment.rows[0]!.id);
+    const extra = rows.find((r) => r.key === "site_ai_endorsement");
+    expect(extra).toEqual(
+      expect.objectContaining({
+        kind: "endorsement",
+        configuration: { endorsementField: "additional_insured" },
+      }),
+    );
   });
 
   it("prefers the project's own default profile over the company default", async () => {
