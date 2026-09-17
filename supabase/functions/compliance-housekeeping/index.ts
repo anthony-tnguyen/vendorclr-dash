@@ -200,7 +200,11 @@ async function notifyComplianceContacts(
       template: params.template,
       to_email: to,
       status:
-        sendResult.status === "sent" ? "sent" : sendResult.status === "failed" ? "failed" : "queued",
+        sendResult.status === "sent"
+          ? "sent"
+          : sendResult.status === "failed"
+            ? "failed"
+            : "queued",
       provider_message_id: sendResult.providerMessageId,
       error: sendResult.error,
       sent_at: sendResult.status === "sent" ? new Date().toISOString() : null,
