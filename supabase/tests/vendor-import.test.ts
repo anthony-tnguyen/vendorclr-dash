@@ -1,0 +1,268 @@
+import type { PGlite } from "@electric-sql/pglite";
+import { beforeAll, describe, expect, it } from "vitest";
+
+import { asUser, companyIdFor, createTestDb, signUp } from "./harness";
+
+/**
+ * Task 11a - import_vendor_row() (20260917001500_vendor_import.sql). Each
+ * call is one accepted CSV row's writes, atomically: project create-or-
+ * lookup (matched by trimmed name, never overwriting an existing project's
+ * certificate holder fields), vendor create-or-lookup (matched by normalized
+ * name OR normalized non-empty email, never overwriting an existing
+ * vendor's other fields), and an assignment create that is a no-op (not an
+ * error) when the (project, vendor) pair already exists.
+ */
+
+const OWNER = "11111111-1111-1111-1111-111111111111";
+const OTHER_OWNER = "44444444-4444-4444-4444-444444444444";
+
+let db: PGlite;
+let companyId: string;
+let otherCompanyId: string;
+
+interface ImportVendorRowResult {
+  project_id: string;
+  project_created: boolean;
+  vendor_id: string;
+  vendor_created: boolean;
+  assignment_id: string;
+  assignment_created: boolean;
+}
+
+async function importRow(
+  userId: string,
+  args: {
+    companyId: string;
+    projectName: string;
+    certificateHolderName?: string;
+    certificateHolderAddress?: string;
+    vendorName: string;
+    trade?: string | null;
+    contactName?: string;
+    contactEmail?: string;
+    riskTier?: string | null;
+    contractValue?: number | null;
+  },
+): Promise<ImportVendorRowResult> {
+  const rows = await asUser<ImportVendorRowResult>(
+    db,
+    userId,
+    `select * from public.import_vendor_row($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+    [
+      args.companyId,
+      args.projectName,
+      args.certificateHolderName ?? "",
+      args.certificateHolderAddress ?? "",
+      args.vendorName,
+      args.trade ?? "Structural Steel",
+      args.contactName ?? "",
+      args.contactEmail ?? "",
+      args.riskTier ?? "moderate",
+      args.contractValue ?? 0,
+    ],
+  );
+  return rows[0]!;
+}
+
+beforeAll(async () => {
+  db = await createTestDb();
+
+  await signUp(db, { id: OWNER, email: "owner@ridgeline.test", companyName: "Ridgeline GC" });
+  companyId = await companyIdFor(db, OWNER);
+
+  await signUp(db, { id: OTHER_OWNER, email: "owner@other.test", companyName: "Other Co" });
+  otherCompanyId = await companyIdFor(db, OTHER_OWNER);
+}, 60_000);
+
+describe("import_vendor_row()", () => {
+  it("creates a brand-new project, vendor and assignment when none exist", async () => {
+    const result = await importRow(OWNER, {
+      companyId,
+      projectName: "Harbor Tower",
+      certificateHolderName: "Ridgeline GC LLC",
+      certificateHolderAddress: "100 Harbor Way",
+      vendorName: "Cascade Steel",
+      trade: "Structural Steel",
+      contactEmail: "ops@cascadesteel.test",
+      contractValue: 500000,
+    });
+
+    expect(result.project_created).toBe(true);
+    expect(result.vendor_created).toBe(true);
+    expect(result.assignment_created).toBe(true);
+
+    const project = await db.query<{ name: string; certificate_holder_name: string }>(
+      `select name, certificate_holder_name from public.projects where id = $1`,
+      [result.project_id],
+    );
+    expect(project.rows[0]).toMatchObject({
+      name: "Harbor Tower",
+      certificate_holder_name: "Ridgeline GC LLC",
+    });
+
+    const vendor = await db.query<{ name: string; trade: string }>(
+      `select name, trade from public.vendors where id = $1`,
+      [result.vendor_id],
+    );
+    expect(vendor.rows[0]).toMatchObject({ name: "Cascade Steel", trade: "Structural Steel" });
+
+    const assignment = await db.query(
+      `select id from public.project_vendor_assignments where id = $1`,
+      [result.assignment_id],
+    );
+    expect(assignment.rows).toHaveLength(1);
+  });
+
+  it("reuses an existing project by normalized (trimmed) name match, without overwriting its certificate holder fields", async () => {
+    const first = await importRow(OWNER, {
+      companyId,
+      projectName: "  Lakeside Campus  ",
+      certificateHolderName: "Original Holder",
+      certificateHolderAddress: "1 Original Ave",
+      vendorName: "Vendor A For Lakeside",
+    });
+    expect(first.project_created).toBe(true);
+
+    const second = await importRow(OWNER, {
+      companyId,
+      projectName: "Lakeside Campus",
+      certificateHolderName: "Different Holder",
+      certificateHolderAddress: "2 Different Ave",
+      vendorName: "Vendor B For Lakeside",
+    });
+
+    expect(second.project_created).toBe(false);
+    expect(second.project_id).toBe(first.project_id);
+
+    const project = await db.query<{
+      certificate_holder_name: string;
+      certificate_holder_address: string;
+    }>(
+      `select certificate_holder_name, certificate_holder_address from public.projects where id = $1`,
+      [first.project_id],
+    );
+    expect(project.rows[0]).toMatchObject({
+      certificate_holder_name: "Original Holder",
+      certificate_holder_address: "1 Original Ave",
+    });
+  });
+
+  it("reuses an existing vendor by normalized name match (case/whitespace-insensitive), without overwriting its other fields", async () => {
+    const first = await importRow(OWNER, {
+      companyId,
+      projectName: "Vendor Name Match Project",
+      vendorName: "Acme Electrical Co",
+      trade: "Electrical",
+      contractValue: 250000,
+      riskTier: "high",
+    });
+    expect(first.vendor_created).toBe(true);
+
+    const second = await importRow(OWNER, {
+      companyId,
+      projectName: "Vendor Name Match Project Two",
+      vendorName: "  acme electrical co  ",
+      trade: "Concrete",
+      contractValue: 999999,
+      riskTier: "low",
+    });
+
+    expect(second.vendor_created).toBe(false);
+    expect(second.vendor_id).toBe(first.vendor_id);
+
+    const vendor = await db.query<{ trade: string; contract_value: number; risk_tier: string }>(
+      `select trade, contract_value, risk_tier from public.vendors where id = $1`,
+      [first.vendor_id],
+    );
+    expect(vendor.rows[0]).toMatchObject({
+      trade: "Electrical",
+      contract_value: 250000,
+      risk_tier: "high",
+    });
+  });
+
+  it("reuses an existing vendor by normalized email match even if the name differs", async () => {
+    const first = await importRow(OWNER, {
+      companyId,
+      projectName: "Email Match Project",
+      vendorName: "Beacon Roofing Inc",
+      contactEmail: "billing@beaconroofing.test",
+      trade: "Roofing",
+    });
+    expect(first.vendor_created).toBe(true);
+
+    const second = await importRow(OWNER, {
+      companyId,
+      projectName: "Email Match Project Two",
+      vendorName: "Beacon Roofing (renamed)",
+      contactEmail: "  Billing@BeaconRoofing.test  ",
+      trade: "Roofing",
+    });
+
+    expect(second.vendor_created).toBe(false);
+    expect(second.vendor_id).toBe(first.vendor_id);
+
+    const vendor = await db.query<{ name: string }>(
+      `select name from public.vendors where id = $1`,
+      [first.vendor_id],
+    );
+    expect(vendor.rows[0]!.name).toBe("Beacon Roofing Inc");
+  });
+
+  it("calling it twice for the SAME (project, vendor) pair does not error and does not create a second assignment", async () => {
+    const first = await importRow(OWNER, {
+      companyId,
+      projectName: "Idempotent Assignment Project",
+      vendorName: "Idempotent Assignment Vendor",
+    });
+
+    const second = await importRow(OWNER, {
+      companyId,
+      projectName: "Idempotent Assignment Project",
+      vendorName: "Idempotent Assignment Vendor",
+    });
+
+    expect(second.project_id).toBe(first.project_id);
+    expect(second.vendor_id).toBe(first.vendor_id);
+    expect(second.assignment_id).toBe(first.assignment_id);
+    expect(second.assignment_created).toBe(false);
+
+    const assignments = await db.query(
+      `select id from public.project_vendor_assignments where project_id = $1 and vendor_id = $2`,
+      [first.project_id, first.vendor_id],
+    );
+    expect(assignments.rows).toHaveLength(1);
+  });
+
+  it("raises for a cross-tenant company id (IDOR)", async () => {
+    await expect(
+      importRow(OTHER_OWNER, {
+        companyId,
+        projectName: "Cross Tenant Project",
+        vendorName: "Cross Tenant Vendor",
+      }),
+    ).rejects.toThrow(/not authorized/);
+  });
+
+  it("rejects an invalid trade value via the existing CHECK constraint, not silent coercion", async () => {
+    await expect(
+      importRow(OWNER, {
+        companyId,
+        projectName: "Bad Trade Project",
+        vendorName: "Bad Trade Vendor",
+        trade: "Not A Real Trade",
+      }),
+    ).rejects.toThrow();
+  });
+
+  it("rejects an invalid risk_tier value via the existing CHECK constraint, not silent coercion", async () => {
+    await expect(
+      importRow(OWNER, {
+        companyId,
+        projectName: "Bad Risk Tier Project",
+        vendorName: "Bad Risk Tier Vendor",
+        riskTier: "extreme",
+      }),
+    ).rejects.toThrow();
+  });
+});
