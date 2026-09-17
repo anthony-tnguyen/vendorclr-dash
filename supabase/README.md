@@ -1351,6 +1351,35 @@ src/data/db-types.ts` followed by `git diff --exit-code src/data/db-types.ts`.
   `apply_policy_renewal()`. The vendor detail page renders that as "Not on
   file," the same as a vendor with no policy at all; there's no backfill
   from `vendor_documents.parsed_data` for rows that predate this column.
+- **Escalation thresholds are hardcoded at 3/7/14 days, not yet
+  company-configurable.** `compliance_deficiencies_due_for_escalation`
+  (Task 10b, `20260917001300_compliance_case_escalation.sql`) fires at
+  exactly three fixed thresholds baked into the view's own `where` clause,
+  not a per-company setting. This is deliberate, not an oversight: the
+  plan's own bullet reads "escalate unanswered correction requests at 3, 7
+  and 14 days; make thresholds company-configurable **after pilot
+  evidence**" - i.e. configurability is explicitly sequenced to come after
+  this ships and real pilots show what actually needs tuning, not before.
+  Making it configurable now would mean building a settings UI/column
+  around guessed defaults instead of observed ones.
+- **Exception expiry "creates a task" as an `audit_log` entry plus an
+  email, not a dedicated task-tracking feature.** The plan's exception
+  bullet says expiry "reopens the deficiency and creates a task," but this
+  codebase has no task-tracking system at all - no `tasks` table, no
+  assignment/due-date/status model, nothing a "task" could actually be
+  written to. `reopen_expired_compliance_exception()` (Task 10b, same
+  migration as above) reopens the deficiency and writes a
+  `compliance_exception_expired` row to `audit_log` (this project's
+  existing audit trail); the `compliance-housekeeping` Edge Function that
+  calls it then emails the company's owner/risk_manager contacts, the same
+  `adminReviewNeeded`-style "a human must act" notification pattern
+  `process-document-jobs`/`src/workflows/emailTemplates.ts` already use
+  elsewhere in this schema. Together, that pairing (a durable record a
+  human can look up, plus a real-time nudge to look at it) is the
+  deliberate, documented stand-in for "creates a task" in the absence of an
+  actual task feature - not a partial or missed requirement. A real task
+  row (with its own status/assignee/due date a person can work through)
+  would be a meaningfully bigger feature than this bullet's own scope.
 
 ## What is still not built
 
