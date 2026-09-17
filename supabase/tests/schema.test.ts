@@ -63,6 +63,7 @@ describe("migrations", () => {
       "vendor_compliance_items",
       "vendor_contacts",
       "vendor_documents",
+      "vendor_import_batches",
       "vendor_policies",
       "vendor_upload_requests",
       "vendors",
