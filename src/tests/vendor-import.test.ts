@@ -136,8 +136,14 @@ describe("validateOneRow()", () => {
   });
 
   it("predicts willCreateProject/willCreateVendor against seeded existing data vs. genuinely new names", () => {
+    // existingProjectNames is seeded with the project's exact on-file casing
+    // (trim-only, no lowercasing) - matching what fetchValidationContext()
+    // actually populates it with (projects.name's own case-sensitive
+    // `unique (company_id, name)` constraint, Task 4). existingVendorNames/
+    // existingVendorEmails ARE pre-lowercased, matching normalizeMatch()'s
+    // case-insensitive vendor matching.
     const ctx = {
-      existingProjectNames: new Set(["harbor tower"]),
+      existingProjectNames: new Set(["Harbor Tower"]),
       existingVendorNames: new Set(["cascade steel"]),
       existingVendorEmails: new Set(["ops@cascadesteel.test"]),
     };
@@ -165,6 +171,32 @@ describe("validateOneRow()", () => {
       ctx,
     );
     expect(matchByEmailOnly.willCreateVendor).toBe(false);
+  });
+
+  it("project matching is case-SENSITIVE (trim-only) while vendor matching is case-INSENSITIVE - mirroring import_vendor_row()'s SQL exactly", () => {
+    // Regression test for a real bug: this file previously used the SAME
+    // trim+lowercase normalizeMatch() for both projects and vendors, so a
+    // differently-cased project name was predicted here as "will match an
+    // existing project" while import_vendor_row()'s case-sensitive SQL
+    // comparison would NOT match it - execute() would then silently create
+    // a duplicate project row, exactly contradicting what validate told the
+    // caller would happen. See normalizeProjectMatch()'s own doc comment.
+    const ctx = {
+      existingProjectNames: new Set(["Harbor Tower"]),
+      existingVendorNames: new Set(["cascade steel"]),
+      existingVendorEmails: new Set([]),
+    };
+
+    const differentCaseProject = validateOneRow(
+      row({ projectName: "harbor tower", vendorName: "Cascade Steel" }),
+      ctx,
+    );
+    // Must predict a FRESH project create, matching the SQL function's own
+    // case-sensitive lookup, which will not find "Harbor Tower" for an
+    // incoming "harbor tower".
+    expect(differentCaseProject.willCreateProject).toBe(true);
+    // Vendor matching stays case-insensitive - unaffected by the project fix.
+    expect(differentCaseProject.willCreateVendor).toBe(false);
   });
 });
 

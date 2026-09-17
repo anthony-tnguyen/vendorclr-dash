@@ -40,16 +40,26 @@ import { createUploadRequest } from "./vendorUploadRequests";
  *                               trade+risk_tier vocabulary, and predicts
  *                               whether the project/vendor would be created
  *                               fresh or matched to an existing one, using
- *                               the SAME normalization logic (normalizeMatch,
- *                               validateOneRow) that import_vendor_row()'s
- *                               SQL lookups use - kept in sync deliberately,
- *                               since a divergence would mean "validate said
- *                               this creates a new vendor" while "execute
- *                               actually matched an existing one," a
- *                               confusing UX bug even though not a
- *                               data-safety bug (the SQL function is what
- *                               actually decides create-vs-reuse; this is
- *                               only a prediction for the UI).
+ *                               the SAME normalization logic import_vendor_
+ *                               row()'s SQL lookups use - kept in sync
+ *                               DELIBERATELY, and the two are NOT the same
+ *                               function: normalizeMatch() (trim+lowercase)
+ *                               is for vendor name/email matching, while
+ *                               normalizeProjectMatch() (trim only, no
+ *                               case-folding) is for project name matching -
+ *                               mirroring that projects.name's own `unique
+ *                               (company_id, name)` constraint (Task 4) is
+ *                               case-sensitive while vendors has no DB-level
+ *                               uniqueness constraint to anchor to at all.
+ *                               A divergence here is a real data-safety bug,
+ *                               not just a UX one: it previously meant
+ *                               validate could predict "this project already
+ *                               exists" for two differently-cased names that
+ *                               the SQL function's case-sensitive comparison
+ *                               would NOT match, so execute() would silently
+ *                               create a duplicate project row - found by an
+ *                               independent spec-compliance review, fixed by
+ *                               splitting the two normalization functions.
  *
  *   executeVendorImport()    - a createServerFn, the only phase that writes.
  *                               Checks vendor_import_batches for an existing
@@ -108,9 +118,31 @@ export type RiskTier = (typeof RISK_TIER_VALUES)[number];
 
 const EMAIL_SHAPE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-/** Trim + lowercase, for MATCHING only - never used for what gets stored (import_vendor_row() preserves the row's own casing on insert). */
+/** Trim + lowercase, for VENDOR name/email MATCHING only - never used for what gets stored (import_vendor_row() preserves the row's own casing on insert). */
 export function normalizeMatch(value: string): string {
   return value.trim().toLowerCase();
+}
+
+/**
+ * Trim only (no case-folding), for PROJECT name MATCHING only. Deliberately
+ * NOT the same as normalizeMatch(): import_vendor_row()'s project lookup
+ * compares btrim(name) with no lower() (matching projects' own
+ * case-sensitive `unique (company_id, name)` constraint from Task 4 -
+ * construction_core_expand.sql), while the vendor lookup below IS
+ * case-insensitive by design (a vendor has no DB uniqueness constraint at
+ * all to anchor to, so the plan's own "normalized ... vendor/email
+ * duplicates" wording is this codebase's only source of truth for vendor
+ * matching). Using normalizeMatch() (trim+lowercase) here instead would
+ * make this function predict "will match an existing project" for two
+ * differently-cased names that the SQL function's case-sensitive
+ * comparison would NOT match - producing a duplicate project row that
+ * validateVendorImportRows() told the caller would never happen. Found by
+ * an independent spec-compliance review; see this file's own header
+ * comment for the general "keep the SQL and TS copies of this
+ * normalization logic in sync" requirement.
+ */
+export function normalizeProjectMatch(value: string): string {
+  return value.trim();
 }
 
 // ---------------------------------------------------------------------------
@@ -355,7 +387,7 @@ export function validateOneRow(row: ParsedRow, ctx: RowValidationContext): Valid
   }
 
   const willCreateProject = row.projectName
-    ? !ctx.existingProjectNames.has(normalizeMatch(row.projectName))
+    ? !ctx.existingProjectNames.has(normalizeProjectMatch(row.projectName))
     : false;
 
   const normalizedEmail = row.contactEmail ? normalizeMatch(row.contactEmail) : "";
@@ -396,7 +428,7 @@ export function validateRows(rows: ParsedRow[], seed: RowValidationContext): Val
   return rows.map((row) => {
     const result = validateOneRow(row, ctx);
     if (result.status === "valid") {
-      if (row.projectName) ctx.existingProjectNames.add(normalizeMatch(row.projectName));
+      if (row.projectName) ctx.existingProjectNames.add(normalizeProjectMatch(row.projectName));
       if (row.vendorName) ctx.existingVendorNames.add(normalizeMatch(row.vendorName));
       if (row.contactEmail) {
         const normalized = normalizeMatch(row.contactEmail);
@@ -425,7 +457,7 @@ async function fetchValidationContext(
 
   return {
     existingProjectNames: new Set(
-      ((projects ?? []) as Array<{ name: string }>).map((p) => normalizeMatch(p.name)),
+      ((projects ?? []) as Array<{ name: string }>).map((p) => normalizeProjectMatch(p.name)),
     ),
     existingVendorNames: new Set(vendorRows.map((v) => normalizeMatch(v.name))),
     existingVendorEmails: new Set(
