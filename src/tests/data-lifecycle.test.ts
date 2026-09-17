@@ -52,6 +52,7 @@ interface FakeState {
 
 interface FakeCalls {
   removedPaths: string[];
+  removeBatchSizes: number[];
   downloadedPaths: string[];
   deletedCompanyIds: string[];
 }
@@ -139,6 +140,7 @@ function makeFakeSupabase(state: FakeState, calls: FakeCalls) {
       },
       remove: async (paths: string[]) => {
         calls.removedPaths.push(...paths);
+        calls.removeBatchSizes.push(paths.length);
         state.storageObjects = state.storageObjects.filter((o) => !paths.includes(o.path));
         return { error: null };
       },
@@ -158,7 +160,7 @@ function emptyState(): FakeState {
 }
 
 function emptyCalls(): FakeCalls {
-  return { removedPaths: [], downloadedPaths: [], deletedCompanyIds: [] };
+  return { removedPaths: [], removeBatchSizes: [], downloadedPaths: [], deletedCompanyIds: [] };
 }
 
 // ---------------------------------------------------------------------------
@@ -431,5 +433,39 @@ describe("executeDeletion()", () => {
     expect(calls.deletedCompanyIds).toEqual(["company-1"]);
     expect(state.companies).toHaveLength(0);
     expect(state.storageObjects).toHaveLength(0);
+  });
+
+  it("chunks storage-object removal for a large company instead of sending every path in one batch", async () => {
+    // Regression test for a real robustness gap found in code-quality
+    // review: listCompanyStorageObjects() (export-company.ts) already
+    // paginates its list() calls at 1000 entries specifically because a
+    // company can plausibly have well over 1000 documents, but the first
+    // version of deleteStorageObjects() sent every path in ONE unchunked
+    // remove() call regardless of count - exactly the largest companies
+    // (most in need of this tool) were the ones most likely to hit a
+    // request-size/timeout limit with no way to recover short of a code
+    // change. 2500 objects across 3 chunks (1000/1000/500) proves the fix.
+    const state = emptyState();
+    state.companies.push({ id: "company-1", name: "Big Co" });
+    const manyObjects: StorageObjectListing[] = Array.from({ length: 2500 }, (_, i) => ({
+      path: `company/company-1/vendor/v1/documents/doc-${i}.pdf`,
+      size: 10,
+    }));
+    state.storageObjects = manyObjects.map((o) => ({ path: o.path, size: o.size }));
+    const calls = emptyCalls();
+    const supabase = makeFakeSupabase(state, calls);
+
+    await executeDeletion(supabase as never, "company-1", manyObjects);
+
+    // Multiple remove() calls, none exceeding the chunk size, and every
+    // object still gets removed in total.
+    expect(calls.removeBatchSizes.length).toBeGreaterThan(1);
+    for (const size of calls.removeBatchSizes) {
+      expect(size).toBeLessThanOrEqual(1000);
+    }
+    expect(calls.removeBatchSizes.reduce((sum, n) => sum + n, 0)).toBe(2500);
+    expect(calls.removedPaths).toHaveLength(2500);
+    expect(state.storageObjects).toHaveLength(0);
+    expect(state.companies).toHaveLength(0);
   });
 });

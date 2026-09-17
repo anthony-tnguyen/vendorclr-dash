@@ -216,16 +216,40 @@ function printPlan(plan: DeletionPlan, heading: string): void {
   );
 }
 
-/** Deletes every storage object this company owns. Never throws on an individual missing object; aggregates failures and throws once at the end so a partial failure is visible rather than silently stopping partway through. */
+// Same page size as listCompanyStorageObjects()'s own list() pagination
+// (export-company.ts) - that function already established that a single
+// company can plausibly have well over 1000 documents (many vendors, each
+// with years of certificates). A single unchunked remove() call carrying
+// every path at once risks hitting a request-size/timeout limit on the
+// Storage API for exactly the largest, most-in-need-of-this-tool companies.
+// Chunking here mirrors the scale-awareness the list side already has.
+const REMOVE_CHUNK_SIZE = 1000;
+
+/** Deletes every storage object this company owns, chunked (see REMOVE_CHUNK_SIZE) so a very large company doesn't send one oversized batch request. Continues through remaining chunks even if one fails, aggregating every chunk's error and throwing once at the end - so a partial failure is fully visible (which paths failed) rather than silently stopping partway through and leaving the rest never attempted. */
 async function deleteStorageObjects(
   supabase: SupabaseClient,
   objects: StorageObjectListing[],
 ): Promise<void> {
   if (objects.length === 0) return;
-  const paths = objects.map((o) => o.path);
-  // Supabase Storage's remove() accepts a batch of paths in one call.
-  const { error } = await supabase.storage.from(VENDOR_DOCUMENTS_BUCKET).remove(paths);
-  if (error) throw new Error(`Failed to delete storage objects: ${error.message}`);
+
+  const errors: string[] = [];
+  for (let i = 0; i < objects.length; i += REMOVE_CHUNK_SIZE) {
+    const chunk = objects.slice(i, i + REMOVE_CHUNK_SIZE);
+    const paths = chunk.map((o) => o.path);
+    // Supabase Storage's remove() accepts a batch of paths in one call.
+    const { error } = await supabase.storage.from(VENDOR_DOCUMENTS_BUCKET).remove(paths);
+    if (error) {
+      errors.push(
+        `paths ${i}-${i + chunk.length - 1} (${chunk.length} object(s)): ${error.message}`,
+      );
+    }
+  }
+
+  if (errors.length > 0) {
+    throw new Error(
+      `Failed to delete storage objects in ${errors.length} chunk(s):\n${errors.join("\n")}`,
+    );
+  }
 }
 
 /**
