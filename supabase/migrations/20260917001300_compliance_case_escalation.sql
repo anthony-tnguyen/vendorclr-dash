@@ -61,6 +61,166 @@ create index compliance_deficiencies_escalation_idx
   where status = 'open' and correction_requested_at is not null;
 
 -- ---------------------------------------------------------------------------
+-- apply_evaluation_result() - redefined here to reset the escalation clock
+-- on reopen.
+-- ---------------------------------------------------------------------------
+--
+-- Task 10a's version of this function (20260917001200_compliance_cases.sql)
+-- predates correction_requested_at/escalation_level/last_escalated_at
+-- entirely, so its "regressed - reopen a resolved deficiency" branch had no
+-- reason to touch them. Now that those columns exist, leaving them alone on
+-- reopen is a real bug found in this task's own code-quality review: a
+-- deficiency that escalated to level 2 (say, 20 days after its original
+-- correction request), then got resolved by a clean submission, then months
+-- later regresses again on a wholly unrelated resubmission, would reopen
+-- with the STALE escalation_level=2 and the STALE 20-day-old
+-- correction_requested_at still in place - compliance_deficiencies_due_for_
+-- escalation would then judge it immediately overdue for a level-3
+-- escalation on the very next housekeeping run, even though nobody has
+-- requested correction on this fresh episode at all yet. Resetting all
+-- three columns to their "never requested" defaults on reopen treats a
+-- regression as what it actually is: a new open episode that has not yet
+-- had a correction requested, exactly like a brand-new deficiency.
+create or replace function public.apply_evaluation_result(
+  p_company_id             uuid,
+  p_vendor_id              uuid,
+  p_assignment_id          uuid,
+  p_upload_request_id      uuid,
+  p_package_id             uuid,
+  p_evaluated_at           timestamptz,
+  p_requirements_snapshot  jsonb,
+  p_findings_snapshot      jsonb
+)
+returns uuid
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $fn$
+declare
+  v_case_id     uuid;
+  v_run_id      uuid;
+  v_finding     jsonb;
+  v_requirement jsonb;
+  v_key         text;
+  v_state       text;
+  v_existing    public.compliance_deficiencies%rowtype;
+begin
+  if not (
+    p_company_id in (select public.current_company_ids())
+    or public.is_platform_admin()
+  ) then
+    raise exception 'not authorized' using errcode = '42501';
+  end if;
+
+  insert into public.compliance_cases (company_id, vendor_id, assignment_id, upload_request_id)
+  values (p_company_id, p_vendor_id, p_assignment_id, p_upload_request_id)
+  on conflict (assignment_id, upload_request_id)
+  do update set updated_at = now()
+  returning id into v_case_id;
+
+  insert into public.compliance_evaluation_runs (
+    company_id, case_id, package_id, evaluated_at, requirements_snapshot, findings_snapshot
+  ) values (
+    p_company_id, v_case_id, p_package_id, p_evaluated_at, p_requirements_snapshot, p_findings_snapshot
+  )
+  returning id into v_run_id;
+
+  for v_finding in select * from jsonb_array_elements(p_findings_snapshot)
+  loop
+    v_key := v_finding ->> 'requirementKey';
+    v_state := v_finding ->> 'state';
+
+    continue when v_state not in ('deficient', 'unknown');
+
+    select r into v_requirement
+    from jsonb_array_elements(p_requirements_snapshot) r
+    where r ->> 'key' = v_key
+    limit 1;
+
+    select * into v_existing
+    from public.compliance_deficiencies
+    where case_id = v_case_id and requirement_key = v_key;
+
+    if not found then
+      insert into public.compliance_deficiencies (
+        company_id, case_id, requirement_key, status, kind, policy_type,
+        expected, observed, explanation, evidence_document_ids,
+        first_evaluation_run_id, last_evaluation_run_id
+      ) values (
+        p_company_id, v_case_id, v_key, 'open',
+        nullif(v_requirement ->> 'kind', ''),
+        nullif(v_requirement ->> 'policyType', ''),
+        coalesce(v_finding -> 'expected', '{}'::jsonb),
+        v_finding -> 'observed',
+        coalesce(v_finding ->> 'explanation', ''),
+        coalesce(
+          (select array_agg(elem::uuid) from jsonb_array_elements_text(
+            coalesce(v_finding -> 'evidenceDocumentIds', '[]'::jsonb)
+          ) elem),
+          '{}'::uuid[]
+        ),
+        v_run_id, v_run_id
+      );
+    elsif v_existing.status in ('open', 'resolved') then
+      -- The `and status in ('open', 'resolved')` guard on the UPDATE below
+      -- re-checks the row's status LIVE at UPDATE time rather than trusting
+      -- the v_existing snapshot read above - see Task 10a's code-quality
+      -- review fix for the full reasoning (a concurrent
+      -- approve_compliance_exception() call landing between this SELECT and
+      -- this UPDATE must not be clobbered).
+      --
+      -- correction_requested_at/escalation_level/last_escalated_at are reset
+      -- to their "never requested" defaults whenever this branch actually
+      -- reopens a RESOLVED row back to 'open' (see this function's own
+      -- header comment above) - an already-open row being re-touched by a
+      -- new run with unchanged status is not a "reopen" and does not need
+      -- this reset (it never had its own clock disturbed), so the reset is
+      -- conditioned on the row's live status actually being 'resolved'
+      -- going into this statement, not on it merely being in this branch.
+      update public.compliance_deficiencies
+      set kind = nullif(v_requirement ->> 'kind', ''),
+          policy_type = nullif(v_requirement ->> 'policyType', ''),
+          expected = coalesce(v_finding -> 'expected', '{}'::jsonb),
+          observed = v_finding -> 'observed',
+          explanation = coalesce(v_finding ->> 'explanation', ''),
+          evidence_document_ids = coalesce(
+            (select array_agg(elem::uuid) from jsonb_array_elements_text(
+              coalesce(v_finding -> 'evidenceDocumentIds', '[]'::jsonb)
+            ) elem),
+            '{}'::uuid[]
+          ),
+          last_evaluation_run_id = v_run_id,
+          status = 'open',
+          resolved_at = null,
+          resolved_by_evaluation_run_id = null,
+          correction_requested_at = case when status = 'resolved' then null else correction_requested_at end,
+          escalation_level = case when status = 'resolved' then 0 else escalation_level end,
+          last_escalated_at = case when status = 'resolved' then null else last_escalated_at end,
+          updated_at = now()
+      where id = v_existing.id
+        and status in ('open', 'resolved');
+    end if;
+  end loop;
+
+  update public.compliance_deficiencies d
+  set status = 'resolved',
+      resolved_at = now(),
+      resolved_by_evaluation_run_id = v_run_id,
+      updated_at = now()
+  where d.case_id = v_case_id
+    and d.status = 'open'
+    and not exists (
+      select 1
+      from jsonb_array_elements(p_findings_snapshot) f
+      where f ->> 'requirementKey' = d.requirement_key
+        and f ->> 'state' in ('deficient', 'unknown')
+    );
+
+  return v_case_id;
+end;
+$fn$;
+
+-- ---------------------------------------------------------------------------
 -- request_deficiency_correction() - starts the escalation clock.
 -- ---------------------------------------------------------------------------
 --

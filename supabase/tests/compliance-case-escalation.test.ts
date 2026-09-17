@@ -62,8 +62,34 @@ function requirement(overrides: Partial<Record<string, unknown>> = {}) {
   };
 }
 
-/** Creates a fresh case + one open deficiency for the given requirement key, via apply_evaluation_result(), and returns the deficiency id. */
-async function seedOpenDeficiency(requirementKey: string): Promise<string> {
+/** Re-runs apply_evaluation_result() against an already-seeded case, with a fresh finding state for the same requirement key - used to simulate a resubmission (resolve/regress) without re-seeding a new case. */
+async function reapplyResult(
+  requestId: string,
+  packageId: string,
+  requirementKey: string,
+  state: "deficient" | "unknown" | "verified" | "not_applicable",
+): Promise<void> {
+  await asUser(
+    db,
+    OWNER,
+    `select public.apply_evaluation_result($1, $2, $3, $4, $5, $6, $7::jsonb, $8::jsonb)`,
+    [
+      companyId,
+      vendorId,
+      assignmentId,
+      requestId,
+      packageId,
+      new Date().toISOString(),
+      JSON.stringify([requirement({ key: requirementKey })]),
+      JSON.stringify([finding({ requirementKey, state })]),
+    ],
+  );
+}
+
+/** Creates a fresh case + one open deficiency for the given requirement key, via apply_evaluation_result(). Returns the deficiency id plus the case's upload_request_id/package_id, so a caller can re-apply against the SAME case (e.g. to simulate resolve/regress) via reapplyResult(). */
+async function seedOpenDeficiency(
+  requirementKey: string,
+): Promise<{ deficiencyId: string; requestId: string; packageId: string }> {
   caseSeq += 1;
   const uploadRequest = await db.query<{ id: string }>(
     `insert into public.vendor_upload_requests (company_id, vendor_id, token_hash, expires_at)
@@ -76,6 +102,7 @@ async function seedOpenDeficiency(requirementKey: string): Promise<string> {
      values ($1, $2, $3) returning id`,
     [companyId, vendorId, requestId],
   );
+  const packageId = pkg.rows[0]!.id;
 
   const rows = await asUser<{ apply_evaluation_result: string }>(
     db,
@@ -86,7 +113,7 @@ async function seedOpenDeficiency(requirementKey: string): Promise<string> {
       vendorId,
       assignmentId,
       requestId,
-      pkg.rows[0]!.id,
+      packageId,
       new Date().toISOString(),
       JSON.stringify([requirement({ key: requirementKey })]),
       JSON.stringify([finding({ requirementKey })]),
@@ -98,7 +125,7 @@ async function seedOpenDeficiency(requirementKey: string): Promise<string> {
     `select id from public.compliance_deficiencies where case_id = $1 and requirement_key = $2`,
     [caseId, requirementKey],
   );
-  return deficiency.rows[0]!.id;
+  return { deficiencyId: deficiency.rows[0]!.id, requestId, packageId };
 }
 
 async function requestCorrection(userId: string, deficiencyId: string): Promise<void> {
@@ -188,7 +215,7 @@ beforeAll(async () => {
 
 describe("request_deficiency_correction()", () => {
   it("sets correction_requested_at and resets escalation_level/last_escalated_at", async () => {
-    const deficiencyId = await seedOpenDeficiency("req_correction_key");
+    const { deficiencyId } = await seedOpenDeficiency("req_correction_key");
     await backdateCorrectionRequest(deficiencyId, "1 day", 2);
 
     await requestCorrection(OWNER, deficiencyId);
@@ -200,14 +227,14 @@ describe("request_deficiency_correction()", () => {
   });
 
   it("rejects a deficiency that is not open", async () => {
-    const deficiencyId = await seedOpenDeficiency("req_not_open_key");
+    const { deficiencyId } = await seedOpenDeficiency("req_not_open_key");
     await approveException(deficiencyId, "2026-06-01");
 
     await expect(requestCorrection(OWNER, deficiencyId)).rejects.toThrow(/is not open/);
   });
 
   it("rejects cross-tenant access with the generic error", async () => {
-    const deficiencyId = await seedOpenDeficiency("req_cross_tenant_key");
+    const { deficiencyId } = await seedOpenDeficiency("req_cross_tenant_key");
 
     await expect(requestCorrection(OTHER_OWNER, deficiencyId)).rejects.toThrow(/not authorized/);
   });
@@ -216,6 +243,59 @@ describe("request_deficiency_correction()", () => {
     await expect(requestCorrection(OWNER, "00000000-0000-0000-0000-000000000000")).rejects.toThrow(
       /not authorized/,
     );
+  });
+});
+
+describe("apply_evaluation_result() resets the escalation clock on reopen", () => {
+  it("clears a stale correction_requested_at/escalation_level when a resolved deficiency regresses back to open", async () => {
+    const { deficiencyId, requestId, packageId } = await seedOpenDeficiency("clock_reset_key");
+
+    // Simulate the deficiency having already been escalated to level 2 a
+    // long time ago (20 days), then getting cleanly resolved by a
+    // resubmission.
+    await backdateCorrectionRequest(deficiencyId, "20 days", 2);
+    await reapplyResult(requestId, packageId, "clock_reset_key", "verified");
+    const resolved = await getDeficiency(deficiencyId);
+    expect(resolved!.status).toBe("resolved");
+    // The resolve path itself must not touch the escalation columns - only
+    // a reopen does.
+    expect(resolved!.escalation_level).toBe(2);
+
+    // Months later, a wholly unrelated resubmission regresses the SAME
+    // requirement again. Nobody has requested correction on this fresh
+    // episode yet.
+    await reapplyResult(requestId, packageId, "clock_reset_key", "deficient");
+
+    const reopened = await getDeficiency(deficiencyId);
+    expect(reopened!.status).toBe("open");
+    expect(reopened!.correction_requested_at).toBeNull();
+    expect(reopened!.escalation_level).toBe(0);
+    expect(reopened!.last_escalated_at).toBeNull();
+
+    // Without the reset, this fresh episode would already show up as
+    // "overdue for escalation" on the very next housekeeping run, even
+    // though nobody has requested correction on it - confirm it does not.
+    const due = await db.query(
+      `select deficiency_id from public.compliance_deficiencies_due_for_escalation where deficiency_id = $1`,
+      [deficiencyId],
+    );
+    expect(due.rows).toHaveLength(0);
+  });
+
+  it("does not touch the escalation clock when a run merely refreshes an already-open deficiency", async () => {
+    const { deficiencyId, requestId, packageId } = await seedOpenDeficiency("clock_no_touch_key");
+    await requestCorrection(OWNER, deficiencyId);
+    const requested = await getDeficiency(deficiencyId);
+    expect(requested!.correction_requested_at).not.toBeNull();
+
+    // A second run against the SAME still-open deficiency (e.g. an
+    // additional document landing in the same package) must not reset a
+    // correction request that is already legitimately outstanding.
+    await reapplyResult(requestId, packageId, "clock_no_touch_key", "deficient");
+
+    const after = await getDeficiency(deficiencyId);
+    expect(after!.status).toBe("open");
+    expect(after!.correction_requested_at).toEqual(requested!.correction_requested_at);
   });
 });
 
@@ -230,13 +310,13 @@ describe("compliance_deficiencies_due_for_escalation", () => {
   }
 
   it("excludes a deficiency just under the 3-day threshold at level 0", async () => {
-    const deficiencyId = await seedOpenDeficiency("view_under_3d_key");
+    const { deficiencyId } = await seedOpenDeficiency("view_under_3d_key");
     await backdateCorrectionRequest(deficiencyId, "2 days 23 hours", 0);
     expect(await dueRow(deficiencyId)).toBeNull();
   });
 
   it("includes a deficiency just over the 3-day threshold at level 0, next_level 1", async () => {
-    const deficiencyId = await seedOpenDeficiency("view_over_3d_key");
+    const { deficiencyId } = await seedOpenDeficiency("view_over_3d_key");
     await backdateCorrectionRequest(deficiencyId, "3 days 1 hour", 0);
     const row = await dueRow(deficiencyId);
     expect(row).not.toBeNull();
@@ -244,13 +324,13 @@ describe("compliance_deficiencies_due_for_escalation", () => {
   });
 
   it("excludes a deficiency at level 1 just over 3 days but under 7 days", async () => {
-    const deficiencyId = await seedOpenDeficiency("view_level1_under_7d_key");
+    const { deficiencyId } = await seedOpenDeficiency("view_level1_under_7d_key");
     await backdateCorrectionRequest(deficiencyId, "4 days", 1);
     expect(await dueRow(deficiencyId)).toBeNull();
   });
 
   it("includes a deficiency at level 1 just over the 7-day threshold, next_level 2", async () => {
-    const deficiencyId = await seedOpenDeficiency("view_over_7d_key");
+    const { deficiencyId } = await seedOpenDeficiency("view_over_7d_key");
     await backdateCorrectionRequest(deficiencyId, "7 days 1 hour", 1);
     const row = await dueRow(deficiencyId);
     expect(row).not.toBeNull();
@@ -258,7 +338,7 @@ describe("compliance_deficiencies_due_for_escalation", () => {
   });
 
   it("includes a deficiency at level 2 just over the 14-day threshold, next_level 3", async () => {
-    const deficiencyId = await seedOpenDeficiency("view_over_14d_key");
+    const { deficiencyId } = await seedOpenDeficiency("view_over_14d_key");
     await backdateCorrectionRequest(deficiencyId, "14 days 1 hour", 2);
     const row = await dueRow(deficiencyId);
     expect(row).not.toBeNull();
@@ -266,20 +346,20 @@ describe("compliance_deficiencies_due_for_escalation", () => {
   });
 
   it("never includes a deficiency at level 3, regardless of age", async () => {
-    const deficiencyId = await seedOpenDeficiency("view_level3_key");
+    const { deficiencyId } = await seedOpenDeficiency("view_level3_key");
     await backdateCorrectionRequest(deficiencyId, "60 days", 3);
     expect(await dueRow(deficiencyId)).toBeNull();
   });
 
   it("excludes a deficiency with no correction request at all", async () => {
-    const deficiencyId = await seedOpenDeficiency("view_no_request_key");
+    const { deficiencyId } = await seedOpenDeficiency("view_no_request_key");
     expect(await dueRow(deficiencyId)).toBeNull();
   });
 });
 
 describe("mark_deficiency_escalated()", () => {
   it("updates escalation_level and last_escalated_at", async () => {
-    const deficiencyId = await seedOpenDeficiency("mark_escalate_key");
+    const { deficiencyId } = await seedOpenDeficiency("mark_escalate_key");
     await backdateCorrectionRequest(deficiencyId, "4 days", 0);
 
     await db.query(`select public.mark_deficiency_escalated($1, $2)`, [deficiencyId, 1]);
@@ -290,7 +370,7 @@ describe("mark_deficiency_escalated()", () => {
   });
 
   it("is a no-op against a deficiency that has since become resolved", async () => {
-    const deficiencyId = await seedOpenDeficiency("mark_resolved_noop_key");
+    const { deficiencyId } = await seedOpenDeficiency("mark_resolved_noop_key");
     await backdateCorrectionRequest(deficiencyId, "4 days", 0);
 
     // Resolve it via a fresh clean evaluation run for the same requirement key.
@@ -379,19 +459,19 @@ describe("compliance_exceptions_due_for_reopening", () => {
   }
 
   it("excludes an exception that has not expired yet", async () => {
-    const deficiencyId = await seedOpenDeficiency("reopen_not_expired_key");
+    const { deficiencyId } = await seedOpenDeficiency("reopen_not_expired_key");
     const exceptionId = await approveException(deficiencyId, "2099-01-01");
     expect(await dueRow(exceptionId)).toBeNull();
   });
 
   it("includes an expired exception whose deficiency is still waived", async () => {
-    const deficiencyId = await seedOpenDeficiency("reopen_expired_key");
+    const { deficiencyId } = await seedOpenDeficiency("reopen_expired_key");
     const exceptionId = await approveException(deficiencyId, "2020-01-01");
     expect(await dueRow(exceptionId)).not.toBeNull();
   });
 
   it("excludes an exception already reopened", async () => {
-    const deficiencyId = await seedOpenDeficiency("reopen_already_reopened_key");
+    const { deficiencyId } = await seedOpenDeficiency("reopen_already_reopened_key");
     const exceptionId = await approveException(deficiencyId, "2020-01-01");
     await db.query(`update public.compliance_exceptions set reopened_at = now() where id = $1`, [
       exceptionId,
@@ -400,7 +480,7 @@ describe("compliance_exceptions_due_for_reopening", () => {
   });
 
   it("excludes an exception whose deficiency is no longer waived", async () => {
-    const deficiencyId = await seedOpenDeficiency("reopen_not_waived_key");
+    const { deficiencyId } = await seedOpenDeficiency("reopen_not_waived_key");
     const exceptionId = await approveException(deficiencyId, "2020-01-01");
     // Defensive-state simulation: directly flip the deficiency's status,
     // something no real code path does to a waived row today, but the view
@@ -414,7 +494,7 @@ describe("compliance_exceptions_due_for_reopening", () => {
 
 describe("reopen_expired_compliance_exception()", () => {
   it("reopens the deficiency, sets reopened_at, and writes the audit_log row", async () => {
-    const deficiencyId = await seedOpenDeficiency("reopen_fn_key");
+    const { deficiencyId } = await seedOpenDeficiency("reopen_fn_key");
     const exceptionId = await approveException(deficiencyId, "2020-01-01");
 
     const rows = await db.query<{ reopen_expired_compliance_exception: string }>(
@@ -442,7 +522,7 @@ describe("reopen_expired_compliance_exception()", () => {
   });
 
   it("is idempotent - a second call does not double-write or error", async () => {
-    const deficiencyId = await seedOpenDeficiency("reopen_idempotent_key");
+    const { deficiencyId } = await seedOpenDeficiency("reopen_idempotent_key");
     const exceptionId = await approveException(deficiencyId, "2020-01-01");
 
     await db.query(`select public.reopen_expired_compliance_exception($1)`, [exceptionId]);
