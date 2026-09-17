@@ -83,7 +83,7 @@ describe("migrations", () => {
       where n.nspname = 'public' and c.relkind = 'v'
     `);
 
-    expect(result.rows.length).toBe(5);
+    expect(result.rows.length).toBe(7);
     for (const view of result.rows) {
       expect(view.reloptions ?? [], `${view.relname} must be security_invoker`).toContain(
         "security_invoker=true",

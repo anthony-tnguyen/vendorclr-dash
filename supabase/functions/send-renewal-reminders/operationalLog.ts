@@ -6,10 +6,10 @@
 // (same field names, same redaction intent) without importing it - a
 // *.server.ts file cannot cross the Node/Deno boundary any more than
 // svixSignature.ts's own docblock explains for that file. This is a
-// byte-for-byte-identical copy in each of the four Edge Function
+// byte-for-byte-identical copy in each of the five Edge Function
 // directories (resend-webhook, retry-failed-documents,
-// send-renewal-reminders, process-document-jobs) - if one changes, check
-// the other three.
+// send-renewal-reminders, process-document-jobs, compliance-housekeeping) -
+// if one changes, check the other four.
 
 export interface OperationalLog {
   level: "info" | "warn" | "error";

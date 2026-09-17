@@ -132,6 +132,12 @@ export const SKIPPED_IN_PGLITE: readonly string[] = [
   // Task 8b - schedules process-document-jobs via cron.schedule()/pg_net,
   // same reasoning as the two scheduled-job migrations above.
   "20260917000700_schedule_document_processing_jobs.sql",
+  // Task 10b - schedules compliance-housekeeping via cron.schedule()/pg_net,
+  // same reasoning as the scheduled-job migrations above. The escalation
+  // schema/functions/views themselves live in the separate
+  // 20260917001300_compliance_case_escalation.sql migration, which is NOT
+  // skipped and is fully exercised by PGlite tests.
+  "20260917001400_schedule_compliance_housekeeping.sql",
 ];
 
 export function migrationFiles(): string[] {

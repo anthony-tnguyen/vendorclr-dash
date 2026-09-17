@@ -91,6 +91,26 @@ export async function approveComplianceException(input: ComplianceExceptionInput
   return unwrap(result);
 }
 
+/**
+ * Calls request_deficiency_correction() (Task 10b,
+ * 20260917001300_compliance_case_escalation.sql) - starts the 3/7/14-day
+ * escalation clock on an open deficiency by setting correction_requested_at.
+ * Same error-handling shape as applyEvaluationResult()/
+ * approveComplianceException() above: throws on either an RPC error or a
+ * void/undefined result signaling something unexpected, never swallows a
+ * failure silently.
+ */
+export async function requestDeficiencyCorrection(deficiencyId: string): Promise<void> {
+  const supabase = await getRequestScopedClient();
+  const result = (await supabase.rpc("request_deficiency_correction", {
+    p_deficiency_id: deficiencyId,
+  })) as unknown as {
+    data: null;
+    error: { message: string } | null;
+  };
+  if (result.error) throw new Error(result.error.message);
+}
+
 /** Every case opened for one assignment, most recently opened first. */
 export async function listCasesForAssignment(assignmentId: string): Promise<ComplianceCaseRow[]> {
   const supabase = await getRequestScopedClient();
