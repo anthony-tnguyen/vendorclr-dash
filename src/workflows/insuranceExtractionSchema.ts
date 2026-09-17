@@ -20,6 +20,16 @@ import { z } from "zod";
 
 // Mirrors vendor_policies.policy_type's CHECK constraint exactly - this is
 // the vocabulary a successful extraction can eventually be matched against.
+/**
+ * Recorded on every 'model'-sourced document_extractions row
+ * (record_document_extraction()'s p_prompt_version) so a later reader can
+ * tell which version of this file's shape/prompt produced a given
+ * attempt. Bump this string whenever ExtractedPolicySchema's fields or the
+ * extraction prompt in documentExtraction.ts change in a way that affects
+ * what the model is asked to return - not on every unrelated edit.
+ */
+export const EXTRACTION_SCHEMA_VERSION = "2026-09-16-task9a";
+
 export const POLICY_TYPES = [
   "general_liability",
   "workers_compensation",
@@ -54,6 +64,59 @@ export const ExtractedPolicySchema = z.object({
   // report false confidence in a checkbox reading.
   additional_insured: z.boolean().nullable(),
   waiver_of_subrogation: z.boolean().nullable(),
+  // Task 9a: closes the gap noted on vendor_policies.primary_noncontributory
+  // (Phase 0 column, never populated by extraction until now). Same
+  // checkbox-tied-to-an-endorsement-form caveat as additional_insured above.
+  primary_noncontributory: z.boolean().nullable().default(null),
+  // Additional-insured coverage commonly splits into two distinct
+  // endorsements on a real ACORD 25 - CG 20 10 (ongoing operations) and
+  // CG 20 37 (completed operations) - each with its own checkbox/attachment.
+  // `additional_insured` above is kept as the overall/general reading (no
+  // existing consumer - complianceEngine.ts, apply_policy_renewal - changes
+  // meaning), and these two are additive detail for whichever caller wants
+  // the finer split. All three are independently tri-state: a certificate
+  // can clearly show ongoing-operations coverage while leaving completed-
+  // operations undeterminable, or vice versa.
+  additional_insured_ongoing_operations: z.boolean().nullable().default(null),
+  additional_insured_completed_operations: z.boolean().nullable().default(null),
+  // Does the certificate itself show the required advance-cancellation-
+  // notice language (most ACORD 25s carry standard "should any of the above
+  // described policies be cancelled..." language, sometimes struck through
+  // or amended by endorsement). _days is the stated notice period when
+  // legible; independently nullable from _provided (a certificate can show
+  // the language without a legible day count, or vice versa on a poor scan).
+  cancellation_notice_provided: z.boolean().nullable().default(null),
+  cancellation_notice_days: z.number().int().nullable().default(null),
+  // Workers' Compensation carries its own Part Two "Employers Liability"
+  // sub-coverage with its own three limits, distinct from the WC policy's
+  // statutory Part One limits (which is why this is a sibling field on the
+  // policy line rather than reusing `limits`, whose two keys are GL-shaped).
+  // Present on every policy for schema simplicity, but only ever meaningful
+  // (non-null) when type is "workers_compensation" - the prompt instructs
+  // the model accordingly.
+  employers_liability: z
+    .object({
+      each_accident: z.number().nullable(),
+      disease_each_employee: z.number().nullable(),
+      disease_policy_limit: z.number().nullable(),
+    })
+    .partial()
+    .nullable()
+    .default(null),
+  // For an umbrella/excess policy line: does the certificate state it
+  // "follows form" over (or otherwise provides excess evidence for) the
+  // scheduled underlying policies. Generic on the shape rather than
+  // umbrella-only so a future non-umbrella "follows form" reading (rare, but
+  // not impossible on a wrap-up program) is not schema-blocked.
+  follows_form: z.boolean().nullable().default(null),
+  // Specific endorsement form numbers identified as attached to or
+  // referenced by this policy line (e.g. "CG 20 10 07 04", "CG 24 04"). Null
+  // means the certificate gives no basis to say either way (most common -
+  // ACORD 25s often reference forms only via the checkbox fields above, not
+  // by number); an empty array is the stronger claim "the certificate was
+  // legible on this point and named no endorsement forms" - the two are
+  // deliberately not collapsed into one "empty means unknown" convention.
+  endorsement_forms: z.array(z.string()).nullable().default(null),
 });
 export type ExtractedPolicy = z.infer<typeof ExtractedPolicySchema>;
 
@@ -84,7 +147,15 @@ export const INSURANCE_EXTRACTION_JSON_SHAPE = `{
       "expiration_date": string|null,    // ISO date, yyyy-mm-dd
       "limits": { "each_occurrence": number|null, "general_aggregate": number|null },
       "additional_insured": boolean|null,
-      "waiver_of_subrogation": boolean|null
+      "waiver_of_subrogation": boolean|null,
+      "primary_noncontributory": boolean|null,
+      "additional_insured_ongoing_operations": boolean|null,
+      "additional_insured_completed_operations": boolean|null,
+      "cancellation_notice_provided": boolean|null,
+      "cancellation_notice_days": number|null,
+      "employers_liability": { "each_accident": number|null, "disease_each_employee": number|null, "disease_policy_limit": number|null } | null,
+      "follows_form": boolean|null,
+      "endorsement_forms": string[]|null
     }
   ],
   "certificate_holder": { "name": string|null, "address": string|null },

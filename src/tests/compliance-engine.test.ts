@@ -20,6 +20,14 @@ function policy(overrides: Partial<ExtractedPolicy> = {}): ExtractedPolicy {
     limits: {},
     additional_insured: true,
     waiver_of_subrogation: true,
+    primary_noncontributory: true,
+    additional_insured_ongoing_operations: true,
+    additional_insured_completed_operations: true,
+    cancellation_notice_provided: true,
+    cancellation_notice_days: 30,
+    employers_liability: null,
+    follows_form: null,
+    endorsement_forms: null,
     ...overrides,
   };
 }

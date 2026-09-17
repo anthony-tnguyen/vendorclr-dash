@@ -115,6 +115,9 @@ import { logOperational, newRequestId } from "./operationalLog.ts";
  * a claimed batch can span multiple companies in one invocation.
  */
 
+/** Matches EXTRACTION_SCHEMA_VERSION in src/workflows/insuranceExtractionSchema.ts exactly - keep the two in sync. */
+const EXTRACTION_SCHEMA_VERSION = "2026-09-16-task9a";
+
 const BATCH_SIZE = 10;
 const BACKOFF_SECONDS_BY_ATTEMPT = [15, 45, 120, 300];
 const RESEND_ENDPOINT = "https://api.resend.com/emails";
@@ -251,6 +254,7 @@ async function applyOnePolicyLine(
     p_waiver_of_subrogation: policy.waiver_of_subrogation,
     p_certificate_holder_name: certificateHolder.name,
     p_certificate_holder_address: certificateHolder.address,
+    p_primary_noncontributory: policy.primary_noncontributory,
   });
 
   if (rpcError || !newPolicyId) {
@@ -518,7 +522,20 @@ async function notifyDocumentOutcome(
 // Per-job processing
 // ---------------------------------------------------------------------------
 
-/** A job reached a terminal SUCCESS outcome - writes vendor_documents, nudges compliance_queue_items, notifies, and marks the job 'succeeded'. */
+/**
+ * A job's attempt reached extraction success - writes vendor_documents,
+ * nudges compliance_queue_items, notifies, and marks the job 'succeeded'.
+ *
+ * Returns "succeeded" on the normal path. If record_document_extraction()
+ * itself fails to write (see below), this is no longer a success at all -
+ * it defers to recordJobFailure() and returns whatever THAT returns
+ * ("retrying" or "exhausted"), exactly like every other attempt failure in
+ * this file (download/extraction failures, an unhandled exception). This
+ * keeps the retry-budget self-healing property intact for a transient RPC
+ * blip, and keeps vendor_documents.processing_status = 'failed' reserved
+ * for genuine exhaustion only - see this file's top docblock's backoff
+ * section for why writing 'failed' mid-retry would be wrong.
+ */
 async function finalizeSuccess(
   // deno-lint-ignore no-explicit-any
   supabase: any,
@@ -526,7 +543,7 @@ async function finalizeSuccess(
   job: ClaimedJob,
   doc: { file_name: string },
   extraction: ExtractDocumentResult,
-): Promise<void> {
+): Promise<"succeeded" | "retrying" | "exhausted"> {
   let finalStatus: "processed" | "needs_review" | "failed" = extraction.status;
   let reviewReason: string | null = null;
   let appliedPolicyId: string | null = null;
@@ -545,12 +562,53 @@ async function finalizeSuccess(
     }
   }
 
+  // Task 9a: record_document_extraction() inserts the immutable
+  // document_extractions row for this attempt AND refreshes
+  // vendor_documents.parsed_data/extraction_confidence/current_extraction_id
+  // in one call - see that function's migration docblock
+  // (20260917000900_versioned_extractions.sql) for why this replaced a
+  // direct .update() of those two columns, and why this Edge Function calls
+  // the same RPC the Node app does rather than duplicating the
+  // insert-plus-cache-refresh logic here.
+  const { error: recordExtractionError } = await supabase.rpc("record_document_extraction", {
+    p_document_id: job.target_document_id,
+    p_company_id: job.company_id,
+    p_source: "model",
+    p_provider: "anthropic",
+    p_model: "claude-opus-5",
+    p_prompt_version: EXTRACTION_SCHEMA_VERSION,
+    p_confidence: extraction.confidence,
+    p_parsed_data: extraction.data,
+    p_error: extraction.error,
+  });
+
+  // The attempt row/cache refresh above failed to write - this attempt did
+  // not produce a usable, recorded result, so it must not be treated as a
+  // success. Hand off to the exact same bounded-backoff path as any other
+  // attempt failure, rather than writing vendor_documents ourselves here.
+  if (recordExtractionError) {
+    logOperational({
+      level: "error",
+      event: "record_document_extraction_failed",
+      requestId: newRequestId(),
+      companyId: job.company_id,
+      route: "process-document-jobs",
+      outcome: "failure",
+      errorCode: "record_document_extraction_rpc_error",
+    });
+    return recordJobFailure(
+      supabase,
+      resendApiKey,
+      job,
+      doc,
+      `Could not record the extraction result: ${recordExtractionError.message}`,
+    );
+  }
+
   await supabase
     .from("vendor_documents")
     .update({
       processing_status: finalStatus,
-      parsed_data: extraction.data,
-      extraction_confidence: extraction.confidence,
       processing_error: extraction.error,
       review_reason: reviewReason,
       applied_policy_id: appliedPolicyId,
@@ -585,6 +643,8 @@ async function finalizeSuccess(
     .from("document_processing_jobs")
     .update({ status: "succeeded", last_error: null })
     .eq("id", job.id);
+
+  return "succeeded";
 }
 
 /** A job's attempt failed (extraction error, download error, or an unexpected exception) - schedules a backoff retry, or exhausts the job and finalizes vendor_documents/notifies if the attempt budget is spent. */
@@ -781,16 +841,22 @@ Deno.serve(async (req: Request) => {
         continue;
       }
 
-      await finalizeSuccess(supabase, resendApiKey, job, doc, extraction);
-      succeeded++;
-      logOperational({
-        level: "info",
-        event: "document_processing_job_succeeded",
-        requestId,
-        companyId: job.company_id,
-        route,
-        outcome: "success",
-      });
+      const outcome = await finalizeSuccess(supabase, resendApiKey, job, doc, extraction);
+      if (outcome === "succeeded") {
+        succeeded++;
+        logOperational({
+          level: "info",
+          event: "document_processing_job_succeeded",
+          requestId,
+          companyId: job.company_id,
+          route,
+          outcome: "success",
+        });
+      } else if (outcome === "exhausted") {
+        exhausted++;
+      } else {
+        failed++;
+      }
     } catch (error) {
       logOperational(
         {

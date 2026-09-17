@@ -4,7 +4,10 @@
 // imported: this function runs in Supabase's Deno Edge Runtime, a separate
 // deployment target from the Node/Cloudflare app, with no shared build step
 // across that boundary in this project - same reasoning as
-// send-renewal-reminders/uploadTokens.ts. If one changes, check the other.
+// send-renewal-reminders/uploadTokens.ts. Two other byte-for-byte copies
+// exist (src/workflows/insuranceExtractionSchema.ts,
+// process-document-jobs/insuranceExtractionSchema.ts) - if one changes,
+// check the other two.
 import { z } from "npm:zod@3.25.76";
 
 export const POLICY_TYPES = [
@@ -20,6 +23,9 @@ export const POLICY_TYPES = [
 export const PolicyTypeSchema = z.enum(POLICY_TYPES);
 export type PolicyType = z.infer<typeof PolicyTypeSchema>;
 
+// Kept byte-for-byte in sync with src/workflows/insuranceExtractionSchema.ts's
+// own ExtractedPolicySchema (Task 9a's new fields) - see this file's top
+// docblock.
 export const ExtractedPolicySchema = z.object({
   type: PolicyTypeSchema.nullable(),
   carrier: z.string().nullable(),
@@ -34,6 +40,22 @@ export const ExtractedPolicySchema = z.object({
     .partial(),
   additional_insured: z.boolean().nullable(),
   waiver_of_subrogation: z.boolean().nullable(),
+  primary_noncontributory: z.boolean().nullable().default(null),
+  additional_insured_ongoing_operations: z.boolean().nullable().default(null),
+  additional_insured_completed_operations: z.boolean().nullable().default(null),
+  cancellation_notice_provided: z.boolean().nullable().default(null),
+  cancellation_notice_days: z.number().int().nullable().default(null),
+  employers_liability: z
+    .object({
+      each_accident: z.number().nullable(),
+      disease_each_employee: z.number().nullable(),
+      disease_policy_limit: z.number().nullable(),
+    })
+    .partial()
+    .nullable()
+    .default(null),
+  follows_form: z.boolean().nullable().default(null),
+  endorsement_forms: z.array(z.string()).nullable().default(null),
 });
 export type ExtractedPolicy = z.infer<typeof ExtractedPolicySchema>;
 
@@ -61,7 +83,15 @@ export const INSURANCE_EXTRACTION_JSON_SHAPE = `{
       "expiration_date": string|null,    // ISO date, yyyy-mm-dd
       "limits": { "each_occurrence": number|null, "general_aggregate": number|null },
       "additional_insured": boolean|null,
-      "waiver_of_subrogation": boolean|null
+      "waiver_of_subrogation": boolean|null,
+      "primary_noncontributory": boolean|null,
+      "additional_insured_ongoing_operations": boolean|null,
+      "additional_insured_completed_operations": boolean|null,
+      "cancellation_notice_provided": boolean|null,
+      "cancellation_notice_days": number|null,
+      "employers_liability": { "each_accident": number|null, "disease_each_employee": number|null, "disease_policy_limit": number|null } | null,
+      "follows_form": boolean|null,
+      "endorsement_forms": string[]|null
     }
   ],
   "certificate_holder": { "name": string|null, "address": string|null },

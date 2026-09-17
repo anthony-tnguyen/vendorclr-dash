@@ -22,6 +22,13 @@ export const POLICY_TYPES = [
 export const PolicyTypeSchema = z.enum(POLICY_TYPES);
 export type PolicyType = z.infer<typeof PolicyTypeSchema>;
 
+// Kept byte-for-byte in sync with src/workflows/insuranceExtractionSchema.ts's
+// own ExtractedPolicySchema - see this file's top docblock. Task 9a added the
+// primary_noncontributory/additional_insured_ongoing_operations/
+// additional_insured_completed_operations/cancellation_notice_*/
+// employers_liability/follows_form/endorsement_forms fields there; ported
+// here unchanged (field-for-field, comment-for-comment reasoning omitted -
+// see the Node original for the full rationale on each).
 export const ExtractedPolicySchema = z.object({
   type: PolicyTypeSchema.nullable(),
   carrier: z.string().nullable(),
@@ -36,6 +43,22 @@ export const ExtractedPolicySchema = z.object({
     .partial(),
   additional_insured: z.boolean().nullable(),
   waiver_of_subrogation: z.boolean().nullable(),
+  primary_noncontributory: z.boolean().nullable().default(null),
+  additional_insured_ongoing_operations: z.boolean().nullable().default(null),
+  additional_insured_completed_operations: z.boolean().nullable().default(null),
+  cancellation_notice_provided: z.boolean().nullable().default(null),
+  cancellation_notice_days: z.number().int().nullable().default(null),
+  employers_liability: z
+    .object({
+      each_accident: z.number().nullable(),
+      disease_each_employee: z.number().nullable(),
+      disease_policy_limit: z.number().nullable(),
+    })
+    .partial()
+    .nullable()
+    .default(null),
+  follows_form: z.boolean().nullable().default(null),
+  endorsement_forms: z.array(z.string()).nullable().default(null),
 });
 export type ExtractedPolicy = z.infer<typeof ExtractedPolicySchema>;
 
@@ -63,7 +86,15 @@ export const INSURANCE_EXTRACTION_JSON_SHAPE = `{
       "expiration_date": string|null,    // ISO date, yyyy-mm-dd
       "limits": { "each_occurrence": number|null, "general_aggregate": number|null },
       "additional_insured": boolean|null,
-      "waiver_of_subrogation": boolean|null
+      "waiver_of_subrogation": boolean|null,
+      "primary_noncontributory": boolean|null,
+      "additional_insured_ongoing_operations": boolean|null,
+      "additional_insured_completed_operations": boolean|null,
+      "cancellation_notice_provided": boolean|null,
+      "cancellation_notice_days": number|null,
+      "employers_liability": { "each_accident": number|null, "disease_each_employee": number|null, "disease_policy_limit": number|null } | null,
+      "follows_form": boolean|null,
+      "endorsement_forms": string[]|null
     }
   ],
   "certificate_holder": { "name": string|null, "address": string|null },
