@@ -535,6 +535,22 @@ async function notifyDocumentOutcome(
  * blip, and keeps vendor_documents.processing_status = 'failed' reserved
  * for genuine exhaustion only - see this file's top docblock's backoff
  * section for why writing 'failed' mid-retry would be wrong.
+ *
+ * record_document_extraction() runs BEFORE applyComplianceEngine() -
+ * deliberately, not the historical order. applyComplianceEngine() writes
+ * vendor_policies via apply_policy_renewal() (superseding the vendor's
+ * current active policy and inserting a new active one at the extracted
+ * expiration date - see that RPC's migration). If it ran first and THEN
+ * record_document_extraction() failed, the bounded-backoff retry
+ * (recordJobFailure() below) would re-run applyComplianceEngine() from
+ * scratch on the next attempt, re-matching the SAME extracted policy
+ * against the vendor's now-already-renewed active policy: matchExtractedPolicy()
+ * (complianceEngine.ts) would see the extracted expiration date as no later
+ * than the (already-updated) one on file and wrongly reject a clean renewal
+ * as needs_review, even though it was already correctly applied. Recording
+ * the extraction first means a retry can only ever re-enter
+ * applyComplianceEngine() when no compliance write happened on the prior
+ * attempt, so it always starts from the vendor's true pre-renewal state.
  */
 async function finalizeSuccess(
   // deno-lint-ignore no-explicit-any
@@ -544,24 +560,6 @@ async function finalizeSuccess(
   doc: { file_name: string },
   extraction: ExtractDocumentResult,
 ): Promise<"succeeded" | "retrying" | "exhausted"> {
-  let finalStatus: "processed" | "needs_review" | "failed" = extraction.status;
-  let reviewReason: string | null = null;
-  let appliedPolicyId: string | null = null;
-
-  if (extraction.status === "processed" && extraction.data) {
-    const result = await applyComplianceEngine(supabase, {
-      companyId: job.company_id,
-      vendorId: job.vendor_id,
-      policies: extraction.data.policies,
-      certificateHolder: extraction.data.certificate_holder,
-    });
-    appliedPolicyId = result.appliedPolicyId;
-    if (!result.allMatched) {
-      finalStatus = "needs_review";
-      reviewReason = result.reasons.join(" ");
-    }
-  }
-
   // Task 9a: record_document_extraction() inserts the immutable
   // document_extractions row for this attempt AND refreshes
   // vendor_documents.parsed_data/extraction_confidence/current_extraction_id
@@ -586,6 +584,8 @@ async function finalizeSuccess(
   // not produce a usable, recorded result, so it must not be treated as a
   // success. Hand off to the exact same bounded-backoff path as any other
   // attempt failure, rather than writing vendor_documents ourselves here.
+  // Crucially, applyComplianceEngine() has NOT run yet at this point (see
+  // this function's docblock), so the retry this triggers starts clean.
   if (recordExtractionError) {
     logOperational({
       level: "error",
@@ -603,6 +603,24 @@ async function finalizeSuccess(
       doc,
       `Could not record the extraction result: ${recordExtractionError.message}`,
     );
+  }
+
+  let finalStatus: "processed" | "needs_review" | "failed" = extraction.status;
+  let reviewReason: string | null = null;
+  let appliedPolicyId: string | null = null;
+
+  if (extraction.status === "processed" && extraction.data) {
+    const result = await applyComplianceEngine(supabase, {
+      companyId: job.company_id,
+      vendorId: job.vendor_id,
+      policies: extraction.data.policies,
+      certificateHolder: extraction.data.certificate_holder,
+    });
+    appliedPolicyId = result.appliedPolicyId;
+    if (!result.allMatched) {
+      finalStatus = "needs_review";
+      reviewReason = result.reasons.join(" ");
+    }
   }
 
   await supabase
