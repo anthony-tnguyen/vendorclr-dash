@@ -1380,6 +1380,66 @@ src/data/db-types.ts` followed by `git diff --exit-code src/data/db-types.ts`.
   actual task feature - not a partial or missed requirement. A real task
   row (with its own status/assignee/due date a person can work through)
   would be a meaningfully bigger feature than this bullet's own scope.
+- **PDF export is not built - CSV export is.** Task 11b's plan bullet reads
+  "CSV/PDF export is generated server-side"; only the CSV half
+  (`src/workflows/reportExports.ts`) is implemented. A real server-side PDF
+  renderer needs a rendering-library decision (a new dependency) this
+  brief's dispatch does not make - hand-rolling a minimal PDF format by hand
+  would be a worse outcome than clearly deferring it. Follow-up: pick a PDF
+  library (e.g. a headless-Chromium print-to-PDF service or a pure-JS
+  generator) and wire it behind the same `exportReport()` entry point,
+  reusing the same permission check / `audit_log` row / filename logic - only
+  the rendering step itself needs to change.
+- **"Pilot metrics" is instrumented via the existing `logOperational()`
+  structured-logging infrastructure (Task 2), not a new metrics
+  table/pipeline.** The plan's Task 11 bullet says "instrument pilot metrics
+  listed in the source requirements" - an external document this session
+  does not have access to. Interpreted pragmatically as: add metric-flavored
+  `logOperational()` calls, tagged with a `pilot_metric.` event-name prefix,
+  at the key compliance-lifecycle events this codebase's own domain model
+  already defines and that had no equivalent operational logging yet -
+  `pilot_metric.compliance_case_opened` (`complianceCaseRepository.ts`'s
+  `applyEvaluationResult()`, logged only on the get-or-create's create
+  branch), `pilot_metric.compliance_exception_approved`
+  (`approveComplianceException()`), `pilot_metric.csv_import_executed`
+  (`executeVendorImportHandler()`, Task 11a's import pipeline, logged only
+  for a real execution, never an idempotent replay),
+  `pilot_metric.audit_snapshot_created` (`reportRepository.ts`'s
+  `createAuditSnapshot()`), and `pilot_metric.report_exported`
+  (`reportExports.ts`'s `exportReport()`). Every payload is limited to the
+  envelope's own existing fields (`companyId`, `event`, `requestId`,
+  `outcome`) with no `extra` object at all - no document text, policy
+  numbers or contact PII is ever passed, not merely relied on
+  `logOperational()`'s redaction to strip after the fact. Two
+  compliance-housekeeping events that predate this task
+  (`compliance_deficiency_escalated`, `compliance_exception_expired_reopened`
+  in `supabase/functions/compliance-housekeeping/index.ts`) already satisfy
+  the same shape (`companyId` + event name, no PII) and are treated as
+  already-qualifying pilot metrics; they were deliberately NOT renamed with
+  the new prefix, to avoid touching an existing, tested Edge Function's
+  event vocabulary for a naming-consistency preference alone. A dedicated
+  metrics table/dashboard (aggregation, retention policy, a real analytics
+  sink) is out of scope for this task and would be meaningfully bigger than
+  "instrument events" - this is a deliberate scope decision, not a silently
+  under-delivered requirement.
+- **The customer-filtered audit history read (`listCustomerAuditHistory()`,
+  `reportRepository.ts`) has no action ever excluded today, but the
+  exclusion mechanism (`EXCLUDED_FROM_CUSTOMER_HISTORY`) exists and is
+  checked first.** Every current `insert into audit_log` call site (19 total
+  as of Task 11b - 9 in SQL migrations, 10 in `src/workflows/*.ts`;
+  independently re-counted after this entry's original count undercounted
+  them) was read and confirmed to record a real business event scoped correctly by
+  `company_id`, including the three staff/`assertPlatformAdmin()`-gated ones
+  (`review_resolved`, `extraction_reviewer_edit`, `document_reprocessed`) -
+  those represent VendorClr staff acting ON a company's own vendor
+  documents as part of that company's own compliance workflow, not a
+  platform-admin-only investigative action, so surfacing them to the
+  company is the transparency an audit history is for, not a leak. If a
+  future action type is ever added that should NOT be customer-visible, its
+  action string goes in that array; the property this file documents ("no
+  action currently leaks internal-only detail") holds only as of the
+  actions that exist today and needs re-checking whenever a new `audit_log`
+  write is added, not assumed to hold forever.
 
 ## What is still not built
 

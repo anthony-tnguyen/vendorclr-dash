@@ -56,6 +56,61 @@ export type Database = {
           },
         ];
       };
+      audit_snapshots: {
+        Row: {
+          assignment_id: string;
+          company_id: string;
+          created_at: string;
+          evidence_snapshot: Json;
+          id: string;
+          requested_by: string;
+          requirements_snapshot: Json;
+          snapshot_taken_at: string;
+        };
+        Insert: {
+          assignment_id: string;
+          company_id: string;
+          created_at?: string;
+          evidence_snapshot: Json;
+          id?: string;
+          requested_by: string;
+          requirements_snapshot: Json;
+          snapshot_taken_at?: string;
+        };
+        Update: {
+          assignment_id?: string;
+          company_id?: string;
+          created_at?: string;
+          evidence_snapshot?: Json;
+          id?: string;
+          requested_by?: string;
+          requirements_snapshot?: Json;
+          snapshot_taken_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "audit_snapshots_assignment_id_fkey";
+            columns: ["assignment_id"];
+            isOneToOne: false;
+            referencedRelation: "project_vendor_assignments";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "audit_snapshots_company_id_fkey";
+            columns: ["company_id"];
+            isOneToOne: false;
+            referencedRelation: "admin_company_stats";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "audit_snapshots_company_id_fkey";
+            columns: ["company_id"];
+            isOneToOne: false;
+            referencedRelation: "companies";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       companies: {
         Row: {
           created_at: string;
@@ -322,13 +377,16 @@ export type Database = {
         Row: {
           case_id: string;
           company_id: string;
+          correction_requested_at: string | null;
           created_at: string;
+          escalation_level: number;
           evidence_document_ids: string[];
           expected: Json;
           explanation: string;
           first_evaluation_run_id: string;
           id: string;
           kind: string | null;
+          last_escalated_at: string | null;
           last_evaluation_run_id: string;
           observed: Json | null;
           policy_type: string | null;
@@ -342,13 +400,16 @@ export type Database = {
         Insert: {
           case_id: string;
           company_id: string;
+          correction_requested_at?: string | null;
           created_at?: string;
+          escalation_level?: number;
           evidence_document_ids?: string[];
           expected: Json;
           explanation: string;
           first_evaluation_run_id: string;
           id?: string;
           kind?: string | null;
+          last_escalated_at?: string | null;
           last_evaluation_run_id: string;
           observed?: Json | null;
           policy_type?: string | null;
@@ -362,13 +423,16 @@ export type Database = {
         Update: {
           case_id?: string;
           company_id?: string;
+          correction_requested_at?: string | null;
           created_at?: string;
+          escalation_level?: number;
           evidence_document_ids?: string[];
           expected?: Json;
           explanation?: string;
           first_evaluation_run_id?: string;
           id?: string;
           kind?: string | null;
+          last_escalated_at?: string | null;
           last_evaluation_run_id?: string;
           observed?: Json | null;
           policy_type?: string | null;
@@ -428,6 +492,13 @@ export type Database = {
             isOneToOne: false;
             referencedRelation: "compliance_exceptions";
             referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "compliance_deficiencies_waived_via_exception_id_fkey";
+            columns: ["waived_via_exception_id"];
+            isOneToOne: false;
+            referencedRelation: "compliance_exceptions_due_for_reopening";
+            referencedColumns: ["exception_id"];
           },
         ];
       };
@@ -560,6 +631,13 @@ export type Database = {
             isOneToOne: false;
             referencedRelation: "compliance_deficiencies";
             referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "compliance_exceptions_deficiency_id_fkey";
+            columns: ["deficiency_id"];
+            isOneToOne: false;
+            referencedRelation: "compliance_deficiencies_due_for_escalation";
+            referencedColumns: ["deficiency_id"];
           },
           {
             foreignKeyName: "compliance_exceptions_supporting_document_id_fkey";
@@ -2294,6 +2372,57 @@ export type Database = {
           },
         ];
       };
+      vendor_import_batches: {
+        Row: {
+          accepted_rows: number;
+          company_id: string;
+          created_at: string;
+          id: string;
+          idempotency_key: string;
+          rejected_rows: number;
+          row_results: Json;
+          total_rows: number;
+          uploaded_by: string;
+        };
+        Insert: {
+          accepted_rows: number;
+          company_id: string;
+          created_at?: string;
+          id?: string;
+          idempotency_key: string;
+          rejected_rows: number;
+          row_results: Json;
+          total_rows: number;
+          uploaded_by: string;
+        };
+        Update: {
+          accepted_rows?: number;
+          company_id?: string;
+          created_at?: string;
+          id?: string;
+          idempotency_key?: string;
+          rejected_rows?: number;
+          row_results?: Json;
+          total_rows?: number;
+          uploaded_by?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "vendor_import_batches_company_id_fkey";
+            columns: ["company_id"];
+            isOneToOne: false;
+            referencedRelation: "admin_company_stats";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "vendor_import_batches_company_id_fkey";
+            columns: ["company_id"];
+            isOneToOne: false;
+            referencedRelation: "companies";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       vendor_policies: {
         Row: {
           additional_insured: boolean | null;
@@ -2585,6 +2714,142 @@ export type Database = {
           },
         ];
       };
+      compliance_deficiencies_due_for_escalation: {
+        Row: {
+          assignment_id: string | null;
+          case_id: string | null;
+          company_id: string | null;
+          correction_requested_at: string | null;
+          deficiency_id: string | null;
+          escalation_level: number | null;
+          explanation: string | null;
+          next_level: number | null;
+          requirement_key: string | null;
+          upload_request_id: string | null;
+          vendor_contact_email: string | null;
+          vendor_contact_name: string | null;
+          vendor_id: string | null;
+          vendor_name: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "compliance_cases_assignment_id_fkey";
+            columns: ["assignment_id"];
+            isOneToOne: false;
+            referencedRelation: "project_vendor_assignments";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "compliance_cases_upload_request_id_fkey";
+            columns: ["upload_request_id"];
+            isOneToOne: false;
+            referencedRelation: "vendor_upload_requests";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "compliance_cases_vendor_id_fkey";
+            columns: ["vendor_id"];
+            isOneToOne: false;
+            referencedRelation: "vendor_compliance_summary";
+            referencedColumns: ["vendor_id"];
+          },
+          {
+            foreignKeyName: "compliance_cases_vendor_id_fkey";
+            columns: ["vendor_id"];
+            isOneToOne: false;
+            referencedRelation: "vendors";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "compliance_deficiencies_case_id_fkey";
+            columns: ["case_id"];
+            isOneToOne: false;
+            referencedRelation: "compliance_cases";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "compliance_deficiencies_company_id_fkey";
+            columns: ["company_id"];
+            isOneToOne: false;
+            referencedRelation: "admin_company_stats";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "compliance_deficiencies_company_id_fkey";
+            columns: ["company_id"];
+            isOneToOne: false;
+            referencedRelation: "companies";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      compliance_exceptions_due_for_reopening: {
+        Row: {
+          case_id: string | null;
+          company_id: string | null;
+          deficiency_id: string | null;
+          exception_id: string | null;
+          expires_on: string | null;
+          explanation: string | null;
+          reason: string | null;
+          requirement_key: string | null;
+          vendor_contact_email: string | null;
+          vendor_contact_name: string | null;
+          vendor_id: string | null;
+          vendor_name: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "compliance_cases_vendor_id_fkey";
+            columns: ["vendor_id"];
+            isOneToOne: false;
+            referencedRelation: "vendor_compliance_summary";
+            referencedColumns: ["vendor_id"];
+          },
+          {
+            foreignKeyName: "compliance_cases_vendor_id_fkey";
+            columns: ["vendor_id"];
+            isOneToOne: false;
+            referencedRelation: "vendors";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "compliance_deficiencies_case_id_fkey";
+            columns: ["case_id"];
+            isOneToOne: false;
+            referencedRelation: "compliance_cases";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "compliance_exceptions_company_id_fkey";
+            columns: ["company_id"];
+            isOneToOne: false;
+            referencedRelation: "admin_company_stats";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "compliance_exceptions_company_id_fkey";
+            columns: ["company_id"];
+            isOneToOne: false;
+            referencedRelation: "companies";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "compliance_exceptions_deficiency_id_fkey";
+            columns: ["deficiency_id"];
+            isOneToOne: false;
+            referencedRelation: "compliance_deficiencies";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "compliance_exceptions_deficiency_id_fkey";
+            columns: ["deficiency_id"];
+            isOneToOne: false;
+            referencedRelation: "compliance_deficiencies_due_for_escalation";
+            referencedColumns: ["deficiency_id"];
+          },
+        ];
+      };
       documents_due_for_retry: {
         Row: {
           company_id: string | null;
@@ -2844,6 +3109,10 @@ export type Database = {
           isSetofReturn: true;
         };
       };
+      create_audit_snapshot: {
+        Args: { assignment_id: string };
+        Returns: string;
+      };
       create_company_for_current_user: {
         Args: { company_name: string; member_name?: string };
         Returns: string;
@@ -2921,11 +3190,30 @@ export type Database = {
         Args: { allowed: string[]; target_company: string };
         Returns: boolean;
       };
+      import_vendor_row: {
+        Args: {
+          p_certificate_holder_address: string;
+          p_certificate_holder_name: string;
+          p_company_id: string;
+          p_contact_email: string;
+          p_contact_name: string;
+          p_contract_value: number;
+          p_project_name: string;
+          p_risk_tier: string;
+          p_trade: string;
+          p_vendor_name: string;
+        };
+        Returns: Record<string, unknown>;
+      };
       increment_upload_rate_limit_counter: {
         Args: { p_bucket_key: string; p_window_start: string };
         Returns: number;
       };
       is_platform_admin: { Args: never; Returns: boolean };
+      mark_deficiency_escalated: {
+        Args: { p_deficiency_id: string; p_new_level: number };
+        Returns: undefined;
+      };
       record_document_extraction: {
         Args: {
           p_company_id: string;
@@ -2961,6 +3249,14 @@ export type Database = {
           isOneToOne: true;
           isSetofReturn: false;
         };
+      };
+      reopen_expired_compliance_exception: {
+        Args: { p_exception_id: string };
+        Returns: string;
+      };
+      request_deficiency_correction: {
+        Args: { p_deficiency_id: string };
+        Returns: undefined;
       };
       resend_company_invitation: {
         Args: {

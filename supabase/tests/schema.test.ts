@@ -29,6 +29,7 @@ describe("migrations", () => {
 
     expect(names).toEqual([
       "audit_log",
+      "audit_snapshots",
       "companies",
       "company_feature_flags",
       "company_invitations",
