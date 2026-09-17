@@ -444,9 +444,8 @@ export const INVALID_TOKEN_MESSAGE =
  * rather than re-deriving it a second way.
  */
 export async function currentClientIp(): Promise<string> {
-  const { getRequest } = await import("@tanstack/react-start/server");
-  const { extractClientIp } = await getUploadAbuseModule();
-  return extractClientIp(getRequest().headers);
+  const { currentClientIpFromRequest } = await import("./clientIp.server");
+  return currentClientIpFromRequest();
 }
 
 /**
