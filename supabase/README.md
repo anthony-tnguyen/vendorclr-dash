@@ -1425,9 +1425,10 @@ src/data/db-types.ts` followed by `git diff --exit-code src/data/db-types.ts`.
 - **The customer-filtered audit history read (`listCustomerAuditHistory()`,
   `reportRepository.ts`) has no action ever excluded today, but the
   exclusion mechanism (`EXCLUDED_FROM_CUSTOMER_HISTORY`) exists and is
-  checked first.** Every current `insert into audit_log` call site (9 total
-  as of Task 11b - 5 in SQL migrations, 4 in `src/workflows/*.ts`) was read
-  and confirmed to record a real business event scoped correctly by
+  checked first.** Every current `insert into audit_log` call site (19 total
+  as of Task 11b - 9 in SQL migrations, 10 in `src/workflows/*.ts`;
+  independently re-counted after this entry's original count undercounted
+  them) was read and confirmed to record a real business event scoped correctly by
   `company_id`, including the three staff/`assertPlatformAdmin()`-gated ones
   (`review_resolved`, `extraction_reviewer_edit`, `document_reprocessed`) -
   those represent VendorClr staff acting ON a company's own vendor

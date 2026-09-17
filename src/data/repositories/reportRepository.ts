@@ -831,8 +831,10 @@ export interface AuditLogRow {
  * customer should not see, merely tagged with THEIR company_id?
  *
  * Answer, verified by reading every current `insert into audit_log` /
- * `.from("audit_log").insert(...)` call site in this codebase (9 total, 5 in
- * SQL migrations, 4 in src/workflows/*.ts as of Task 11b): every single one
+ * `.from("audit_log").insert(...)` call site in this codebase (19 total, 9 in
+ * SQL migrations, 10 in src/workflows/*.ts as of Task 11b, independently
+ * re-counted by a code-review pass after this comment's original count
+ * undercounted them): every single one
  * records a real business event about the company's OWN data - an upload
  * request, a document review outcome, a reviewer's extraction correction, a
  * submission package, a compliance exception, a CSV import. Three of these
