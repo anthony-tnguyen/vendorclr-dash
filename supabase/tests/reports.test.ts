@@ -258,6 +258,96 @@ describe("create_audit_snapshot()", () => {
     // itself as its first statement.
     await expect(createSnapshot(OWNER, otherAssignmentId)).rejects.toThrow(/not authorized/);
   });
+
+  it("aggregates deficiencies from EVERY compliance_cases row on the assignment, not just one", async () => {
+    // A real production shape this project's own schema explicitly allows:
+    // compliance_cases is one row per (assignment_id, upload_request_id) -
+    // Task 10a's own upsert key - so a single assignment accumulates a NEW
+    // case every time a NEW upload request (a new submission cycle) is sent
+    // for it, while old cases and their deficiencies remain. An audit
+    // snapshot that only looked at the most-recently-touched case, or joined
+    // through a single case_id instead of filtering by assignment_id, would
+    // silently under-report - exactly the failure mode a point-in-time audit
+    // document must never have. Fresh assignment so this test's counts don't
+    // interact with the describe block above's own mutations to the shared
+    // assignmentId.
+    const project = await db.query<{ id: string }>(
+      `insert into public.projects (company_id, name) values ($1, 'Multi-Case Site') returning id`,
+      [companyId],
+    );
+    const assignment = await db.query<{ id: string }>(
+      `insert into public.project_vendor_assignments (company_id, project_id, vendor_id, trade_code)
+       values ($1, $2, $3, 'Structural Steel') returning id`,
+      [companyId, project.rows[0]!.id, vendorId],
+    );
+    const multiCaseAssignmentId = assignment.rows[0]!.id;
+
+    // First submission cycle - its own upload request/package/case, left
+    // permanently deficient (never re-evaluated to resolved).
+    const firstRequest = await db.query<{ id: string }>(
+      `insert into public.vendor_upload_requests (company_id, vendor_id, token_hash, expires_at)
+       values ($1, $2, 'hash-multi-case-1', now() + interval '14 days') returning id`,
+      [companyId, vendorId],
+    );
+    const firstPackage = await db.query<{ id: string }>(
+      `insert into public.submission_packages (company_id, vendor_id, upload_request_id)
+       values ($1, $2, $3) returning id`,
+      [companyId, vendorId, firstRequest.rows[0]!.id],
+    );
+    await applyResult(OWNER, {
+      companyId,
+      vendorId,
+      assignmentId: multiCaseAssignmentId,
+      uploadRequestId: firstRequest.rows[0]!.id,
+      packageId: firstPackage.rows[0]!.id,
+      requirements: [requirement({ key: "case_one_key" })],
+      findings: [finding({ requirementKey: "case_one_key" })],
+    });
+
+    // Second, LATER submission cycle for the SAME assignment - a distinct
+    // upload request, so apply_evaluation_result() creates a SECOND
+    // compliance_cases row (a different (assignment_id, upload_request_id)
+    // pair), with its own distinct deficiency.
+    const secondRequest = await db.query<{ id: string }>(
+      `insert into public.vendor_upload_requests (company_id, vendor_id, token_hash, expires_at)
+       values ($1, $2, 'hash-multi-case-2', now() + interval '14 days') returning id`,
+      [companyId, vendorId],
+    );
+    const secondPackage = await db.query<{ id: string }>(
+      `insert into public.submission_packages (company_id, vendor_id, upload_request_id)
+       values ($1, $2, $3) returning id`,
+      [companyId, vendorId, secondRequest.rows[0]!.id],
+    );
+    await applyResult(OWNER, {
+      companyId,
+      vendorId,
+      assignmentId: multiCaseAssignmentId,
+      uploadRequestId: secondRequest.rows[0]!.id,
+      packageId: secondPackage.rows[0]!.id,
+      requirements: [requirement({ key: "case_two_key" })],
+      findings: [finding({ requirementKey: "case_two_key" })],
+    });
+
+    const caseCount = await db.query<{ count: string }>(
+      `select count(*) from public.compliance_cases where assignment_id = $1`,
+      [multiCaseAssignmentId],
+    );
+    expect(Number(caseCount.rows[0]!.count)).toBe(2);
+
+    const snapshotId = await createSnapshot(OWNER, multiCaseAssignmentId);
+    const snapshot = await getSnapshotRow(snapshotId);
+    const deficiencies = snapshot.evidence_snapshot.deficiencies as Array<{
+      requirement_key: string;
+      status: string;
+    }>;
+
+    // Both cases' deficiencies must be present - not just the most recently
+    // created/touched one.
+    expect(deficiencies.map((d) => d.requirement_key).sort()).toEqual([
+      "case_one_key",
+      "case_two_key",
+    ]);
+  });
 });
 
 describe("time-to-compliance report data (direct SQL, same join shape as getTimeToComplianceReport())", () => {
