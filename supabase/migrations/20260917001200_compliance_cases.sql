@@ -60,6 +60,12 @@ create table public.compliance_cases (
 create index compliance_cases_company_idx on public.compliance_cases (company_id);
 create index compliance_cases_vendor_idx on public.compliance_cases (vendor_id);
 create index compliance_cases_assignment_idx on public.compliance_cases (assignment_id);
+-- upload_request_id is the trailing column of the (assignment_id,
+-- upload_request_id) unique constraint above, which does not efficiently
+-- serve a lookup filtered on upload_request_id alone - a dedicated index,
+-- matching this schema's established "every FK gets its own index"
+-- convention (see every other table in this migration).
+create index compliance_cases_upload_request_idx on public.compliance_cases (upload_request_id);
 
 create trigger compliance_cases_touch_updated_at
   before update on public.compliance_cases
@@ -473,6 +479,21 @@ begin
       -- nor the implicit else below - it is the one status this function
       -- must never touch (see the migration docblock and this function's own
       -- header comment).
+      --
+      -- The `and status in ('open', 'resolved')` below re-checks the row's
+      -- status LIVE at UPDATE time rather than trusting the `v_existing`
+      -- snapshot read above: without it, a concurrent approve_compliance_
+      -- exception() call that waives this exact row between this function's
+      -- SELECT and this UPDATE would be silently clobbered back to 'open'
+      -- (with waived_via_exception_id left dangling, pointing at a real,
+      -- still-approved exception) - the exact interleaving this function's
+      -- header comment calls the single most load-bearing invariant in this
+      -- migration. Postgres re-evaluates a plain UPDATE's WHERE clause
+      -- against the row's committed state at execution time under READ
+      -- COMMITTED, so this guard makes the race resolve to "0 rows updated"
+      -- instead of "waiver overwritten" - the bulk resolve-sweep below
+      -- already had this property via its own `where d.status = 'open'`
+      -- filter; this was the one branch missing it.
       update public.compliance_deficiencies
       set kind = nullif(v_requirement ->> 'kind', ''),
           policy_type = nullif(v_requirement ->> 'policyType', ''),
@@ -490,7 +511,8 @@ begin
           resolved_at = null,
           resolved_by_evaluation_run_id = null,
           updated_at = now()
-      where id = v_existing.id;
+      where id = v_existing.id
+        and status in ('open', 'resolved');
     end if;
   end loop;
 
