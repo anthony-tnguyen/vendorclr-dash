@@ -32,4 +32,21 @@ export interface ResolvedRequirement {
   required: boolean;
   amount: number | null;
   source: RequirementSource;
+  /**
+   * Per-kind interpretation detail, passed through unread by
+   * resolve_assignment_requirements() (widened in Task 9b -
+   * supabase/migrations/20260917001100_resolved_requirement_configuration.sql,
+   * see that migration's docblock and the column comment it adds for the
+   * full contract). Loose `Record<string, unknown>` rather than a
+   * discriminated union keyed on `kind` - consistent with this file's
+   * sibling EvaluationResult.expected/observed looseness
+   * (src/domain/compliance/evaluatePackage.ts) and not worth the extra
+   * indirection for the handful of shapes involved:
+   *   kind = "limit": { limitField: "each_occurrence" | "general_aggregate" }
+   *   kind = "endorsement": { endorsementField: <a boolean field name on
+   *     ExtractedPolicy, e.g. "additional_insured"> }
+   *   kind = "document": { documentKind: <a DocumentKind value> }
+   *   kind = "certificate_holder": unused, always {}
+   */
+  configuration: Record<string, unknown>;
 }

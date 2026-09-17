@@ -2636,6 +2636,7 @@ export type Database = {
         Args: { assignment_id: string };
         Returns: {
           amount: number;
+          configuration: Json;
           key: string;
           kind: string;
           policy_type: string;
