@@ -67,6 +67,8 @@ import path from "node:path";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { getAdminClient } from "./lib/supabaseAdminClient";
+import { companyStoragePrefix, VENDOR_DOCUMENTS_BUCKET } from "./lib/companyScopedTables";
+import { listCompanyStorageObjects } from "./export-company";
 
 // ---------------------------------------------------------------------------
 // CLI / artifact shapes - pure functions, unit tested in
@@ -258,8 +260,58 @@ async function createFixture(supabase: SupabaseClient, runId: string): Promise<F
   return { companyId: company.id as string, vendorId: vendor.id as string };
 }
 
-/** Best-effort teardown - a leftover fixture is inert (obviously named, never customer data), so a failed cleanup is logged, not thrown. */
+// Same chunk size delete-company.ts's own deleteStorageObjects() uses, for
+// the same reason (a single remove() call carrying an unbounded number of
+// paths risks a request-size/timeout limit) - unlikely to matter for a
+// handful of smoke-test uploads per run, but there is no reason for this
+// script to reinvent a smaller, un-chunked version of a problem Task 12
+// already solved correctly.
+const REMOVE_CHUNK_SIZE = 1000;
+
+/**
+ * Best-effort teardown. `on delete cascade` from `companies` removes every
+ * DB row the fixture created, but Supabase Storage objects are NOT part of
+ * that cascade - a separate system entirely (see delete-company.ts's own
+ * docblock for the same fact, established in Task 12). caseHappyPath/
+ * caseDuplicateDetection/caseMalwareScanStatus each upload a real file via
+ * uploadDocumentForTokenHandler(), so without this, every smoke run would
+ * permanently leak a handful of storage objects. Worse, those objects are
+ * stored at company/<companyId>/vendor/<vendorId>/documents/<documentId>.<ext>
+ * - pure UUIDs with no human-readable "this is a smoke fixture" marker once
+ * the companies row (the only place the __smoke-production__ name lived) is
+ * gone, making a leaked object practically unfindable later. Explicitly
+ * listing and removing this fixture's own storage objects BEFORE deleting
+ * the company row (while the company still exists to scope the listing to)
+ * closes that gap - found by an independent code-quality review.
+ *
+ * A leftover fixture (DB row or storage object) is still inert either way -
+ * obviously named, never real customer data - so a failed cleanup here is
+ * logged, not thrown; it must never fail the whole smoke run.
+ */
 async function cleanupFixture(supabase: SupabaseClient, fixture: Fixture): Promise<void> {
+  try {
+    const objects = await listCompanyStorageObjects(
+      supabase,
+      VENDOR_DOCUMENTS_BUCKET,
+      companyStoragePrefix(fixture.companyId),
+    );
+    for (let i = 0; i < objects.length; i += REMOVE_CHUNK_SIZE) {
+      const chunk = objects.slice(i, i + REMOVE_CHUNK_SIZE).map((o) => o.path);
+      const { error } = await supabase.storage.from(VENDOR_DOCUMENTS_BUCKET).remove(chunk);
+      if (error) {
+        console.warn(
+          `[smoke-production] storage cleanup failed for company ${fixture.companyId} ` +
+            `(${chunk.length} object(s)): ${error.message} - remove them by hand.`,
+        );
+      }
+    }
+  } catch (error) {
+    console.warn(
+      `[smoke-production] storage cleanup failed for company ${fixture.companyId}: ` +
+        `${error instanceof Error ? error.message : String(error)} - remove them by hand.`,
+    );
+  }
+
   try {
     await supabase.from("companies").delete().eq("id", fixture.companyId);
   } catch (error) {
@@ -559,31 +611,52 @@ async function caseEncryptedDocument(supabase: SupabaseClient, fixture: Fixture)
   }
 }
 
-async function caseExtractionInvocation(supabaseUrl: string, serviceRoleKey: string) {
-  // Directly invokes the process-document-jobs Edge Function once, the same
-  // way pg_cron -> pg_net does every minute in the deployed project. This is
-  // the "failed/low-confidence extraction" case's real, checkable signal:
-  // whichever of {notConfigured: true} (no ANTHROPIC_API_KEY Edge Function
-  // secret set yet) or {claimed, succeeded, failed, exhausted} counts comes
-  // back is a genuine fact about this environment's current extraction
-  // capability, not a guess - see docs/operations/environment-matrix.md for
-  // whether ANTHROPIC_API_KEY is expected to be configured on this target
-  // yet.
+async function caseExtractionInvocation(supabaseUrl: string) {
+  // Deliberately NOT a real authenticated invocation of process-document-jobs
+  // (an earlier version of this case did that, using the service-role key -
+  // found in code-quality review to be a real production-safety hazard:
+  // claim_document_processing_jobs() is entirely unscoped, claiming up to
+  // BATCH_SIZE=10 of the OLDEST due jobs project-wide with no filter by
+  // company/vendor/smoke-fixture marker (see
+  // supabase/migrations/20260917000800_document_processing_job_claim_exhaustion_fix.sql).
+  // On any environment where ANTHROPIC_API_KEY is actually configured (true
+  // of production per environment-matrix.md), that call would process
+  // whatever real customer documents happen to be queued at that moment -
+  // a real Anthropic API call, a real apply_policy_renewal() write, and a
+  // real vendor/owner notification email via notifyDocumentOutcome() - as a
+  // side effect of running a "smoke test," with no scoping to this script's
+  // own throwaway fixture at all. A verification check must never have a
+  // side effect that large and that far outside its own blast radius.
+  //
+  // Instead, this case uses the exact same UNAUTHENTICATED-call-returns-403
+  // boot-check convention already established elsewhere in this project
+  // (process-document-jobs/retry-failed-documents' own live-verification
+  // history, Task 9a/10b) for "did this redeploy even boot" - it proves the
+  // function is deployed and its own isServiceRoleRequest() check is intact
+  // and responding, without ever invoking real job-claiming/processing logic.
+  // This deliberately narrows what this case can prove (deployed and
+  // responding, not "successfully processed a document") - that is the
+  // correct tradeoff for a script explicitly designed to be runnable against
+  // production.
   const url = `${supabaseUrl.replace(/\/+$/, "")}/functions/v1/process-document-jobs`;
   const response = await fetch(url, {
     method: "POST",
-    headers: { Authorization: `Bearer ${serviceRoleKey}`, "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json" },
     body: "{}",
   });
-  const body = await response.json().catch(() => ({}));
-  if (!response.ok)
-    return { pass: false, detail: `HTTP ${response.status}: ${JSON.stringify(body)}` };
+  if (response.status === 403) {
+    return {
+      pass: true,
+      detail:
+        "process-document-jobs is deployed and rejected an unauthenticated call (403) - " +
+        "confirms the function boots and its isServiceRoleRequest() check is intact, " +
+        "without triggering real job processing (see this function's own docblock for why).",
+    };
+  }
+  const body = await response.text().catch(() => "");
   return {
-    pass: true,
-    detail:
-      body && typeof body === "object" && "notConfigured" in body && body.notConfigured
-        ? "process-document-jobs invoked successfully; ANTHROPIC_API_KEY is not configured on this environment yet (documents stay queued) - see environment-matrix.md"
-        : `process-document-jobs invoked successfully: ${JSON.stringify(body)}`,
+    pass: false,
+    detail: `Expected HTTP 403 (unauthenticated rejection) from process-document-jobs, got ${response.status}: ${body}`,
   };
 }
 
@@ -762,9 +835,7 @@ async function main(): Promise<void> {
       ),
     );
     cases.push(
-      await runCase("extraction_worker_invocation", () =>
-        caseExtractionInvocation(supabaseUrl, serviceRoleKey),
-      ),
+      await runCase("extraction_worker_invocation", () => caseExtractionInvocation(supabaseUrl)),
     );
     cases.push(await runCase("bounce_suppression", () => caseBounceScenario(supabase, fixture!)));
   } finally {
