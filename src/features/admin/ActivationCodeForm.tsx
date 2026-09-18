@@ -71,7 +71,13 @@ export function ActivationCodeForm({ onDone }: { onDone?: () => void }) {
           <label htmlFor="company-name" className="block text-sm font-medium">
             Company name
           </label>
-          <input id="company-name" name="company-name" required maxLength={200} className={inputClass} />
+          <input
+            id="company-name"
+            name="company-name"
+            required
+            maxLength={200}
+            className={inputClass}
+          />
         </div>
         <div>
           <label htmlFor="email" className="block text-sm font-medium">

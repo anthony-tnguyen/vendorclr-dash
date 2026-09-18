@@ -168,7 +168,6 @@ function isoDate(value: string | null): string {
   return value ?? NO_EXPIRY;
 }
 
-
 function toActivationCode(row: ActivationCodeRow): ActivationCode {
   return {
     id: row.id,
@@ -528,7 +527,6 @@ export function createSupabaseRepository(
         };
       });
     },
-
 
     // ---------------------------------------------------------------------
     // Activation codes (pending-migration 20260918000200_activation_codes.sql)

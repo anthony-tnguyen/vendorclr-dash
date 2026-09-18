@@ -40,7 +40,9 @@ describe("demo screen", () => {
     expect(
       await screen.findByRole("heading", { level: 2, name: "This is the demo console" }),
     ).toBeInTheDocument();
-    expect(screen.getByText(/built-in sample construction data, not your account/i)).toBeInTheDocument();
+    expect(
+      screen.getByText(/built-in sample construction data, not your account/i),
+    ).toBeInTheDocument();
     expect(screen.getByText(/nothing you do on this screen is saved/i)).toBeInTheDocument();
   });
 
@@ -55,14 +57,16 @@ describe("demo screen", () => {
     expect(await within(roster).findByText("Corbett Structural Steel")).toBeInTheDocument();
     expect(await within(roster).findByText("Ironclad Fire Protection")).toBeInTheDocument();
     expect(within(roster).getAllByTestId("demo-vendor-row").length).toBeGreaterThan(5);
-    expect((await within(roster).findAllByLabelText(/compliance matrix for/i)).length).toBeGreaterThan(
-      5,
-    );
+    expect(
+      (await within(roster).findAllByLabelText(/compliance matrix for/i)).length,
+    ).toBeGreaterThan(5);
 
     // Read-only: the only controls on the page are the code form, sign out, the
     // skip link and the activation panel. No add-vendor, no document request,
     // no upload, nothing that could be mistaken for working.
-    expect(screen.queryByRole("button", { name: /add vendor|request documents|upload/i })).toBeNull();
+    expect(
+      screen.queryByRole("button", { name: /add vendor|request documents|upload/i }),
+    ).toBeNull();
     expect(screen.queryByRole("link", { name: /new vendor/i })).toBeNull();
     await user.tab();
   });

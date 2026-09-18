@@ -484,7 +484,6 @@ const accessGrants: AccessGrant[] = [
   },
 ];
 
-
 /**
  * Sample activation codes for the preview's staff screen. These are display
  * content only: nothing here is a code anyone could redeem, because the demo

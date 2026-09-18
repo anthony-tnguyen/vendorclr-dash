@@ -144,7 +144,6 @@ export interface AccessGrant {
   lastActiveOn: string;
 }
 
-
 /**
  * Paid-access model. An activation code is issued by VendorClr staff after
  * payment, is single-use and locked to one email address, and creates a company

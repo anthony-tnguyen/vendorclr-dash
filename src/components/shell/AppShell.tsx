@@ -180,10 +180,7 @@ export function AppShell({ title, subtitle, actions, children }: AppShellProps) 
    * no company membership at all, so neither is gated.
    */
   const needsActivation =
-    mode === "live" &&
-    status === "authenticated" &&
-    !isStaff &&
-    activation !== "activated";
+    mode === "live" && status === "authenticated" && !isStaff && activation !== "activated";
 
   useEffect(() => {
     if (needsActivation) void navigate({ to: "/demo", replace: true });

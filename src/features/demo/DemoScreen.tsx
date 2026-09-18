@@ -27,15 +27,18 @@ import { cn } from "@/lib/utils";
 const UNLOCKED_POINTS = [
   {
     title: "Your own vendor roster",
-    detail: "Add your subcontractors once and track COI, additional insured, waiver of subrogation, lien waiver and renewal status for each.",
+    detail:
+      "Add your subcontractors once and track COI, additional insured, waiver of subrogation, lien waiver and renewal status for each.",
   },
   {
     title: "Document requests that reach people",
-    detail: "Ask a vendor, their broker or a second contact for what's missing, and see whether it was delivered, bounced or uploaded.",
+    detail:
+      "Ask a vendor, their broker or a second contact for what's missing, and see whether it was delivered, bounced or uploaded.",
   },
   {
     title: "Requirements you control",
-    detail: "Set your own minimum limits and required endorsements per project, and keep the history of who changed what.",
+    detail:
+      "Set your own minimum limits and required endorsements per project, and keep the history of who changed what.",
   },
   {
     title: "Reporting you can hand over",
@@ -89,9 +92,7 @@ function ActivationForm() {
       setState({
         status: "error",
         message:
-          error instanceof Error && error.message
-            ? error.message
-            : "That code was not recognised.",
+          error instanceof Error && error.message ? error.message : "That code was not recognised.",
       });
     }
   }
@@ -147,15 +148,18 @@ function ActivationForm() {
       ) : null}
 
       {state.status === "done" && state.message ? (
-        <p role="status" className="mt-3 rounded-sm border border-ok/40 bg-ok-soft px-3 py-2 text-xs font-semibold text-ok">
+        <p
+          role="status"
+          className="mt-3 rounded-sm border border-ok/40 bg-ok-soft px-3 py-2 text-xs font-semibold text-ok"
+        >
           {state.message}
         </p>
       ) : null}
 
       {live ? null : (
         <p className="mt-3 rounded-sm border border-warn/40 bg-warn-soft px-3 py-2 text-xs text-warn">
-          Demo mode — this preview is not connected to a database, so nothing here can be
-          activated, saved or sent.
+          Demo mode — this preview is not connected to a database, so nothing here can be activated,
+          saved or sent.
         </p>
       )}
     </section>
@@ -198,9 +202,7 @@ function SampleRoster() {
         <h2 id="sample-roster-heading" className="text-sm font-bold tracking-tight text-foreground">
           Sample vendor roster
         </h2>
-        <p className="numeric text-xs text-muted-foreground">
-          {roster.length} vendors · read-only
-        </p>
+        <p className="numeric text-xs text-muted-foreground">{roster.length} vendors · read-only</p>
       </div>
 
       <ul className="space-y-2">
@@ -354,8 +356,8 @@ export function DemoScreen() {
                 </h2>
                 <p className="mt-1 text-sm text-foreground">
                   Everything below is VendorClr&apos;s built-in sample construction data, not your
-                  account. It is read-only: there is nothing here to add, upload, request or
-                  delete, and nothing you do on this screen is saved or sent to anyone.
+                  account. It is read-only: there is nothing here to add, upload, request or delete,
+                  and nothing you do on this screen is saved or sent to anyone.
                 </p>
                 <p className="mt-2 text-sm text-foreground">
                   {noCompanyYet
@@ -371,12 +373,18 @@ export function DemoScreen() {
               aria-labelledby="unlocked-heading"
               className="rounded-md border border-border bg-card p-5"
             >
-              <h2 id="unlocked-heading" className="text-sm font-bold tracking-tight text-foreground">
+              <h2
+                id="unlocked-heading"
+                className="text-sm font-bold tracking-tight text-foreground"
+              >
                 What an activated workspace does
               </h2>
               <ul className="mt-3 grid gap-3 sm:grid-cols-2">
                 {UNLOCKED_POINTS.map((point) => (
-                  <li key={point.title} className="rounded-sm border border-border bg-background p-3">
+                  <li
+                    key={point.title}
+                    className="rounded-sm border border-border bg-background p-3"
+                  >
                     <p className="text-sm font-semibold text-foreground">{point.title}</p>
                     <p className="mt-1 text-xs text-muted-foreground">{point.detail}</p>
                   </li>

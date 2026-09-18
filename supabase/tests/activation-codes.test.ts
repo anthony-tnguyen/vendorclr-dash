@@ -146,9 +146,12 @@ describe("activation codes (pending 20260918000200)", () => {
       plan: string;
       activation_status: string;
       subscription_renews_on: string | null;
-    }>(db, BUYER, `select name, plan, activation_status, subscription_renews_on from public.redeem_activation_code($1)`, [
-      code,
-    ]);
+    }>(
+      db,
+      BUYER,
+      `select name, plan, activation_status, subscription_renews_on from public.redeem_activation_code($1)`,
+      [code],
+    );
     expect(opened[0]).toMatchObject({
       name: "Halstead Builders",
       plan: "Field",
