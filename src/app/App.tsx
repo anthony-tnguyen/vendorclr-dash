@@ -76,6 +76,8 @@ function useDemoSessionValue(): Session {
       canSwitchRole: true,
       personName: role === "admin" ? "VendorClr Operations" : "Rosa Sandoval",
       companyName: role === "admin" ? "VendorClr Internal" : "Halstead Builders",
+      companyId: null,
+      companyRole: "owner" as CompanyRole,
       userId: null,
       signOut: async () => {},
     }),
@@ -91,6 +93,8 @@ interface LiveIdentity {
   userId: string;
   personName: string;
   companyName: string;
+  companyId: string | null;
+  companyRole: CompanyRole | null;
   isPlatformAdmin: boolean;
 }
 
@@ -110,7 +114,7 @@ function useLiveSessionValue(): Session {
         supabase.from("profiles").select("full_name, email").eq("id", userId).maybeSingle(),
         supabase
           .from("company_members")
-          .select("companies ( name )")
+          .select("company_id, role, companies ( name )")
           .order("created_at", { ascending: true })
           .limit(1)
           .maybeSingle(),
@@ -119,13 +123,19 @@ function useLiveSessionValue(): Session {
 
       if (cancelled) return;
 
-      const company = (membershipResult.data as { companies?: { name?: string } | null } | null)
-        ?.companies;
+      const membership = membershipResult.data as {
+        company_id?: string | null;
+        role?: string | null;
+        companies?: { name?: string } | null;
+      } | null;
+      const company = membership?.companies;
 
       setIdentity({
         userId,
         personName: profileResult.data?.full_name ?? profileResult.data?.email ?? email,
         companyName: company?.name ?? "No company yet",
+        companyId: membership?.company_id ?? null,
+        companyRole: (membership?.role as CompanyRole | undefined) ?? null,
         isPlatformAdmin: adminResult.data === true,
       });
       setStatus("authenticated");
