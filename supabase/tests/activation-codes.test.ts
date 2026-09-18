@@ -17,7 +17,7 @@ import { asUser, createTestDb } from "./harness";
  */
 const PENDING_MIGRATION = readFileSync(
   new URL(
-    "../../docs/operations/pending-migrations/20260919000100_activation_codes.sql",
+    "../../docs/operations/pending-migrations/20260918000200_activation_codes.sql",
     import.meta.url,
   ),
   "utf8",
@@ -75,7 +75,7 @@ async function raiseMessage(operation: () => Promise<unknown>): Promise<string> 
   throw new Error("expected the statement to be refused, but it succeeded");
 }
 
-describe("activation codes (pending 20260919000100)", () => {
+describe("activation codes (pending 20260918000200)", () => {
   beforeEach(async () => {
     db = await createTestDb();
     await db.exec(PENDING_MIGRATION);
