@@ -72,10 +72,13 @@ afterEach(() => {
 });
 
 describe("production action truthfulness", () => {
-  it("does not present demo-only settings controls as a production save", () => {
+  it("does not present demo-only settings controls as a production save", async () => {
     renderWithQueryClient(<SettingsPage />);
 
-    expect(main().getByRole("button", { name: "Settings are not available" })).toBeDisabled();
+    // No company on the mocked live session: the page says so rather than
+    // offering controls that would save nowhere.
+    expect(await main().findByRole("alert")).toHaveTextContent(/not linked to a company/i);
+    expect(main().queryByRole("button", { name: /save requirements/i })).not.toBeInTheDocument();
     expect(main().queryByText(/demo/i)).not.toBeInTheDocument();
   });
 
