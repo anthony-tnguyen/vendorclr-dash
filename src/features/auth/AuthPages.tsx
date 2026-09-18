@@ -1,6 +1,7 @@
-import { Link, useNavigate } from "@tanstack/react-router";
-import { useState, type FormEvent, type ReactNode } from "react";
+import { Link, useNavigate, useSearch } from "@tanstack/react-router";
+import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 
+import { useSession } from "@/app/App";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { hasBackendEnv } from "@/lib/supabase/env";
 
