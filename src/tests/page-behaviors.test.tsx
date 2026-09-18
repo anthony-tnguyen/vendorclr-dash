@@ -131,11 +131,12 @@ describe("authenticated-demo route behavior", () => {
     expect(await screen.findByRole("status")).toHaveTextContent(/no file was generated/i);
   });
 
-  it("does not persist settings", async () => {
+  it("does not persist requirement settings in demo mode", async () => {
     const { user } = await renderRoute("/dashboard/settings");
 
-    await user.click(screen.getByRole("button", { name: /save settings/i }));
-    expect(await screen.findByRole("status")).toHaveTextContent(/not saved to any backend/i);
+    await user.click(await screen.findByLabelText("Primary and non-contributory"));
+    await user.click(screen.getByRole("button", { name: /save requirements/i }));
+    expect(await screen.findByRole("status")).toHaveTextContent(/not saved to any database/i);
   });
 
   it("renders the help FAQ with answers behind each question", async () => {

@@ -2,6 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState } 
 import type { ReactNode } from "react";
 
 import type { DemoRole } from "@/data/contracts";
+import type { CompanyRole } from "@/data/dbTypeAliases";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { hasBackendEnv } from "@/lib/supabase/env";
 
@@ -32,6 +33,13 @@ export interface Session {
   canSwitchRole: boolean;
   personName: string;
   companyName: string;
+  /** The caller's first company membership, or null when they belong to none. */
+  companyId: string | null;
+  /**
+   * The caller's role in that company. Presentation only - every write below is
+   * re-checked by has_company_role() in RLS, which is the real boundary.
+   */
+  companyRole: CompanyRole | null;
   userId: string | null;
   signOut: () => Promise<void>;
 }
@@ -46,6 +54,8 @@ const DEMO_FALLBACK: Session = {
   canSwitchRole: true,
   personName: "Rosa Sandoval",
   companyName: "Halstead Builders",
+  companyId: null,
+  companyRole: "owner",
   userId: null,
   signOut: async () => {},
 };
@@ -66,6 +76,8 @@ function useDemoSessionValue(): Session {
       canSwitchRole: true,
       personName: role === "admin" ? "VendorClr Operations" : "Rosa Sandoval",
       companyName: role === "admin" ? "VendorClr Internal" : "Halstead Builders",
+      companyId: null,
+      companyRole: "owner" as CompanyRole,
       userId: null,
       signOut: async () => {},
     }),
@@ -81,6 +93,8 @@ interface LiveIdentity {
   userId: string;
   personName: string;
   companyName: string;
+  companyId: string | null;
+  companyRole: CompanyRole | null;
   isPlatformAdmin: boolean;
 }
 
@@ -100,7 +114,7 @@ function useLiveSessionValue(): Session {
         supabase.from("profiles").select("full_name, email").eq("id", userId).maybeSingle(),
         supabase
           .from("company_members")
-          .select("companies ( name )")
+          .select("company_id, role, companies ( name )")
           .order("created_at", { ascending: true })
           .limit(1)
           .maybeSingle(),
@@ -109,13 +123,19 @@ function useLiveSessionValue(): Session {
 
       if (cancelled) return;
 
-      const company = (membershipResult.data as { companies?: { name?: string } | null } | null)
-        ?.companies;
+      const membership = membershipResult.data as {
+        company_id?: string | null;
+        role?: string | null;
+        companies?: { name?: string } | null;
+      } | null;
+      const company = membership?.companies;
 
       setIdentity({
         userId,
         personName: profileResult.data?.full_name ?? profileResult.data?.email ?? email,
         companyName: company?.name ?? "No company yet",
+        companyId: membership?.company_id ?? null,
+        companyRole: (membership?.role as CompanyRole | undefined) ?? null,
         isPlatformAdmin: adminResult.data === true,
       });
       setStatus("authenticated");
@@ -175,6 +195,8 @@ function useLiveSessionValue(): Session {
       canSwitchRole,
       personName: identity?.personName ?? "",
       companyName: identity?.companyName ?? "",
+      companyId: identity?.companyId ?? null,
+      companyRole: identity?.companyRole ?? null,
       userId: identity?.userId ?? null,
       signOut,
     }),
