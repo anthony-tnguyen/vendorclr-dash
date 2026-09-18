@@ -28,10 +28,10 @@ import { generateUploadToken, hashToken } from "./uploadTokens";
  * Task 6 - company teammate invitations and the access lifecycle
  * (invite/resend/revoke, accept, and existing-member role change/removal).
  *
- * Distinct from src/workflows (none yet) touching signup_invites: that
- * table + create_signup_invite() gates creating a brand-new *company* and is
- * untouched by this file. Everything here is about inviting a teammate to,
- * or managing membership within, a company that already exists.
+ * Distinct from the activation codes that open a brand-new company
+ * (activation_codes + create_activation_code()): those are a sales-side
+ * surface and are untouched by this file. Everything here is about inviting a
+ * teammate to, or managing membership within, a company that already exists.
  *
  * This is the actual interface contract for the future UI task
  * (CompanyAccessPage.tsx, the accept-invite.$token.tsx route, and a rewrite
