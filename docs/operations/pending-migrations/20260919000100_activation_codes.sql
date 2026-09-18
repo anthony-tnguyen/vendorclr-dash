@@ -141,7 +141,7 @@ begin
       for position in 1..10 loop
         -- One character per byte of md5 over fresh randomness, folded into a
         -- 32-glyph alphabet with no O/0, I/1/L, S/5, B/8 or 2/Z look-alikes.
-        label := substr(md5((gen_random_uuid() || gen_random_uuid())::text), position, 1);
+        label := substr(md5(gen_random_uuid()::text || gen_random_uuid()::text), position, 1);
         candidate := candidate || substr(
           alphabet,
           (('x' || label)::bit(4)::int * 2) % length(alphabet) + 1,
