@@ -13,7 +13,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 const authStub = {
   getSession: vi.fn(async () => ({ data: { session: null } })),
-  onAuthStateChange: vi.fn(() => ({ subscription: { unsubscribe: vi.fn() } })),
+  onAuthStateChange: vi.fn(() => ({ data: { subscription: { unsubscribe: vi.fn() } } })),
   signOut: vi.fn(async () => ({ error: null })),
 };
 
