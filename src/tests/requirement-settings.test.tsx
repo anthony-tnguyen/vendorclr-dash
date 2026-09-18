@@ -47,14 +47,19 @@ describe("requirement settings", () => {
     expect(coi?.configuration).toEqual({ documentKind: "certificate_of_insurance" });
   });
 
-  it("renders the editable requirement form and never claims a demo save persisted", () => {
-    render(<SettingsPage />);
+  it("renders the editable requirement form and never claims a demo save persisted", async () => {
+    const router = getRouter();
+    router.update({
+      ...router.options,
+      history: createMemoryHistory({ initialEntries: ["/dashboard/settings"] }),
+    });
+    await router.load();
+    render(<RouterProvider router={router} />);
 
-    expect(screen.getByText("Coverage types and minimum limits")).toBeInTheDocument();
-    const checkbox = screen.getByLabelText("Pollution liability");
-    fireEvent.click(checkbox);
+    expect(await screen.findByText("Coverage types and minimum limits")).toBeInTheDocument();
+    fireEvent.click(screen.getByLabelText("Pollution liability"));
     fireEvent.click(screen.getByRole("button", { name: "Save requirements" }));
 
-    expect(screen.getByRole("status").textContent).toMatch(/not saved to any database/i);
+    expect((await screen.findByRole("status")).textContent).toMatch(/not saved to any database/i);
   });
 });
