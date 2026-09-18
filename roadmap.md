@@ -2,8 +2,9 @@
 
 ## Activation-code access model (approved plan: `.lovable/plan/activation-code-access-model-2026-09-18.md`)
 
-- [x] PR 1 — Migration authored and verified against a real Postgres:
-      `docs/operations/pending-migrations/20260918000200_activation_codes.sql`
+- [x] PR 1 — Migration authored, applied to the live project
+      (`fzrcowwonezflydicpbd`), and smoke-tested end to end:
+      `supabase/migrations/20260918000200_activation_codes.sql`
       (activation columns + backfill, `activation_codes`, security-definer functions,
       audit widening). Open sign-up, the `/demo` screen and the access gate in
       `AppShell` are in place.
@@ -31,9 +32,15 @@
 
 ## Waiting on the user
 
-- [ ] Apply `docs/operations/pending-migrations/20260918000200_activation_codes.sql`
-      to the hosted project and report the verification output - the steps are in
-      `docs/operations/pending-migrations/README.md`
+- [x] Apply `supabase/migrations/20260918000200_activation_codes.sql` to the
+      hosted project - applied via the Supabase MCP connector and verified live:
+      backfill left 0 companies in `demo`, `activation_codes` has exactly the
+      one staff-only `activation_codes_select` policy, the audit vocabulary
+      constraints picked up the new actions/target type, and a seeded
+      issue → redeem → verify → clean-up round trip produced the right
+      company/membership/audit rows and the two anti-probing error paths
+      ("already has a workspace", "not recognised" for both an unknown code
+      and someone else's code).
 - [ ] Settings audit-history check: confirm a change-history entry appears after
       saving in Dashboard → Settings
 - [ ] Confirm the customer-facing wording "activation code"

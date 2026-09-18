@@ -20,7 +20,7 @@ hosted environment, email provider, or Supabase migration is deployed.
 | Sign in | Sign in | `live` | Calls Supabase password auth when configured; preview clearly says it authenticates nobody. |
 | Signup | Create account, no code required | `live` | Supabase signup creates a profile only; the new account then lands on the demo console. |
 | Demo console | Browse the sample roster | `demo-preview` | Rendered from the in-memory demo repository, labelled as sample data, with no add/upload/request control to click. |
-| Demo console | Enter an activation code | `unfinished` | The screen calls `redeem_activation_code()`, but that function and the `activation_codes` table are the pending migration `docs/operations/pending-migrations/20260918000200_activation_codes.sql` - not applied to the hosted database yet, so nothing is opened by it. |
+| Demo console | Enter an activation code | `live` | The screen calls `redeem_activation_code()`; that function and the `activation_codes` table are applied to the hosted database via `supabase/migrations/20260918000200_activation_codes.sql` and verified with a live seeded redemption. |
 | Password reset | Send reset link | `live` | Supabase password-reset API is called when configured. |
 | App navigation | Sidebar, mobile navigation, back links, vendor/detail links | `live` | Client-side routing only; does not claim a data mutation. |
 | Staff/customer selector | Change visible console | `demo-preview` | A view toggle only; it is explicitly not an authorization boundary. |
