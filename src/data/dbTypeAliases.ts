@@ -51,7 +51,6 @@ export type RequirementKey =
   "coi" | "additionalInsured" | "waiverOfSubrogation" | "lienWaiver" | "renewal";
 export type RequirementStatus = "compliant" | "expiring" | "missing" | "expired" | "pending";
 export type LimitField = "each_occurrence_limit" | "general_aggregate_limit";
-export type SignupInviteStatus = "pending" | "used" | "revoked";
 export type LeadStage = "new" | "qualified" | "demo" | "closed";
 
 export type VendorRow = Omit<Row<"vendors">, "risk_tier"> & {
@@ -112,11 +111,7 @@ export type ProjectRequirementOverrideRow = Row<"project_requirement_overrides">
 
 export type LeadRow = Omit<Row<"leads">, "stage"> & { stage: LeadStage };
 
-export type SignupInviteRow = Omit<Row<"signup_invites">, "status"> & {
-  status: SignupInviteStatus;
-};
-
-/** company_invitations.status - Task 6. Distinct from SignupInviteStatus above: this gates a teammate invite to an existing company, not a new-company signup. */
+/** company_invitations.status - Task 6: a teammate joining a company that already exists. Not the same thing as an activation code, which opens a company. */
 export type CompanyInvitationStatus = "pending" | "accepted" | "expired" | "revoked";
 
 export type CompanyInvitationRow = Omit<Row<"company_invitations">, "status" | "role"> & {

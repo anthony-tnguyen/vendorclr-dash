@@ -144,20 +144,6 @@ export interface AccessGrant {
   lastActiveOn: string;
 }
 
-export interface SignupInvite {
-  id: string;
-  companyName: string;
-  email: string;
-  code: string;
-  status: "pending" | "used" | "revoked";
-  expiresOn: string;
-  createdOn: string;
-}
-
-export interface SignupInviteDraft {
-  companyName: string;
-  email: string;
-}
 
 /**
  * Paid-access model. An activation code is issued by VendorClr staff after
@@ -165,10 +151,11 @@ export interface SignupInviteDraft {
  * when redeemed. It is not a payment instrument: nothing bills against a code,
  * and no provider is called to validate one.
  *
- * Kept separate from SignupInvite (the retired signup gate, see
- * supabase/migrations/20260915000100_gated_signup_invites.sql) on purpose - the
- * two are different facts, and folding them together would make the old rows
- * look like codes they never were.
+ * This replaces invite-gated signup
+ * (supabase/migrations/20260915000100_gated_signup_invites.sql). Those rows are
+ * left where they are: permission to register and payment for a workspace are
+ * different facts, and folding them together would make the old rows look like
+ * codes they never were.
  */
 export interface ActivationCode {
   id: string;
@@ -211,12 +198,6 @@ export interface DashboardRepository {
   listQueue(): Promise<QueueItem[]>;
   listLeads(): Promise<Lead[]>;
   listAccessGrants(): Promise<AccessGrant[]>;
-  /** @deprecated Retired signup gate - see ActivationCode. Removed with the admin UI. */
-  listSignupInvites(): Promise<SignupInvite[]>;
-  /** @deprecated Retired signup gate - see ActivationCode. Removed with the admin UI. */
-  createSignupInvite(draft: SignupInviteDraft): Promise<SignupInvite>;
-  /** @deprecated Retired signup gate - see ActivationCode. Removed with the admin UI. */
-  revokeSignupInvite(inviteId: string): Promise<void>;
   /** Staff-only list; RLS returns nothing to anyone who is not VendorClr staff. */
   listActivationCodes(): Promise<ActivationCode[]>;
   createActivationCode(draft: ActivationCodeDraft): Promise<ActivationCode>;
