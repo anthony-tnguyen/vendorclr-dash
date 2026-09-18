@@ -2,6 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState } 
 import type { ReactNode } from "react";
 
 import type { DemoRole } from "@/data/contracts";
+import type { CompanyRole } from "@/data/dbTypeAliases";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { hasBackendEnv } from "@/lib/supabase/env";
 
@@ -32,6 +33,13 @@ export interface Session {
   canSwitchRole: boolean;
   personName: string;
   companyName: string;
+  /** The caller's first company membership, or null when they belong to none. */
+  companyId: string | null;
+  /**
+   * The caller's role in that company. Presentation only - every write below is
+   * re-checked by has_company_role() in RLS, which is the real boundary.
+   */
+  companyRole: CompanyRole | null;
   userId: string | null;
   signOut: () => Promise<void>;
 }
@@ -46,6 +54,8 @@ const DEMO_FALLBACK: Session = {
   canSwitchRole: true,
   personName: "Rosa Sandoval",
   companyName: "Halstead Builders",
+  companyId: null,
+  companyRole: "owner",
   userId: null,
   signOut: async () => {},
 };
