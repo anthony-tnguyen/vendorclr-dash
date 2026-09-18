@@ -1,7 +1,8 @@
+import { createMemoryHistory, RouterProvider } from "@tanstack/react-router";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
-import { SettingsPage } from "@/features/settings/SettingsPage";
+import { getRouter } from "@/router";
 import {
   REQUIREMENT_CATALOG,
   canEditRequirements,
