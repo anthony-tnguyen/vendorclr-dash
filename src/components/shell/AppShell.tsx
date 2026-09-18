@@ -186,19 +186,24 @@ export function AppShell({ title, subtitle, actions, children }: AppShellProps) 
   const needsActivation =
     mode === "live" && status === "authenticated" && !isStaff && activation !== "activated";
 
+  // The destination is captured on first render and never recomputed: `here`
+  // changes the moment the redirect lands, and re-running on it would send the
+  // gate chasing its own navigation.
+  const cameFrom = useRef(here);
+
   useEffect(() => {
     // Signed-out first: an anonymous visitor needs the sign-in screen, not the
     // demo screen, and carries the page they asked for so sign-in can return them.
     if (signedOut) {
       void navigate({
         to: "/login",
-        search: { redirect: here },
+        search: { redirect: cameFrom.current },
         replace: true,
       });
       return;
     }
     if (needsActivation) void navigate({ to: "/demo", replace: true });
-  }, [signedOut, needsActivation, here, navigate]);
+  }, [signedOut, needsActivation, navigate]);
 
   if (status === "loading" || signedOut || needsActivation) {
     return (
