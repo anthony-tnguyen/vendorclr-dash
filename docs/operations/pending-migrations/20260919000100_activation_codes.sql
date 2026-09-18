@@ -381,7 +381,9 @@ begin
     jsonb_build_object('plan', matched.plan, 'source', 'activation_code')
   );
 
-  return (select * from public.companies where id = new_company);
+  -- A row-returning function needs a composite-typed expression; a bare
+  -- "select *" subquery returns a record, which the RETURN cannot use.
+  return (select c from public.companies c where id = new_company);
 end;
 $fn$;
 
