@@ -121,6 +121,10 @@ const DEFAULT_GRANTS = `
  */
 export const SKIPPED_IN_PGLITE: readonly string[] = [
   "20260902000600_schedule_renewal_reminders.sql",
+  // Drops and recreates the pg_net extension itself (fixing its schema) -
+  // PGlite never created pg_net in the first place (see the entry above),
+  // so there is nothing here for it to drop.
+  "20260902093950_recreate_pg_net_in_extensions_schema.sql",
   "20260903000400_schedule_automated_retries.sql",
   // Grants on the `cron` schema/tables, which PGlite never creates (see that
   // migration's own docblock) - same reason as the two above.
@@ -138,6 +142,18 @@ export const SKIPPED_IN_PGLITE: readonly string[] = [
   // 20260917001300_compliance_case_escalation.sql migration, which is NOT
   // skipped and is fully exercised by PGlite tests.
   "20260917001400_schedule_compliance_housekeeping.sql",
+  // Both fix an intermediate stage of requirement_profiles' "one default per
+  // company" constraint (a plain partial unique index, then a row-level
+  // BEFORE trigger) that 20260916000300_construction_core_expand.sql no
+  // longer has - that base migration was edited after these two were applied
+  // live to already contain the final, consolidated design (the deferrable
+  // EXCLUDE constraint + statement-level triggers) directly, so replaying
+  // these against today's base file conflicts on objects that were never
+  // created in their intermediate form. Genuinely applied in this order in
+  // production; not reproducible from the checked-in files alone - verified
+  // against the live project instead, same category of gap as pg_net/pg_cron.
+  "20260916160903_construction_core_security_fix.sql",
+  "20260916162335_construction_core_default_profile_swap_fix.sql",
 ];
 
 export function migrationFiles(): string[] {
