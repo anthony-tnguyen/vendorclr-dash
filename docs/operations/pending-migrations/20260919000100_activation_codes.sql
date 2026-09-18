@@ -59,7 +59,9 @@ create index if not exists companies_activation_status_idx
 --
 -- Widened before the functions below so a verification run cannot insert a row
 -- the CHECK rejects. 'company' is already an allowed target_type; the new one is
--- 'activation_code'.
+-- 'activation_code'. Only events that have a company belong in here -
+-- audit_log.company_id is NOT NULL - so issuing and withdrawing a code is
+-- recorded on the activation_codes row instead, not in the audit log.
 
 alter table public.audit_log
   drop constraint if exists audit_log_action_check;
@@ -74,8 +76,7 @@ alter table public.audit_log
     'extraction_reviewer_edit', 'compliance_exception_approved', 'compliance_exception_expired',
     'vendor_import_executed', 'report_exported',
     'requirement_rule_added', 'requirement_rule_changed', 'requirement_rule_removed',
-    'activation_code_created', 'activation_code_revoked', 'activation_code_redeemed',
-    'company_activated', 'company_access_revoked'
+    'activation_code_redeemed', 'company_activated', 'company_access_revoked'
   ));
 
 alter table public.audit_log
@@ -228,16 +229,9 @@ begin
           nullif(btrim(coalesce(note, '')), ''), admin_id)
   returning * into result;
 
-  insert into public.audit_log (company_id, actor_id, action, target_type, target_id, details)
-  values (
-    null,
-    admin_id,
-    'activation_code_created',
-    'activation_code',
-    result.id,
-    jsonb_build_object('email', result.email, 'company_name', result.company_name,
-                       'plan', result.plan, 'code', result.code)
-  );
+  -- No audit_log row: audit_log.company_id is NOT NULL and a code has no company
+  -- yet. The activation_codes row is itself the record - created_by, created_at,
+  -- status, note - and staff are the only role that can read it.
 
   return result;
 end;
@@ -285,15 +279,8 @@ begin
   where id = target_code
   returning * into result;
 
-  insert into public.audit_log (company_id, actor_id, action, target_type, target_id, details)
-  values (
-    null,
-    admin_id,
-    'activation_code_revoked',
-    'activation_code',
-    result.id,
-    jsonb_build_object('email', result.email, 'company_name', result.company_name)
-  );
+  -- No audit_log row, same reason as in create_activation_code(): the code
+  -- carries revoked_at and the staff-only SELECT policy is who sees it.
 
   return result;
 end;
@@ -374,7 +361,7 @@ begin
 
   -- audit_log has no INSERT policy for authenticated, so both rows are written
   -- from inside this definer boundary like every other writer in this schema.
-  insert into public.audit_log (company_id, actor_id, action, target_type, target_id, details)
+  insert into public.audit_log (company_id, actor_id, action, target_type, target_id, detail)
   values (
     new_company,
     caller_id,
@@ -384,7 +371,7 @@ begin
     jsonb_build_object('company_name', matched.company_name, 'plan', matched.plan)
   );
 
-  insert into public.audit_log (company_id, actor_id, action, target_type, target_id, details)
+  insert into public.audit_log (company_id, actor_id, action, target_type, target_id, detail)
   values (
     new_company,
     caller_id,
@@ -447,7 +434,7 @@ begin
   where id = target_company
   returning * into result;
 
-  insert into public.audit_log (company_id, actor_id, action, target_type, target_id, details)
+  insert into public.audit_log (company_id, actor_id, action, target_type, target_id, detail)
   values (
     target_company,
     admin_id,
