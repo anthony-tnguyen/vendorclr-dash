@@ -195,6 +195,8 @@ function useLiveSessionValue(): Session {
       canSwitchRole,
       personName: identity?.personName ?? "",
       companyName: identity?.companyName ?? "",
+      companyId: identity?.companyId ?? null,
+      companyRole: identity?.companyRole ?? null,
       userId: identity?.userId ?? null,
       signOut,
     }),
