@@ -1,5 +1,5 @@
-import { Link, useNavigate } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
+import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { useSession } from "@/app/App";
 import { adminNav, customerNav } from "@/app/router";
@@ -162,6 +162,9 @@ export interface AppShellProps {
 export function AppShell({ title, subtitle, actions, children }: AppShellProps) {
   const { personName, companyName, role, mode, status, activation, isStaff } = useSession();
   const navigate = useNavigate();
+  // The router's own location, not window.location - the latter lags behind a
+  // client-side navigation and would send the wrong page back to sign-in.
+  const here = useRouterState({ select: (state) => state.location.href });
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const navigation = role === "admin" ? adminNav : customerNav;
   const navigationTitle = role === "admin" ? "Operations" : "Workspace";
@@ -179,19 +182,41 @@ export function AppShell({ title, subtitle, actions, children }: AppShellProps) 
    * Demo mode is the preview sandbox rather than a session, and staff may hold
    * no company membership at all, so neither is gated.
    */
+  const signedOut = mode === "live" && status === "anonymous";
   const needsActivation =
     mode === "live" && status === "authenticated" && !isStaff && activation !== "activated";
 
-  useEffect(() => {
-    if (needsActivation) void navigate({ to: "/demo", replace: true });
-  }, [needsActivation, navigate]);
+  // The destination is captured on first render and never recomputed: `here`
+  // changes the moment the redirect lands, and re-running on it would send the
+  // gate chasing its own navigation.
+  const cameFrom = useRef(here);
 
-  if (status === "loading" || needsActivation) {
+  useEffect(() => {
+    // Signed-out first: an anonymous visitor needs the sign-in screen, not the
+    // demo screen, and carries the page they asked for so sign-in can return them.
+    if (signedOut) {
+      void navigate({
+        to: "/login",
+        search: { redirect: cameFrom.current },
+        replace: true,
+      });
+      return;
+    }
+    if (needsActivation) void navigate({ to: "/demo", replace: true });
+  }, [signedOut, needsActivation, navigate]);
+
+  if (status === "loading" || signedOut || needsActivation) {
     return (
       <div className="min-h-screen bg-background px-4 py-6">
         <div className="mx-auto w-full max-w-3xl">
           <LoadingState
-            label={needsActivation ? "Opening the demo console" : "Loading your workspace"}
+            label={
+              signedOut
+                ? "Opening the sign-in screen"
+                : needsActivation
+                  ? "Opening the demo console"
+                  : "Loading your workspace"
+            }
             rows={5}
           />
         </div>

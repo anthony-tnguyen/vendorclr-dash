@@ -1,6 +1,7 @@
-import { Link, useNavigate } from "@tanstack/react-router";
-import { useState, type FormEvent, type ReactNode } from "react";
+import { Link, useNavigate, useSearch } from "@tanstack/react-router";
+import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 
+import { useSession } from "@/app/App";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { hasBackendEnv } from "@/lib/supabase/env";
 
@@ -158,6 +159,20 @@ function text(form: FormData, key: string): string {
 export function LoginPage() {
   const navigate = useNavigate();
   const live = hasBackendEnv();
+  const { status, mode } = useSession();
+  // Set by the console gate when a signed-out visitor is bounced here. Already
+  // validated as a same-origin relative path by the route's validateSearch.
+  const search = useSearch({ strict: false }) as { redirect?: string };
+  const destination = (search.redirect ?? "/dashboard") as "/dashboard";
+
+  // Someone already signed in has no business on the sign-in screen. Only in
+  // live mode - demo sessions are permanently "authenticated" and the demo
+  // sign-in screen is part of the tour.
+  useEffect(() => {
+    if (mode === "live" && status === "authenticated") {
+      void navigate({ to: destination, replace: true });
+    }
+  }, [mode, status, destination, navigate]);
 
   const { notice, error, pending, onSubmit } = useAuthForm(async (form) => {
     const { error: signInError } = await getSupabaseClient().auth.signInWithPassword({
@@ -166,7 +181,7 @@ export function LoginPage() {
     });
     if (signInError) throw new Error(signInError.message);
 
-    await navigate({ to: "/dashboard" });
+    await navigate({ to: destination, replace: true });
     return "Signed in.";
   });
 
