@@ -54,18 +54,6 @@ Routes:
 
 Add Vitest and Testing Library coverage for route rendering and the compliance rail. Do not claim that any upload, email, review, or export persisted. Finish by running tests and the production build, then report exact results and whether any backend was enabled.
 
-This project was built with [Lovable](https://lovable.dev).
-
-## Build with Lovable
-
-Continue developing this project in the [Lovable editor](https://lovable.dev/projects/dba69ecf-ef0e-42f6-8004-43f28899803b).
-
-- **Ship faster**: describe what you want to build and Lovable handles the code.
-- **Stay in sync**: every change made in Lovable is committed straight to this repository.
-- **Full ownership**: this code is yours. Push to `main` on GitHub and your changes sync back into Lovable, ready for your next prompt.
-
-## Development
-
 Prefer working locally? You need Node.js and npm — [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating).
 
 ```sh
