@@ -57,7 +57,7 @@ describe("requirement settings", () => {
     render(<RouterProvider router={router} />);
 
     expect(await screen.findByText("Coverage types and minimum limits")).toBeInTheDocument();
-    fireEvent.click(screen.getByLabelText("Pollution liability"));
+    fireEvent.click(screen.getByLabelText("Primary and non-contributory"));
     fireEvent.click(screen.getByRole("button", { name: "Save requirements" }));
 
     expect((await screen.findByRole("status")).textContent).toMatch(/not saved to any database/i);

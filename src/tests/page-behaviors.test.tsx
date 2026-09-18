@@ -134,7 +134,7 @@ describe("authenticated-demo route behavior", () => {
   it("does not persist requirement settings in demo mode", async () => {
     const { user } = await renderRoute("/dashboard/settings");
 
-    await user.click(await screen.findByLabelText("Pollution liability"));
+    await user.click(await screen.findByLabelText("Primary and non-contributory"));
     await user.click(screen.getByRole("button", { name: /save requirements/i }));
     expect(await screen.findByRole("status")).toHaveTextContent(/not saved to any database/i);
   });
