@@ -192,13 +192,13 @@ export function AppShell({ title, subtitle, actions, children }: AppShellProps) 
     if (signedOut) {
       void navigate({
         to: "/login",
-        search: { redirect: window.location.pathname + window.location.search },
+        search: { redirect: here },
         replace: true,
       });
       return;
     }
     if (needsActivation) void navigate({ to: "/demo", replace: true });
-  }, [signedOut, needsActivation, navigate]);
+  }, [signedOut, needsActivation, here, navigate]);
 
   if (status === "loading" || signedOut || needsActivation) {
     return (
