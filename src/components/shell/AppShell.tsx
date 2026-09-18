@@ -162,6 +162,9 @@ export interface AppShellProps {
 export function AppShell({ title, subtitle, actions, children }: AppShellProps) {
   const { personName, companyName, role, mode, status, activation, isStaff } = useSession();
   const navigate = useNavigate();
+  // The router's own location, not window.location - the latter lags behind a
+  // client-side navigation and would send the wrong page back to sign-in.
+  const here = useRouterState({ select: (state) => state.location.href });
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const navigation = role === "admin" ? adminNav : customerNav;
   const navigationTitle = role === "admin" ? "Operations" : "Workspace";
