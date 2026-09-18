@@ -121,8 +121,8 @@ export function ActivationCodesPage() {
                       <td className="numeric px-3 py-3 text-xs">{code.code}</td>
                       <td className="px-3 py-3 text-xs">{code.plan}</td>
                       <td className="px-3 py-3 text-xs uppercase">{code.status}</td>
-                      <td className="numeric px-3 py-3 text-xs">{when(code.createdAt)}</td>
-                      <td className="numeric px-3 py-3 text-xs">{when(code.usedAt)}</td>
+                      <td className="numeric px-3 py-3 text-xs">{code.createdOn}</td>
+                      <td className="numeric px-3 py-3 text-xs">{when(code.usedOn)}</td>
                       <td className="px-3 py-3 text-right text-xs">
                         {code.status === "pending" ? (
                           <button

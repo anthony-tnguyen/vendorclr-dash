@@ -6,6 +6,13 @@ import { getRepository } from "@/data/repository";
 
 const PLANS = ["Field", "Program", "Enterprise"] as const;
 
+type Plan = ActivationCodeDraft["plan"];
+
+/** A <select> can carry anything, so the plan is checked against the list. */
+function planFrom(value: string): Plan {
+  return PLANS.find((plan) => plan === value) ?? "Field";
+}
+
 /**
  * Staff-only code creation.
  *
@@ -36,7 +43,7 @@ export function ActivationCodeForm({ onDone }: { onDone?: () => void }) {
     mutation.mutate({
       companyName: String(form.get("company-name") ?? "").trim(),
       email: String(form.get("email") ?? "").trim(),
-      plan: String(form.get("plan") ?? "Field"),
+      plan: planFrom(String(form.get("plan") ?? "Field")),
       renewsOn: renewsOn || null,
       note: String(form.get("note") ?? "").trim() || null,
     });
