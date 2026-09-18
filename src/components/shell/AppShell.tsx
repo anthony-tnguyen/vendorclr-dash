@@ -1,5 +1,5 @@
 import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { useSession } from "@/app/App";
 import { adminNav, customerNav } from "@/app/router";
