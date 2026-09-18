@@ -4,13 +4,16 @@ import { SettingsPage } from "@/features/settings/SettingsPage";
 export const Route = createFileRoute("/dashboard/settings")({
   head: () => ({
     meta: [
-      { title: "Settings — VendorClr" },
+      { title: "Insurance requirements — VendorClr" },
       {
         name: "description",
-        content: "Requirement defaults, coverage minimums and reminder contacts.",
+        content: "Coverage minimums, endorsements and documents every vendor must satisfy.",
       },
-      { property: "og:title", content: "Settings — VendorClr" },
-      { property: "og:description", content: "Requirement defaults and reminder contacts." },
+      { property: "og:title", content: "Insurance requirements — VendorClr" },
+      {
+        property: "og:description",
+        content: "Configure the coverage, endorsements and documents your vendors must provide.",
+      },
     ],
   }),
   component: SettingsPage,
