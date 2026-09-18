@@ -65,7 +65,11 @@ function endorsementRule(
   };
 }
 
-function documentRule(documentKind: string, label: string, description: string): RequirementRuleSpec {
+function documentRule(
+  documentKind: string,
+  label: string,
+  description: string,
+): RequirementRuleSpec {
   return {
     key: `document_${documentKind}`,
     label,

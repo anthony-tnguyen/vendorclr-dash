@@ -144,7 +144,9 @@ export function SettingsPage() {
     if (!isLive) return;
     if (!companyId) {
       setStatus("error");
-      setLoadError("Your account is not linked to a company yet, so there is nothing to configure.");
+      setLoadError(
+        "Your account is not linked to a company yet, so there is nothing to configure.",
+      );
       return;
     }
     setStatus("loading");
@@ -234,7 +236,10 @@ export function SettingsPage() {
       {status === "loading" ? (
         <LoadingState label="Loading your requirements" />
       ) : status === "error" ? (
-        <ErrorState description={loadError ?? "Could not load your requirements."} onRetry={() => void load()} />
+        <ErrorState
+          description={loadError ?? "Could not load your requirements."}
+          onRetry={() => void load()}
+        />
       ) : (
         <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_20rem]">
           <form onSubmit={onSubmit} className="space-y-4">
@@ -316,9 +321,7 @@ export function SettingsPage() {
                                 onChange={(event) =>
                                   update(spec.key, {
                                     amount:
-                                      event.target.value === ""
-                                        ? null
-                                        : Number(event.target.value),
+                                      event.target.value === "" ? null : Number(event.target.value),
                                   })
                                 }
                                 className="numeric focusable mt-1 w-full rounded-sm border border-input bg-background px-3 py-2 text-sm disabled:opacity-50"
@@ -380,12 +383,18 @@ export function SettingsPage() {
             </div>
 
             {saveError ? (
-              <p role="alert" className="rounded-sm border border-destructive/30 bg-danger-soft px-3 py-2 text-xs">
+              <p
+                role="alert"
+                className="rounded-sm border border-destructive/30 bg-danger-soft px-3 py-2 text-xs"
+              >
                 {saveError}
               </p>
             ) : null}
             {notice ? (
-              <p role="status" className="rounded-sm border border-border bg-muted px-3 py-2 text-xs">
+              <p
+                role="status"
+                className="rounded-sm border border-border bg-muted px-3 py-2 text-xs"
+              >
                 {notice}
               </p>
             ) : null}

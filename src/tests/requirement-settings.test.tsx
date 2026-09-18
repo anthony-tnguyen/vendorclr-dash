@@ -27,15 +27,25 @@ describe("requirement settings", () => {
 
   it("requires a positive whole amount on an enabled limit rule", () => {
     const key = "general_liability_each_occurrence_limit";
-    expect(validateRequirementSettings(values({ [key]: { enabled: true, amount: null } }))[key]).toBeTruthy();
-    expect(validateRequirementSettings(values({ [key]: { enabled: true, amount: 0 } }))[key]).toBeTruthy();
-    expect(validateRequirementSettings(values({ [key]: { enabled: true, amount: 1.5 } }))[key]).toBeTruthy();
-    expect(validateRequirementSettings(values({ [key]: { enabled: true, amount: 2000000 } }))[key]).toBeUndefined();
+    expect(
+      validateRequirementSettings(values({ [key]: { enabled: true, amount: null } }))[key],
+    ).toBeTruthy();
+    expect(
+      validateRequirementSettings(values({ [key]: { enabled: true, amount: 0 } }))[key],
+    ).toBeTruthy();
+    expect(
+      validateRequirementSettings(values({ [key]: { enabled: true, amount: 1.5 } }))[key],
+    ).toBeTruthy();
+    expect(
+      validateRequirementSettings(values({ [key]: { enabled: true, amount: 2000000 } }))[key],
+    ).toBeUndefined();
   });
 
   it("ignores amounts on requirements that are switched off", () => {
     const key = "general_liability_each_occurrence_limit";
-    expect(validateRequirementSettings(values({ [key]: { enabled: false, amount: null } }))).toEqual({});
+    expect(
+      validateRequirementSettings(values({ [key]: { enabled: false, amount: null } })),
+    ).toEqual({});
   });
 
   it("uses the compliance engine's configuration vocabulary", () => {
