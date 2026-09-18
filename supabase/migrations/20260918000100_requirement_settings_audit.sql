@@ -1,9 +1,11 @@
 -- Stage 1 (Settings) - actor trail for insurance-requirement changes.
 --
--- NOT YET APPLIED. This project points at an external Supabase project, and
--- supabase/migrations/ is managed outside this workspace, so this file lives
--- here until it is moved into supabase/migrations/ and shipped through the
--- normal migration flow.
+-- Originally applied by hand directly against the live project (this file
+-- lived at docs/operations/pending-migrations/20260918000100_requirement_settings_audit.sql
+-- while unfinished tooling access meant supabase/migrations/ couldn't be
+-- reached from that session) and only backfilled here afterward, once
+-- confirmed live and working - so this file's content matches exactly what
+-- is already applied; it is not expected to run again.
 --
 -- Why a trigger: requirement_profiles / requirement_profile_rules are written
 -- directly by the request-scoped client (RLS gates writes to owner and
@@ -15,9 +17,6 @@
 -- One audit_log row per changed rule, not per save: raising the GL
 -- each-occurrence minimum and dropping the pollution requirement are two
 -- separate facts, and collapsing them makes the history unreadable.
---
--- Until this is applied, the Settings page's "Change history" panel renders
--- its empty state; nothing else on the page depends on it.
 
 alter table public.audit_log
   drop constraint audit_log_action_check;
