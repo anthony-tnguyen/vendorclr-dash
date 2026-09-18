@@ -1,8 +1,9 @@
-import { Link } from "@tanstack/react-router";
-import { useState } from "react";
+import { Link, useNavigate } from "@tanstack/react-router";
+import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import { useSession } from "@/app/App";
 import { adminNav, customerNav } from "@/app/router";
+import { LoadingState } from "@/components/states/AsyncState";
 import { cn } from "@/lib/utils";
 
 type NavItems = typeof customerNav | typeof adminNav;
@@ -159,10 +160,44 @@ export interface AppShellProps {
 }
 
 export function AppShell({ title, subtitle, actions, children }: AppShellProps) {
-  const { personName, companyName, role, mode } = useSession();
+  const { personName, companyName, role, mode, status, activation, isStaff } = useSession();
+  const navigate = useNavigate();
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const navigation = role === "admin" ? adminNav : customerNav;
   const navigationTitle = role === "admin" ? "Operations" : "Workspace";
+
+  /**
+   * The one access gate for the whole console, placed in the chrome every
+   * dashboard page renders through so no page has to remember to check access
+   * itself - and, because nothing below <AppShell /> mounts until it passes, no
+   * page's queries fire against a session that has not been resolved or an
+   * account that has no company to be scoped to.
+   *
+   * Not a security boundary: RLS is. An unactivated account has no company, so
+   * its reads come back empty even if it reaches a page.
+   *
+   * Demo mode is the preview sandbox rather than a session, and staff may hold
+   * no company membership at all, so neither is gated.
+   */
+  const needsActivation =
+    mode === "live" && status === "authenticated" && !isStaff && activation !== "activated";
+
+  useEffect(() => {
+    if (needsActivation) void navigate({ to: "/demo", replace: true });
+  }, [needsActivation, navigate]);
+
+  if (status === "loading" || needsActivation) {
+    return (
+      <div className="min-h-screen bg-background px-4 py-6">
+        <div className="mx-auto w-full max-w-3xl">
+          <LoadingState
+            label={needsActivation ? "Opening the demo console" : "Loading your workspace"}
+            rows={5}
+          />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background">

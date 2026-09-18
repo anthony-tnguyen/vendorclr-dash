@@ -144,19 +144,46 @@ export interface AccessGrant {
   lastActiveOn: string;
 }
 
-export interface SignupInvite {
+/**
+ * Paid-access model. An activation code is issued by VendorClr staff after
+ * payment, is single-use and locked to one email address, and creates a company
+ * when redeemed. It is not a payment instrument: nothing bills against a code,
+ * and no provider is called to validate one.
+ *
+ * This replaces invite-gated signup
+ * (supabase/migrations/20260915000100_gated_signup_invites.sql). Those rows are
+ * left where they are: permission to register and payment for a workspace are
+ * different facts, and folding them together would make the old rows look like
+ * codes they never were.
+ */
+export interface ActivationCode {
   id: string;
-  companyName: string;
-  email: string;
   code: string;
+  email: string;
+  companyName: string;
+  plan: "Field" | "Program" | "Enterprise";
   status: "pending" | "used" | "revoked";
-  expiresOn: string;
+  /** ISO date or null - when set, copied onto the new company's renewal date. */
+  renewsOn: string | null;
+  note: string | null;
   createdOn: string;
+  /** ISO timestamp or null while the code is still outstanding. */
+  usedOn: string | null;
 }
 
-export interface SignupInviteDraft {
-  companyName: string;
+export interface ActivationCodeDraft {
   email: string;
+  companyName: string;
+  plan: "Field" | "Program" | "Enterprise";
+  renewsOn?: string | null;
+  note?: string | null;
+}
+
+/** What redeeming a code produced - the workspace the caller now owns. */
+export interface ActivatedWorkspace {
+  companyId: string;
+  companyName: string;
+  plan: "Field" | "Program" | "Enterprise";
 }
 
 export interface DashboardRepository {
@@ -170,9 +197,17 @@ export interface DashboardRepository {
   listQueue(): Promise<QueueItem[]>;
   listLeads(): Promise<Lead[]>;
   listAccessGrants(): Promise<AccessGrant[]>;
-  listSignupInvites(): Promise<SignupInvite[]>;
-  createSignupInvite(draft: SignupInviteDraft): Promise<SignupInvite>;
-  revokeSignupInvite(inviteId: string): Promise<void>;
+  /** Staff-only list; RLS returns nothing to anyone who is not VendorClr staff. */
+  listActivationCodes(): Promise<ActivationCode[]>;
+  createActivationCode(draft: ActivationCodeDraft): Promise<ActivationCode>;
+  revokeActivationCode(codeId: string): Promise<ActivationCode>;
+  /** The customer-facing unlock. Throws with the database's message on any failure. */
+  redeemActivationCode(code: string): Promise<ActivatedWorkspace>;
+  /** Staff-only: open or close an existing workspace without deleting anything. */
+  setCompanyActivation(
+    companyId: string,
+    activation: "demo" | "activated" | "revoked",
+  ): Promise<void>;
 }
 
 export const COMPLIANCE_LABELS: Record<ComplianceKey, string> = {

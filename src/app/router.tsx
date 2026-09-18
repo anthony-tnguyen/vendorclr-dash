@@ -10,6 +10,8 @@ export const routes = {
   login: "/login",
   signup: "/signup",
   resetPassword: "/reset-password",
+  /** Read-only sample console for accounts that have not been activated yet. */
+  demo: "/demo",
   dashboard: "/dashboard",
   vendors: "/dashboard/vendors",
   vendorDetail: "/dashboard/vendors/$vendorId",
@@ -21,7 +23,7 @@ export const routes = {
   adminCompliance: "/dashboard/admin/compliance",
   adminLeads: "/dashboard/admin/leads",
   adminAccess: "/dashboard/admin/access",
-  adminInvites: "/dashboard/admin/invites",
+  adminActivation: "/dashboard/admin/activation",
   adminOperations: "/dashboard/admin/operations",
   help: "/dashboard/help",
 } as const;
@@ -52,9 +54,9 @@ export const adminNav = [
   { label: "Leads", to: routes.adminLeads, description: "Inbound pipeline" },
   { label: "Access", to: routes.adminAccess, description: "Role and scope management" },
   {
-    label: "Invites",
-    to: routes.adminInvites,
-    description: "Codes that gate business signup",
+    label: "Activation codes",
+    to: routes.adminActivation,
+    description: "Codes that open a paid workspace",
   },
   {
     label: "Operations",

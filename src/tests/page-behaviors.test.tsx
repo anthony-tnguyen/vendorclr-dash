@@ -36,10 +36,11 @@ describe("authenticated-demo route behavior", () => {
     expect(screen.getByText(/does not authenticate anyone/i)).toBeInTheDocument();
   });
 
-  it("asks for an invite code on signup instead of a free-text company name", async () => {
+  it("signs up with a name, email and password only - no code of any kind", async () => {
     await renderRoute("/signup");
 
-    expect(await screen.findByLabelText("Invite code")).toBeInTheDocument();
+    expect(await screen.findByLabelText("Work email")).toBeInTheDocument();
+    expect(screen.queryByLabelText(/invite code|activation code/i)).not.toBeInTheDocument();
     expect(screen.queryByLabelText("Company name")).not.toBeInTheDocument();
   });
 
@@ -160,7 +161,7 @@ describe("administrator route behavior", () => {
     ["/dashboard/admin/compliance", "Compliance queue"],
     ["/dashboard/admin/leads", "Leads"],
     ["/dashboard/admin/access", "Access management"],
-    ["/dashboard/admin/invites", "Signup invites"],
+    ["/dashboard/admin/activation", "Activation codes"],
   ])("denies %s for the customer demo role", async (path) => {
     await renderRoute(path);
 
@@ -211,30 +212,32 @@ describe("administrator route behavior", () => {
     );
   });
 
-  // Mutates the shared demo repository singleton (creates then revokes a real
-  // invite in its in-memory store). Kept last in this describe block since
-  // nothing resets the repository between tests in this file - a test added
-  // after this one would otherwise silently inherit the extra revoked invite.
-  it("creates and revokes a signup invite through the demo repository", async () => {
-    const { user } = await renderAdminRoute("/dashboard/admin/invites");
+  // Mutates the shared demo repository singleton (creates then withdraws a code
+  // in its in-memory store). Kept last in this describe block since nothing
+  // resets the repository between tests in this file - a test added after this
+  // one would otherwise silently inherit the extra withdrawn code.
+  it("creates and withdraws an activation code through the demo repository", async () => {
+    const { user } = await renderAdminRoute("/dashboard/admin/activation");
 
-    await screen.findByText("Meridian Fabrication");
+    await screen.findByText("Halstead Builders");
 
-    await user.click(screen.getByRole("button", { name: /create invite/i }));
+    await user.click(screen.getByRole("button", { name: /create code/i }));
     await user.type(screen.getByLabelText("Company name"), "Cedar Ridge Contracting");
-    await user.type(screen.getByLabelText("Email"), "owner@cedarridge.example");
-    await user.click(screen.getByRole("button", { name: /^create invite$/i }));
+    await user.type(screen.getByLabelText("Customer email"), "owner@cedarridge.example");
+    await user.click(screen.getByRole("button", { name: /^create code$/i }));
 
     expect(
-      await screen.findByText(/invite code .+ created for cedar ridge contracting/i),
+      await screen.findByText(/code .+ created for owner@cedarridge\.example/i),
     ).toBeInTheDocument();
     expect(await screen.findByText("Cedar Ridge Contracting")).toBeInTheDocument();
 
     const row = screen.getByText("Cedar Ridge Contracting").closest("tr");
-    if (!row) throw new Error("expected a table row for the new invite");
-    await user.click(within(row).getByRole("button", { name: /revoke/i }));
+    if (!row) throw new Error("expected a table row for the new code");
+    await user.click(within(row).getByRole("button", { name: /withdraw/i }));
 
-    await waitFor(() => expect(within(row).queryByRole("button", { name: /revoke/i })).toBeNull());
+    await waitFor(() =>
+      expect(within(row).queryByRole("button", { name: /withdraw/i })).toBeNull(),
+    );
     expect(within(row).getByText("revoked")).toBeInTheDocument();
   });
 });

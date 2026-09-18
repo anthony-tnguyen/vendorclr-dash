@@ -18,7 +18,9 @@ hosted environment, email provider, or Supabase migration is deployed.
 | Surface | Action | Status | Evidence / truthful behavior |
 | --- | --- | --- |
 | Sign in | Sign in | `live` | Calls Supabase password auth when configured; preview clearly says it authenticates nobody. |
-| Signup | Create account with an invite code | `live` | Supabase signup carries the invite code for server-side redemption. |
+| Signup | Create account, no code required | `live` | Supabase signup creates a profile only; the new account then lands on the demo console. |
+| Demo console | Browse the sample roster | `demo-preview` | Rendered from the in-memory demo repository, labelled as sample data, with no add/upload/request control to click. |
+| Demo console | Enter an activation code | `unfinished` | The screen calls `redeem_activation_code()`, but that function and the `activation_codes` table are the pending migration `docs/operations/pending-migrations/20260918000200_activation_codes.sql` - not applied to the hosted database yet, so nothing is opened by it. |
 | Password reset | Send reset link | `live` | Supabase password-reset API is called when configured. |
 | App navigation | Sidebar, mobile navigation, back links, vendor/detail links | `live` | Client-side routing only; does not claim a data mutation. |
 | Staff/customer selector | Change visible console | `demo-preview` | A view toggle only; it is explicitly not an authorization boundary. |
@@ -47,7 +49,7 @@ hosted environment, email provider, or Supabase migration is deployed.
 | Admin queue | Open a linked document review | `live` | Available only for a backend-backed queue item with a document ID. |
 | Document review | Open original document, reprocess, approve, reject | `live` | Calls the document-review/upload workflows; approval has an explicit confirmation step. |
 | Admin queue | Review an item without a linked document | `disabled` | The UI explains that no document is available to review. |
-| Signup invites | Create an admin-issued company signup invite | `live` | Repository operations persist and revoke server-backed invites when configured. |
+| Activation codes | Create, list and withdraw a code | `unfinished` | The admin screen and its security-definer functions are written and covered by `supabase/tests/activation-codes.test.ts`, but the table they use is the pending migration above; until it is applied the hosted database has no `activation_codes`. |
 | Access management | View access grants | `live` | Reads company memberships and profiles from the configured backend. |
 | Access management | Invite teammate | `disabled` | No membership invitation backend workflow exists. Live UI says teammate invitations are not available; preview says no invitation was created or emailed. |
 | Companies, leads, overview | Open data and local review detail | `live` | Read paths use the configured repository; review becomes a live route only when a document is linked. |

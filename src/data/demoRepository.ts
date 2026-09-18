@@ -1,5 +1,8 @@
 import type {
   AccessGrant,
+  ActivatedWorkspace,
+  ActivationCode,
+  ActivationCodeDraft,
   Company,
   ComplianceItem,
   DashboardRepository,
@@ -7,8 +10,6 @@ import type {
   OverviewMetric,
   QueueItem,
   ReportRow,
-  SignupInvite,
-  SignupInviteDraft,
   TaskItem,
   Vendor,
   VendorDraft,
@@ -483,24 +484,43 @@ const accessGrants: AccessGrant[] = [
   },
 ];
 
-const signupInvites: SignupInvite[] = [
+/**
+ * Sample activation codes for the preview's staff screen. These are display
+ * content only: nothing here is a code anyone could redeem, because the demo
+ * repository has no database to redeem against - see redeemActivationCode().
+ */
+const DEMO_CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ";
+
+const demoCode = (): string =>
+  Array.from(
+    { length: 10 },
+    () => DEMO_CODE_ALPHABET[Math.floor(Math.random() * DEMO_CODE_ALPHABET.length)],
+  ).join("");
+
+const activationCodes: ActivationCode[] = [
   {
-    id: "inv-1",
-    companyName: "Meridian Fabrication",
-    email: "owner@meridianfab.example",
-    code: "A1B2C3D4E5",
+    id: "act-1",
+    code: "K7M2QP9XRD",
+    email: "founder@halstead.example",
+    companyName: "Halstead Builders",
+    plan: "Program",
     status: "pending",
-    expiresOn: "2026-09-29",
-    createdOn: "2026-09-15",
+    renewsOn: "2027-03-01",
+    note: "Design partner - annual.",
+    createdOn: "2026-09-10",
+    usedOn: null,
   },
   {
-    id: "inv-2",
-    companyName: "Halstead Builders",
-    email: "founder@halstead.example",
-    code: "F6G7H8I9J0",
+    id: "act-2",
+    code: "HPQ4WKCY8M",
+    email: "ops@marrow.example",
+    companyName: "Marrow Construction Group",
+    plan: "Field",
     status: "used",
-    expiresOn: "2026-09-10",
-    createdOn: "2026-08-27",
+    renewsOn: null,
+    note: null,
+    createdOn: "2026-08-19",
+    usedOn: "2026-08-24",
   },
 ];
 
@@ -509,7 +529,7 @@ const delay = <T>(value: T): Promise<T> =>
 
 export function createDemoRepository(): DashboardRepository {
   const vendorStore = vendors.map((v) => ({ ...v }));
-  const inviteStore = signupInvites.map((i) => ({ ...i }));
+  const codeStore = activationCodes.map((r) => ({ ...r }));
 
   return {
     listVendors: () => delay(vendorStore.map((v) => ({ ...v }))),
@@ -547,25 +567,44 @@ export function createDemoRepository(): DashboardRepository {
     listQueue: () => delay(queue.map((r) => ({ ...r }))),
     listLeads: () => delay(leads.map((r) => ({ ...r }))),
     listAccessGrants: () => delay(accessGrants.map((r) => ({ ...r }))),
-    listSignupInvites: () => delay(inviteStore.map((r) => ({ ...r }))),
-    createSignupInvite: (draft: SignupInviteDraft) => {
-      const invite: SignupInvite = {
-        id: `inv-${1400 + inviteStore.length}`,
+
+    // Activation codes. The staff-side screens can be walked through against
+    // this in-memory store, which is what the preview and the Vitest suite need.
+    // The two operations that a database is the whole point of deliberately
+    // refuse rather than return something plausible - a demo that pretended to
+    // create a company, or to close one, would be exactly the fake success this
+    // app's copy rules forbid.
+    listActivationCodes: () => delay(codeStore.map((r) => ({ ...r }))),
+    createActivationCode: (draft: ActivationCodeDraft) => {
+      const record: ActivationCode = {
+        id: `act-${1400 + codeStore.length}`,
+        code: demoCode(),
+        email: draft.email.trim().toLowerCase(),
         companyName: draft.companyName,
-        email: draft.email,
-        code: Math.random().toString(16).slice(2, 12).toUpperCase(),
+        plan: draft.plan,
         status: "pending",
-        expiresOn: "2026-09-29",
-        createdOn: "2026-09-15",
+        renewsOn: draft.renewsOn ?? null,
+        note: draft.note ?? null,
+        createdOn: new Date().toISOString().slice(0, 10),
+        usedOn: null,
       };
-      inviteStore.unshift(invite);
-      return delay(invite);
+      codeStore.unshift(record);
+      return delay({ ...record });
     },
-    revokeSignupInvite: (inviteId: string) => {
-      const invite = inviteStore.find((i) => i.id === inviteId);
-      if (!invite) return Promise.reject(new Error("Signup invite not found"));
-      invite.status = "revoked";
-      return delay(undefined);
+    revokeActivationCode: (codeId: string) => {
+      const record = codeStore.find((r) => r.id === codeId);
+      if (!record) return Promise.reject(new Error("Activation code not found"));
+      if (record.status !== "pending") {
+        return Promise.reject(new Error("Only a pending activation code can be revoked"));
+      }
+      record.status = "revoked";
+      return delay({ ...record });
     },
+    redeemActivationCode: (): Promise<ActivatedWorkspace> =>
+      Promise.reject(
+        new Error("Demo mode: activation codes are not checked or redeemed without a database."),
+      ),
+    setCompanyActivation: (): Promise<void> =>
+      Promise.reject(new Error("Demo mode: there is no company here to activate or close.")),
   };
 }

@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as DemoRouteImport } from './routes/demo'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as SignupRouteImport } from './routes/signup'
@@ -23,9 +24,9 @@ import { Route as ApiHealthLiveRouteImport } from './routes/api.health.live'
 import { Route as ApiHealthReadyRouteImport } from './routes/api.health.ready'
 import { Route as DashboardAdminIndexRouteImport } from './routes/dashboard.admin.index'
 import { Route as DashboardAdminAccessRouteImport } from './routes/dashboard.admin.access'
+import { Route as DashboardAdminActivationRouteImport } from './routes/dashboard.admin.activation'
 import { Route as DashboardAdminCompaniesRouteImport } from './routes/dashboard.admin.companies'
 import { Route as DashboardAdminComplianceRouteImport } from './routes/dashboard.admin.compliance'
-import { Route as DashboardAdminInvitesRouteImport } from './routes/dashboard.admin.invites'
 import { Route as DashboardAdminLeadsRouteImport } from './routes/dashboard.admin.leads'
 import { Route as DashboardAdminOperationsRouteImport } from './routes/dashboard.admin.operations'
 import { Route as DashboardVendorsIndexRouteImport } from './routes/dashboard.vendors.index'
@@ -35,6 +36,11 @@ import { Route as DashboardAdminComplianceQueueItemIdRouteImport } from './route
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DemoRoute = DemoRouteImport.update({
+  id: '/demo',
+  path: '/demo',
   getParentRoute: () => rootRouteImport,
 } as any)
 const LoginRoute = LoginRouteImport.update({
@@ -102,6 +108,12 @@ const DashboardAdminAccessRoute = DashboardAdminAccessRouteImport.update({
   path: '/dashboard/admin/access',
   getParentRoute: () => rootRouteImport,
 } as any)
+const DashboardAdminActivationRoute =
+  DashboardAdminActivationRouteImport.update({
+    id: '/dashboard/admin/activation',
+    path: '/dashboard/admin/activation',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const DashboardAdminCompaniesRoute = DashboardAdminCompaniesRouteImport.update({
   id: '/dashboard/admin/companies',
   path: '/dashboard/admin/companies',
@@ -113,11 +125,6 @@ const DashboardAdminComplianceRoute =
     path: '/dashboard/admin/compliance',
     getParentRoute: () => rootRouteImport,
   } as any)
-const DashboardAdminInvitesRoute = DashboardAdminInvitesRouteImport.update({
-  id: '/dashboard/admin/invites',
-  path: '/dashboard/admin/invites',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const DashboardAdminLeadsRoute = DashboardAdminLeadsRouteImport.update({
   id: '/dashboard/admin/leads',
   path: '/dashboard/admin/leads',
@@ -149,6 +156,7 @@ const DashboardAdminComplianceQueueItemIdRoute =
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/demo': typeof DemoRoute
   '/login': typeof LoginRoute
   '/reset-password': typeof ResetPasswordRoute
   '/signup': typeof SignupRoute
@@ -161,9 +169,9 @@ export interface FileRoutesByFullPath {
   '/api/health/live': typeof ApiHealthLiveRoute
   '/api/health/ready': typeof ApiHealthReadyRoute
   '/dashboard/admin/access': typeof DashboardAdminAccessRoute
+  '/dashboard/admin/activation': typeof DashboardAdminActivationRoute
   '/dashboard/admin/companies': typeof DashboardAdminCompaniesRoute
   '/dashboard/admin/compliance': typeof DashboardAdminComplianceRouteWithChildren
-  '/dashboard/admin/invites': typeof DashboardAdminInvitesRoute
   '/dashboard/admin/leads': typeof DashboardAdminLeadsRoute
   '/dashboard/admin/operations': typeof DashboardAdminOperationsRoute
   '/dashboard/vendors/$vendorId': typeof DashboardVendorsVendorIdRoute
@@ -173,6 +181,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/demo': typeof DemoRoute
   '/login': typeof LoginRoute
   '/reset-password': typeof ResetPasswordRoute
   '/signup': typeof SignupRoute
@@ -185,9 +194,9 @@ export interface FileRoutesByTo {
   '/api/health/live': typeof ApiHealthLiveRoute
   '/api/health/ready': typeof ApiHealthReadyRoute
   '/dashboard/admin/access': typeof DashboardAdminAccessRoute
+  '/dashboard/admin/activation': typeof DashboardAdminActivationRoute
   '/dashboard/admin/companies': typeof DashboardAdminCompaniesRoute
   '/dashboard/admin/compliance': typeof DashboardAdminComplianceRouteWithChildren
-  '/dashboard/admin/invites': typeof DashboardAdminInvitesRoute
   '/dashboard/admin/leads': typeof DashboardAdminLeadsRoute
   '/dashboard/admin/operations': typeof DashboardAdminOperationsRoute
   '/dashboard/vendors/$vendorId': typeof DashboardVendorsVendorIdRoute
@@ -198,6 +207,7 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/demo': typeof DemoRoute
   '/login': typeof LoginRoute
   '/reset-password': typeof ResetPasswordRoute
   '/signup': typeof SignupRoute
@@ -210,9 +220,9 @@ export interface FileRoutesById {
   '/api/health/live': typeof ApiHealthLiveRoute
   '/api/health/ready': typeof ApiHealthReadyRoute
   '/dashboard/admin/access': typeof DashboardAdminAccessRoute
+  '/dashboard/admin/activation': typeof DashboardAdminActivationRoute
   '/dashboard/admin/companies': typeof DashboardAdminCompaniesRoute
   '/dashboard/admin/compliance': typeof DashboardAdminComplianceRouteWithChildren
-  '/dashboard/admin/invites': typeof DashboardAdminInvitesRoute
   '/dashboard/admin/leads': typeof DashboardAdminLeadsRoute
   '/dashboard/admin/operations': typeof DashboardAdminOperationsRoute
   '/dashboard/vendors/$vendorId': typeof DashboardVendorsVendorIdRoute
@@ -224,6 +234,7 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/demo'
     | '/login'
     | '/reset-password'
     | '/signup'
@@ -236,9 +247,9 @@ export interface FileRouteTypes {
     | '/api/health/live'
     | '/api/health/ready'
     | '/dashboard/admin/access'
+    | '/dashboard/admin/activation'
     | '/dashboard/admin/companies'
     | '/dashboard/admin/compliance'
-    | '/dashboard/admin/invites'
     | '/dashboard/admin/leads'
     | '/dashboard/admin/operations'
     | '/dashboard/vendors/$vendorId'
@@ -248,6 +259,7 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/demo'
     | '/login'
     | '/reset-password'
     | '/signup'
@@ -260,9 +272,9 @@ export interface FileRouteTypes {
     | '/api/health/live'
     | '/api/health/ready'
     | '/dashboard/admin/access'
+    | '/dashboard/admin/activation'
     | '/dashboard/admin/companies'
     | '/dashboard/admin/compliance'
-    | '/dashboard/admin/invites'
     | '/dashboard/admin/leads'
     | '/dashboard/admin/operations'
     | '/dashboard/vendors/$vendorId'
@@ -272,6 +284,7 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/'
+    | '/demo'
     | '/login'
     | '/reset-password'
     | '/signup'
@@ -284,9 +297,9 @@ export interface FileRouteTypes {
     | '/api/health/live'
     | '/api/health/ready'
     | '/dashboard/admin/access'
+    | '/dashboard/admin/activation'
     | '/dashboard/admin/companies'
     | '/dashboard/admin/compliance'
-    | '/dashboard/admin/invites'
     | '/dashboard/admin/leads'
     | '/dashboard/admin/operations'
     | '/dashboard/vendors/$vendorId'
@@ -297,6 +310,7 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  DemoRoute: typeof DemoRoute
   LoginRoute: typeof LoginRoute
   ResetPasswordRoute: typeof ResetPasswordRoute
   SignupRoute: typeof SignupRoute
@@ -309,9 +323,9 @@ export interface RootRouteChildren {
   ApiHealthLiveRoute: typeof ApiHealthLiveRoute
   ApiHealthReadyRoute: typeof ApiHealthReadyRoute
   DashboardAdminAccessRoute: typeof DashboardAdminAccessRoute
+  DashboardAdminActivationRoute: typeof DashboardAdminActivationRoute
   DashboardAdminCompaniesRoute: typeof DashboardAdminCompaniesRoute
   DashboardAdminComplianceRoute: typeof DashboardAdminComplianceRouteWithChildren
-  DashboardAdminInvitesRoute: typeof DashboardAdminInvitesRoute
   DashboardAdminLeadsRoute: typeof DashboardAdminLeadsRoute
   DashboardAdminOperationsRoute: typeof DashboardAdminOperationsRoute
   DashboardVendorsVendorIdRoute: typeof DashboardVendorsVendorIdRoute
@@ -326,6 +340,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/demo': {
+      id: '/demo'
+      path: '/demo'
+      fullPath: '/demo'
+      preLoaderRoute: typeof DemoRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/login': {
@@ -419,6 +440,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DashboardAdminAccessRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/dashboard/admin/activation': {
+      id: '/dashboard/admin/activation'
+      path: '/dashboard/admin/activation'
+      fullPath: '/dashboard/admin/activation'
+      preLoaderRoute: typeof DashboardAdminActivationRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/dashboard/admin/companies': {
       id: '/dashboard/admin/companies'
       path: '/dashboard/admin/companies'
@@ -431,13 +459,6 @@ declare module '@tanstack/react-router' {
       path: '/dashboard/admin/compliance'
       fullPath: '/dashboard/admin/compliance'
       preLoaderRoute: typeof DashboardAdminComplianceRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/dashboard/admin/invites': {
-      id: '/dashboard/admin/invites'
-      path: '/dashboard/admin/invites'
-      fullPath: '/dashboard/admin/invites'
-      preLoaderRoute: typeof DashboardAdminInvitesRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/dashboard/admin/leads': {
@@ -495,6 +516,7 @@ const DashboardAdminComplianceRouteWithChildren =
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  DemoRoute: DemoRoute,
   LoginRoute: LoginRoute,
   ResetPasswordRoute: ResetPasswordRoute,
   SignupRoute: SignupRoute,
@@ -507,9 +529,9 @@ const rootRouteChildren: RootRouteChildren = {
   ApiHealthLiveRoute: ApiHealthLiveRoute,
   ApiHealthReadyRoute: ApiHealthReadyRoute,
   DashboardAdminAccessRoute: DashboardAdminAccessRoute,
+  DashboardAdminActivationRoute: DashboardAdminActivationRoute,
   DashboardAdminCompaniesRoute: DashboardAdminCompaniesRoute,
   DashboardAdminComplianceRoute: DashboardAdminComplianceRouteWithChildren,
-  DashboardAdminInvitesRoute: DashboardAdminInvitesRoute,
   DashboardAdminLeadsRoute: DashboardAdminLeadsRoute,
   DashboardAdminOperationsRoute: DashboardAdminOperationsRoute,
   DashboardVendorsVendorIdRoute: DashboardVendorsVendorIdRoute,

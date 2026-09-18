@@ -19,7 +19,7 @@ const expectedRouteIds = [
   "/dashboard/admin/compliance",
   "/dashboard/admin/leads",
   "/dashboard/admin/access",
-  "/dashboard/admin/invites",
+  "/dashboard/admin/activation",
   "/dashboard/admin/operations",
 ] as const;
 

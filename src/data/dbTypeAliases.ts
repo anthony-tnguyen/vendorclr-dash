@@ -51,7 +51,6 @@ export type RequirementKey =
   "coi" | "additionalInsured" | "waiverOfSubrogation" | "lienWaiver" | "renewal";
 export type RequirementStatus = "compliant" | "expiring" | "missing" | "expired" | "pending";
 export type LimitField = "each_occurrence_limit" | "general_aggregate_limit";
-export type SignupInviteStatus = "pending" | "used" | "revoked";
 export type LeadStage = "new" | "qualified" | "demo" | "closed";
 
 export type VendorRow = Omit<Row<"vendors">, "risk_tier"> & {
@@ -112,11 +111,7 @@ export type ProjectRequirementOverrideRow = Row<"project_requirement_overrides">
 
 export type LeadRow = Omit<Row<"leads">, "stage"> & { stage: LeadStage };
 
-export type SignupInviteRow = Omit<Row<"signup_invites">, "status"> & {
-  status: SignupInviteStatus;
-};
-
-/** company_invitations.status - Task 6. Distinct from SignupInviteStatus above: this gates a teammate invite to an existing company, not a new-company signup. */
+/** company_invitations.status - Task 6: a teammate joining a company that already exists. Not the same thing as an activation code, which opens a company. */
 export type CompanyInvitationStatus = "pending" | "accepted" | "expired" | "revoked";
 
 export type CompanyInvitationRow = Omit<Row<"company_invitations">, "status" | "role"> & {
@@ -228,3 +223,47 @@ export type DocumentExtractionSource = "model" | "reviewer_edit";
 export type DocumentExtractionRow = Omit<Row<"document_extractions">, "source"> & {
   source: DocumentExtractionSource;
 };
+
+/**
+ * companies.activation_status - the access model (pending-migration
+ * 20260918000200_activation_codes.sql). 'demo' is the column default, but a
+ * company only ever arrives through redeem_activation_code(), which sets
+ * 'activated' in the same statement, so 'demo' should never be observed in
+ * production - it is the fail-closed default for any future creation path that
+ * forgets to activate.
+ */
+export type CompanyActivationStatus = "demo" | "activated" | "revoked";
+
+/**
+ * Hand-written rather than `Row<"activation_codes">`, unlike every other row
+ * alias in this file: db-types.ts is genuinely generated output, and
+ * activation_codes does not exist in the live database yet, so the generator
+ * has no such table to emit. Swap this for `Row<"activation_codes">` (keeping
+ * the status/plan literal narrowing) the first time db-types.ts is regenerated
+ * after that migration is applied.
+ */
+export interface ActivationCodeRow {
+  id: string;
+  code: string;
+  email: string;
+  company_name: string;
+  plan: CompanyPlan;
+  renews_on: string | null;
+  note: string | null;
+  status: "pending" | "used" | "revoked";
+  created_by: string | null;
+  used_at: string | null;
+  used_by: string | null;
+  redeemed_company_id: string | null;
+  revoked_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+/** The shape redeem_activation_code() returns: it returns the new companies row. */
+export interface RedeemedCompanyRow {
+  id: string;
+  name: string;
+  plan: CompanyPlan;
+  activation_status: CompanyActivationStatus;
+}
