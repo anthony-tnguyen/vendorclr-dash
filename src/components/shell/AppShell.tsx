@@ -179,19 +179,36 @@ export function AppShell({ title, subtitle, actions, children }: AppShellProps) 
    * Demo mode is the preview sandbox rather than a session, and staff may hold
    * no company membership at all, so neither is gated.
    */
+  const signedOut = mode === "live" && status === "anonymous";
   const needsActivation =
     mode === "live" && status === "authenticated" && !isStaff && activation !== "activated";
 
   useEffect(() => {
+    // Signed-out first: an anonymous visitor needs the sign-in screen, not the
+    // demo screen, and carries the page they asked for so sign-in can return them.
+    if (signedOut) {
+      void navigate({
+        to: "/login",
+        search: { redirect: window.location.pathname + window.location.search },
+        replace: true,
+      });
+      return;
+    }
     if (needsActivation) void navigate({ to: "/demo", replace: true });
-  }, [needsActivation, navigate]);
+  }, [signedOut, needsActivation, navigate]);
 
-  if (status === "loading" || needsActivation) {
+  if (status === "loading" || signedOut || needsActivation) {
     return (
       <div className="min-h-screen bg-background px-4 py-6">
         <div className="mx-auto w-full max-w-3xl">
           <LoadingState
-            label={needsActivation ? "Opening the demo console" : "Loading your workspace"}
+            label={
+              signedOut
+                ? "Opening the sign-in screen"
+                : needsActivation
+                  ? "Opening the demo console"
+                  : "Loading your workspace"
+            }
             rows={5}
           />
         </div>
