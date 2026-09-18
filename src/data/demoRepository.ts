@@ -10,8 +10,6 @@ import type {
   OverviewMetric,
   QueueItem,
   ReportRow,
-  SignupInvite,
-  SignupInviteDraft,
   TaskItem,
   Vendor,
   VendorDraft,
@@ -486,26 +484,6 @@ const accessGrants: AccessGrant[] = [
   },
 ];
 
-const signupInvites: SignupInvite[] = [
-  {
-    id: "inv-1",
-    companyName: "Meridian Fabrication",
-    email: "owner@meridianfab.example",
-    code: "A1B2C3D4E5",
-    status: "pending",
-    expiresOn: "2026-09-29",
-    createdOn: "2026-09-15",
-  },
-  {
-    id: "inv-2",
-    companyName: "Halstead Builders",
-    email: "founder@halstead.example",
-    code: "F6G7H8I9J0",
-    status: "used",
-    expiresOn: "2026-09-10",
-    createdOn: "2026-08-27",
-  },
-];
 
 /**
  * Sample activation codes for the preview's staff screen. These are display
@@ -552,7 +530,6 @@ const delay = <T>(value: T): Promise<T> =>
 
 export function createDemoRepository(): DashboardRepository {
   const vendorStore = vendors.map((v) => ({ ...v }));
-  const inviteStore = signupInvites.map((i) => ({ ...i }));
   const codeStore = activationCodes.map((r) => ({ ...r }));
 
   return {
@@ -591,26 +568,6 @@ export function createDemoRepository(): DashboardRepository {
     listQueue: () => delay(queue.map((r) => ({ ...r }))),
     listLeads: () => delay(leads.map((r) => ({ ...r }))),
     listAccessGrants: () => delay(accessGrants.map((r) => ({ ...r }))),
-    listSignupInvites: () => delay(inviteStore.map((r) => ({ ...r }))),
-    createSignupInvite: (draft: SignupInviteDraft) => {
-      const invite: SignupInvite = {
-        id: `inv-${1400 + inviteStore.length}`,
-        companyName: draft.companyName,
-        email: draft.email,
-        code: Math.random().toString(16).slice(2, 12).toUpperCase(),
-        status: "pending",
-        expiresOn: "2026-09-29",
-        createdOn: "2026-09-15",
-      };
-      inviteStore.unshift(invite);
-      return delay(invite);
-    },
-    revokeSignupInvite: (inviteId: string) => {
-      const invite = inviteStore.find((i) => i.id === inviteId);
-      if (!invite) return Promise.reject(new Error("Signup invite not found"));
-      invite.status = "revoked";
-      return delay(undefined);
-    },
 
     // Activation codes. The staff-side screens can be walked through against
     // this in-memory store, which is what the preview and the Vitest suite need.
