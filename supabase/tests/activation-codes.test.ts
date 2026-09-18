@@ -57,9 +57,10 @@ async function issue(
   return row;
 }
 
-async function count(table: string, where = "true"): Promise<number> {
+async function count(table: string, where = "true", params: unknown[] = []): Promise<number> {
   const result = await db.query<{ n: string }>(
     `select count(*)::text as n from public.${table} where ${where}`,
+    params,
   );
   return Number(result.rows[0]?.n ?? 0);
 }
@@ -234,7 +235,7 @@ describe("activation codes (pending 20260919000100)", () => {
 
     // Closing is a door, not a shredder: the roster and the membership survive,
     // so a customer who pays again picks the same workspace back up.
-    expect(await count("company_members", "company_id = $1", )).toBe(1);
+    expect(await count("company_members", "company_id = $1", [companyId])).toBe(1);
     expect(await count("company_members")).toBe(1);
 
     const reopened = await asUser<{ activation_status: string }>(
