@@ -216,18 +216,16 @@ export function SignupPage() {
   const live = hasBackendEnv();
 
   const { notice, error, pending, onSubmit } = useAuthForm(async (form) => {
-    // The invite code rides along in user metadata. The handle_new_user
-    // trigger redeems it against signup_invites and provisions the company
-    // (using the invite's own company name, not anything entered here) plus
-    // the owner membership - a missing or invalid code fails the whole
-    // signUp() call server-side, so this works whether or not email
-    // confirmation is enabled.
+    // Sign-up is open: an account is created with no company attached, and the
+    // handle_new_user() trigger creates the profile only. The workspace itself
+    // arrives later, when an activation code is redeemed on the demo screen -
+    // redeem_activation_code() is what creates the company and the owner seat,
+    // in one transaction. So a fresh account lands on /demo, not /dashboard.
     const { data, error: signUpError } = await getSupabaseClient().auth.signUp({
       email: text(form, "signup-email"),
       password: String(form.get("signup-password") ?? ""),
       options: {
         data: {
-          invite_code: text(form, "invite-code"),
           full_name: text(form, "full-name"),
         },
       },
@@ -235,7 +233,7 @@ export function SignupPage() {
     if (signUpError) throw new Error(signUpError.message);
 
     if (data.session) {
-      await navigate({ to: "/dashboard" });
+      await navigate({ to: "/demo" });
       return "Account created.";
     }
     return "Check your email to confirm the account, then sign in.";
@@ -244,7 +242,7 @@ export function SignupPage() {
   return (
     <AuthLayout
       title="Create an account"
-      description="Set up compliance tracking for your subcontractor roster."
+      description="No code needed to look around. You'll land in the demo console, and your workspace opens when you enter an activation code."
       footer={
         <span>
           Already registered?{" "}
@@ -255,13 +253,6 @@ export function SignupPage() {
       }
     >
       <form onSubmit={onSubmit} className="mt-4 space-y-4">
-        <Field
-          id="invite-code"
-          label="Invite code"
-          autoComplete="off"
-          required={live}
-          hint="Provided by your VendorClr contact."
-        />
         <Field id="full-name" label="Your name" autoComplete="name" />
         <Field
           id="signup-email"
@@ -269,7 +260,7 @@ export function SignupPage() {
           type="email"
           autoComplete="email"
           required={live}
-          hint="Must match the email the invite was sent to."
+          hint="The address any activation code for your company will be issued to."
         />
         <Field
           id="signup-password"

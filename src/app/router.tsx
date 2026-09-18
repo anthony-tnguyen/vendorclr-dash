@@ -10,6 +10,8 @@ export const routes = {
   login: "/login",
   signup: "/signup",
   resetPassword: "/reset-password",
+  /** Read-only sample console for accounts that have not been activated yet. */
+  demo: "/demo",
   dashboard: "/dashboard",
   vendors: "/dashboard/vendors",
   vendorDetail: "/dashboard/vendors/$vendorId",

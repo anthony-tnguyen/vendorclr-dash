@@ -1,5 +1,8 @@
 import type {
   AccessGrant,
+  ActivatedWorkspace,
+  ActivationCode,
+  ActivationCodeDraft,
   Company,
   ComplianceItem,
   ComplianceKey,
@@ -18,11 +21,13 @@ import type {
   VendorTrade,
 } from "./contracts";
 import type {
+  ActivationCodeRow,
   AdminCompanyStatsView,
   CompanyReportRowView,
   CompanyRole,
   ComplianceRequirementRow,
   LeadRow,
+  RedeemedCompanyRow,
   SignupInviteRow,
   VendorComplianceItemRow,
   VendorPolicyRow,
@@ -178,6 +183,21 @@ function toSignupInvite(row: SignupInviteRow): SignupInvite {
   };
 }
 
+function toActivationCode(row: ActivationCodeRow): ActivationCode {
+  return {
+    id: row.id,
+    code: row.code,
+    email: row.email,
+    companyName: row.company_name,
+    plan: row.plan,
+    status: row.status,
+    renewsOn: row.renews_on,
+    note: row.note,
+    createdOn: row.created_at.slice(0, 10),
+    usedOn: row.used_at,
+  };
+}
+
 export function createSupabaseRepository(
   clientFactory: () => VendorClrClient = getSupabaseClient,
 ): DashboardRepository {
@@ -202,7 +222,7 @@ export function createSupabaseRepository(
         if (error) throw new Error(error.message);
         if (!data) {
           throw new Error(
-            "Signed-in user belongs to no company. Business accounts are created via an admin-issued signup invite (see /signup); this user has none.",
+            "Signed-in user belongs to no company. Accounts start on the demo screen and get a workspace when an activation code is redeemed (see /demo); this user has none.",
           );
         }
         return data.company_id;
@@ -553,6 +573,78 @@ export function createSupabaseRepository(
           .eq("id", inviteId)
           .select("id")
           .single(),
+      );
+    },
+
+    // ---------------------------------------------------------------------
+    // Activation codes (pending-migration 20260919000100_activation_codes.sql)
+    //
+    // Every write here is a SECURITY DEFINER RPC, never a direct insert or
+    // update: activation_codes has a SELECT policy for staff and deliberately no
+    // write policy at all, so RLS refuses a direct write from any role, and the
+    // role/email checks that matter live inside the functions. Nothing below
+    // resolves a company first, because redemption is what creates one.
+    // ---------------------------------------------------------------------
+
+    async listActivationCodes(): Promise<ActivationCode[]> {
+      const supabase = clientFactory();
+      const rows = unwrap(
+        await supabase
+          .from("activation_codes")
+          .select("*")
+          .order("created_at", { ascending: false }),
+      ) as ActivationCodeRow[];
+
+      return rows.map(toActivationCode);
+    },
+
+    async createActivationCode(draft: ActivationCodeDraft): Promise<ActivationCode> {
+      const supabase = clientFactory();
+      const row = unwrap(
+        await supabase.rpc("create_activation_code", {
+          target_email: draft.email,
+          target_company: draft.companyName,
+          target_plan: draft.plan,
+          renews_on: draft.renewsOn ?? null,
+          note: draft.note ?? null,
+        }),
+      ) as ActivationCodeRow;
+
+      return toActivationCode(row);
+    },
+
+    async revokeActivationCode(codeId: string): Promise<ActivationCode> {
+      const supabase = clientFactory();
+      const row = unwrap(
+        await supabase.rpc("revoke_activation_code", { target_code: codeId }),
+      ) as ActivationCodeRow;
+
+      return toActivationCode(row);
+    },
+
+    async redeemActivationCode(code: string): Promise<ActivatedWorkspace> {
+      const supabase = clientFactory();
+      // The failure message is the database's own, deliberately uniform ("That
+      // code was not recognised.") for unknown, other-person's, already-used and
+      // revoked codes alike, so the form cannot be used to probe which codes
+      // exist. Pass it through rather than replacing it with a generic one.
+      const row = unwrap(
+        await supabase.rpc("redeem_activation_code", { entered_code: code }),
+      ) as RedeemedCompanyRow;
+
+      return { companyId: row.id, companyName: row.name, plan: row.plan };
+    },
+
+    async setCompanyActivation(
+      companyId: string,
+      activation: "demo" | "activated" | "revoked",
+    ): Promise<void> {
+      const supabase = clientFactory();
+      unwrap(
+        await supabase.rpc("set_company_activation", {
+          target_company: companyId,
+          next_status: activation,
+        }),
       );
     },
   };

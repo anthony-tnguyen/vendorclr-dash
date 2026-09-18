@@ -36,10 +36,11 @@ describe("authenticated-demo route behavior", () => {
     expect(screen.getByText(/does not authenticate anyone/i)).toBeInTheDocument();
   });
 
-  it("asks for an invite code on signup instead of a free-text company name", async () => {
+  it("signs up with a name, email and password only - no code of any kind", async () => {
     await renderRoute("/signup");
 
-    expect(await screen.findByLabelText("Invite code")).toBeInTheDocument();
+    expect(await screen.findByLabelText("Work email")).toBeInTheDocument();
+    expect(screen.queryByLabelText(/invite code|activation code/i)).not.toBeInTheDocument();
     expect(screen.queryByLabelText("Company name")).not.toBeInTheDocument();
   });
 

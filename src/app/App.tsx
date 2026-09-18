@@ -2,7 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState } 
 import type { ReactNode } from "react";
 
 import type { DemoRole } from "@/data/contracts";
-import type { CompanyRole } from "@/data/dbTypeAliases";
+import type { CompanyActivationStatus, CompanyRole } from "@/data/dbTypeAliases";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { hasBackendEnv } from "@/lib/supabase/env";
 
@@ -19,6 +19,10 @@ import { hasBackendEnv } from "@/lib/supabase/env";
  * Note what `role` is NOT: an authorization boundary. Hiding admin routes is a
  * convenience. The actual boundary is RLS in supabase/migrations - a user who
  * forces their way to /dashboard/admin still gets nothing back from the database.
+ *
+ * `activation` is the same kind of affordance. It decides which screen the app
+ * shows; it grants nothing. An unactivated account has no company, so RLS has
+ * nothing to scope its reads to and every protected query comes back empty.
  */
 
 export type SessionMode = "demo" | "live";
@@ -40,6 +44,20 @@ export interface Session {
    * re-checked by has_company_role() in RLS, which is the real boundary.
    */
   companyRole: CompanyRole | null;
+  /**
+   * Whether the caller's company's real console is open. "none" when they belong
+   * to no company at all - the state a freshly signed-up account is in, which is
+   * what the demo screen exists for.
+   */
+  activation: CompanyActivationStatus | "none";
+  /** True for VendorClr staff (platform_admins), who are never gated. */
+  isStaff: boolean;
+  /**
+   * Re-runs the identity read. Nothing in the auth layer fires when access
+   * changes underneath the session - a redemption creates a company, and an
+   * admin's revoke closes one - so anything that does needs to call this.
+   */
+  refresh: () => void;
   userId: string | null;
   signOut: () => Promise<void>;
 }
@@ -56,6 +74,9 @@ const DEMO_FALLBACK: Session = {
   companyName: "Halstead Builders",
   companyId: null,
   companyRole: "owner",
+  activation: "demo",
+  isStaff: false,
+  refresh: () => {},
   userId: null,
   signOut: async () => {},
 };
@@ -78,6 +99,12 @@ function useDemoSessionValue(): Session {
       companyName: role === "admin" ? "VendorClr Internal" : "Halstead Builders",
       companyId: null,
       companyRole: "owner" as CompanyRole,
+      // The preview has no accounts at all, so there is nothing to activate.
+      // "demo" here means "the sample sandbox"; AppShell only ever gates
+      // sessions in live mode, so this value is descriptive, not load-bearing.
+      activation: "demo" as CompanyActivationStatus,
+      isStaff: false,
+      refresh: () => {},
       userId: null,
       signOut: async () => {},
     }),
@@ -95,13 +122,34 @@ interface LiveIdentity {
   companyName: string;
   companyId: string | null;
   companyRole: CompanyRole | null;
+  activation: CompanyActivationStatus | "none";
   isPlatformAdmin: boolean;
+}
+
+/** Narrows whatever the embedded companies row carried, failing closed. */
+function toActivation(
+  companyId: string | null,
+  rawStatus: string | null | undefined,
+): CompanyActivationStatus | "none" {
+  if (!companyId) return "none";
+  if (rawStatus === "activated" || rawStatus === "revoked" || rawStatus === "demo") {
+    return rawStatus;
+  }
+  // A membership whose company row came back without a usable activation_status
+  // means either the column is not there yet (the migration has not been
+  // applied) or the embed silently failed. Both read as "not open" rather than
+  // "open", because guessing wrong here shows a customer a console they should
+  // not have.
+  return "demo";
 }
 
 function useLiveSessionValue(): Session {
   const [status, setStatus] = useState<SessionStatus>("loading");
   const [identity, setIdentity] = useState<LiveIdentity | null>(null);
   const [role, setRoleState] = useState<DemoRole>("customer");
+  const [reloadToken, setReloadToken] = useState(0);
+
+  const refresh = useCallback(() => setReloadToken((token) => token + 1), []);
 
   useEffect(() => {
     const supabase = getSupabaseClient();
@@ -114,7 +162,7 @@ function useLiveSessionValue(): Session {
         supabase.from("profiles").select("full_name, email").eq("id", userId).maybeSingle(),
         supabase
           .from("company_members")
-          .select("company_id, role, companies ( name )")
+          .select("company_id, role, companies ( name, activation_status )")
           .order("created_at", { ascending: true })
           .limit(1)
           .maybeSingle(),
@@ -126,16 +174,18 @@ function useLiveSessionValue(): Session {
       const membership = membershipResult.data as {
         company_id?: string | null;
         role?: string | null;
-        companies?: { name?: string } | null;
+        companies?: { name?: string; activation_status?: string } | null;
       } | null;
       const company = membership?.companies;
+      const companyId = membership?.company_id ?? null;
 
       setIdentity({
         userId,
         personName: profileResult.data?.full_name ?? profileResult.data?.email ?? email,
         companyName: company?.name ?? "No company yet",
-        companyId: membership?.company_id ?? null,
+        companyId,
         companyRole: (membership?.role as CompanyRole | undefined) ?? null,
+        activation: toActivation(companyId, company?.activation_status),
         isPlatformAdmin: adminResult.data === true,
       });
       setStatus("authenticated");
@@ -168,7 +218,7 @@ function useLiveSessionValue(): Session {
       cancelled = true;
       subscription.subscription.unsubscribe();
     };
-  }, []);
+  }, [reloadToken]);
 
   const canSwitchRole = identity?.isPlatformAdmin === true;
 
@@ -197,10 +247,13 @@ function useLiveSessionValue(): Session {
       companyName: identity?.companyName ?? "",
       companyId: identity?.companyId ?? null,
       companyRole: identity?.companyRole ?? null,
+      activation: identity?.activation ?? "none",
+      isStaff: identity?.isPlatformAdmin === true,
+      refresh,
       userId: identity?.userId ?? null,
       signOut,
     }),
-    [status, role, canSwitchRole, identity, setRole, signOut],
+    [status, role, canSwitchRole, identity, setRole, signOut, refresh],
   );
 }
 
