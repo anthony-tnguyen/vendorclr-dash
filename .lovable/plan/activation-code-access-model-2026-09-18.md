@@ -16,7 +16,7 @@ staff revoke       ->  activation_status = revoked  ->  /demo  "access ended" + 
 
 - `src/features/auth/AuthPages.tsx` — the sign-up form has a **required Invite code** field; the code also has to match the sign-up email.
 - `supabase/migrations/20260915000100_gated_signup_invites.sql` — `handle_new_user()` creates a company and an owner seat **only** when a valid pending invite code is supplied. No code, no company.
-- `src/data/supabaseRepository.ts` — `resolveCompanyId()` throws *"Signed-in user belongs to no company…"*, so a codeless account currently sees an **error state** on the dashboard, not a demo.
+- `src/data/supabaseRepository.ts` — `resolveCompanyId()` throws _"Signed-in user belongs to no company…"_, so a codeless account currently sees an **error state** on the dashboard, not a demo.
 - `supabase/migrations/20260901000100_identity_and_tenancy.sql` — `companies` already has `plan` (`Field`, `Program`, `Enterprise`) and `subscription_renews_on`, so codes can carry a plan without a new enum.
 - `src/components/shell/AppShell.tsx` is the chrome every dashboard page renders through — one place to enforce access.
 - `src/domain/featureFlags.ts` exists but no screen reads it; the admin **Signup invites** page (`src/features/admin/InvitesPage.tsx`, `InviteForm.tsx`, `src/routes/dashboard.admin.invites.tsx`) manages the code table that sign-up is about to stop using.
