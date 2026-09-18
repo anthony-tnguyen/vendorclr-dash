@@ -1,31 +1,29 @@
-# VendorClr — remaining go-live work
+# Send signed-out visitors to the sign-in screen
 
-## Context
+## Why it behaves this way today
 
-The activation-code access model is built and verified locally (437 app tests, 426 DB tests, typecheck + production build clean). Two items block it from working on the live site, then the earlier go-live stages continue.
+Two separate things are happening, and neither one is a bug in the sign-in screen itself:
 
-## Stage A — Activation migration goes live (blocked on you)
+1. **There is no sign-in gate.** Opening the site lands on `/` which immediately forwards to `/dashboard`. Nothing checks whether anyone is signed in, so a signed-out visitor gets the console shell instead of the sign-in form. Nothing on the page links to sign in or sign up either.
+2. **This preview has no connection settings.** The file holding the database address and public key is missing from the workspace again, so the whole app falls back to sample-data mode: the sign-in form openly says it authenticates no one, and every screen shows demo content. That is why the dashboard looks like the demo.
 
-1. Apply `docs/operations/pending-migrations/20260919000100_activation_codes.sql` in your Supabase project's SQL editor (the workspace's management key cannot run it — only you can).
-2. Verify: a fresh signup should land on `/demo` (read-only sample roster); a staff-created code redeems into a fresh empty workspace; existing companies are unaffected (backfilled to `activated`).
-3. Once confirmed, I move the SQL into `supabase/migrations/`, remove the temporary exec from `supabase/tests/activation-codes.test.ts`, regenerate DB types so `activation_codes` aliases are no longer handwritten, and update the action-truth inventory entry from `unfinished` to live.
+The redirect to the demo screen that does exist only fires for a *signed-in* account whose workspace has not been activated yet — it never applies to a signed-out visitor.
 
-## Stage B — Staff close/reopen workspace control (small follow-up migration)
+## What to change
 
-`listCompanies()` reads the `admin_company_stats` view, which doesn't expose `activation_status`. A small migration adds that column to the view, then the Companies page gains a close/reopen action calling `set_company_activation` (already built and tested).
+- **Gate the console.** When real connection settings are present and no one is signed in, send visitors from any `/dashboard` screen to the sign-in screen, remembering where they were headed so they land back there after signing in. While the session is still being determined, keep showing the existing loading state rather than flashing either screen.
+- **Keep sample-data mode untouched.** With no connection settings, the app stays the browsable demo it is today — gating it would leave the preview with a sign-in form that cannot sign anyone in.
+- **Add a real entry point.** Route `/` to the sign-in screen for signed-out visitors and to `/dashboard` for signed-in ones, instead of unconditionally forwarding to `/dashboard`. The sign-in screen keeps its link to create an account.
+- **Return after sign-in.** Sign-in honours the remembered destination when present, otherwise `/dashboard` as today.
+- **Restore the connection settings file** so the preview stops running as sample data and this behaviour can actually be seen. The values are already known from earlier.
 
-## Stage C — Go-live stages 2–6 (from the blockers brief)
+## Technical notes
 
-2. Team access: teammate invitation UI against `companyInvitations.ts`.
-3. Contacts + multi-recipient upload requests.
-4. Submission-package portal UI.
-5. Deficiency and exception UI.
-6. Review editing, CSV import polish, reports/CSV export, legal routes; then full verification (app + DB suites, build, staging signup → demo → code → dashboard journey).
+- The gate belongs in `AppShell`, alongside the existing activation gate, so every dashboard page inherits it: when `mode === "live" && status === "anonymous"`, `navigate({ to: "/login", search: { redirect: location.href }, replace: true })`. Order matters — the signed-out check runs before the activation check.
+- `src/routes/index.tsx` currently throws an unconditional `redirect({ to: "/dashboard" })` in `beforeLoad`. Session state lives in React context, not router context, so the decision moves into a small component that reads `useSession()` and redirects once status resolves.
+- `src/routes/login.tsx` gains an optional `redirect` search param, validated as a same-origin relative path; `LoginPage` navigates there on success and also bounces an already-signed-in visitor away.
+- Tests: extend `src/tests/routes.test.tsx` / `page-behaviors.test.tsx` with a signed-out live-mode case asserting the redirect to `/login`, and a sample-data case asserting the dashboard still renders.
 
-Explicitly out of scope per the brief: Procore, Stripe, property management, OCR coordinate highlighting, multilingual, contract extraction, PDF export.
+## Out of scope
 
-## Technical details
-
-- No new backend is enabled anywhere in this plan; everything runs against your existing external Supabase project.
-- Pending SQL lives under `docs/operations/pending-migrations/` because direct writes to `supabase/migrations/` are rejected in this environment.
-- RLS/audit vocabulary for activation is already in the pending migration (`activation_code_redeemed`, `company_activated`, `company_access_revoked`, target type `activation_code`).
+No change to activation codes, the `/demo` screen, or the pending database migration.
