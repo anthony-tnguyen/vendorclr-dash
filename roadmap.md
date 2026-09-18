@@ -44,3 +44,6 @@
 - [ ] Settings audit-history check: confirm a change-history entry appears after
       saving in Dashboard → Settings
 - [ ] Confirm the customer-facing wording "activation code"
+- [x] Sign-in gate: signed-out visitors on any console page are sent to `/login`
+      with the page they asked for remembered; `/` routes to sign-in when signed
+      out and to the dashboard otherwise; sample-data mode stays ungated.

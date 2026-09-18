@@ -23,7 +23,9 @@ vi.mock("@/lib/supabase/client", () => ({
     from: () => ({
       select: () => ({
         eq: () => ({ maybeSingle: async () => ({ data: null, error: null }) }),
-        order: () => ({ limit: () => ({ maybeSingle: async () => ({ data: null, error: null }) }) }),
+        order: () => ({
+          limit: () => ({ maybeSingle: async () => ({ data: null, error: null }) }),
+        }),
       }),
     }),
     rpc: async () => ({ data: false, error: null }),
