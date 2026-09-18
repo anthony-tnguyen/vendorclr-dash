@@ -1,13 +1,15 @@
 import type { PGlite } from "@electric-sql/pglite";
 import { beforeEach, describe, expect, it } from "vitest";
 
-import { asUser, companyIdFor, createTestDb, signUp } from "./harness";
+import { asUser, createTestDb, signUp } from "./harness";
 
 /**
- * Behavior of the invite-gated signup path: signup_invites, the redemption
- * logic in handle_new_user(), and the create_signup_invite() RPC that is the
- * only way a row gets into that table. Grant-level checks (who may EXECUTE
- * which function) live in function-grants.test.ts, not here.
+ * signup_invites survives the activation-code access model change
+ * (20260918000200_activation_codes.sql) unchanged as a table and an RPC -
+ * create_signup_invite() and its RLS are exactly as before. What changed is
+ * handle_new_user(): it used to redeem an invite_code from signup metadata
+ * into a company, and now never does. That retirement is the first describe
+ * block below; create_signup_invite()/RLS below it are unchanged coverage.
  */
 
 const ADMIN = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
@@ -46,8 +48,8 @@ beforeEach(async () => {
   await signUp(db, { id: NON_ADMIN, email: "member@rival.test" });
 }, 60_000);
 
-describe("handle_new_user redeems a valid invite", () => {
-  it("creates the company from the invite's company_name, not any client input", async () => {
+describe("handle_new_user is profile-only under the activation-code access model", () => {
+  it("creates no company even when a valid invite_code is sent in signup metadata", async () => {
     const code = await insertInvite({ email: "owner@newco.test", companyName: "New Co" });
     const userId = "10000000-0000-0000-0000-000000000001";
 
@@ -56,116 +58,20 @@ describe("handle_new_user redeems a valid invite", () => {
       [userId, "owner@newco.test", JSON.stringify({ invite_code: code })],
     );
 
-    const companyId = await companyIdFor(db, userId);
-    const company = await db.query<{ name: string }>(
-      `select name from public.companies where id = $1`,
-      [companyId],
-    );
-    expect(company.rows[0]?.name).toBe("New Co");
+    const profile = await db.query(`select 1 from public.profiles where id = $1`, [userId]);
+    expect(profile.rows).toHaveLength(1);
+    const membership = await db.query(`select 1 from public.company_members where user_id = $1`, [
+      userId,
+    ]);
+    expect(membership.rows).toHaveLength(0);
 
-    const membership = await db.query<{ role: string }>(
-      `select role from public.company_members where company_id = $1 and user_id = $2`,
-      [companyId, userId],
-    );
-    expect(membership.rows[0]?.role).toBe("owner");
-
-    const invite = await db.query<{ status: string; used_by: string }>(
-      `select status, used_by from public.signup_invites where code = $1`,
+    // The gate that used to consume this row on signup is gone; nothing in
+    // handle_new_user() touches signup_invites any more, so it is untouched.
+    const invite = await db.query<{ status: string }>(
+      `select status from public.signup_invites where code = $1`,
       [code],
     );
-    expect(invite.rows[0]?.status).toBe("used");
-    expect(invite.rows[0]?.used_by).toBe(userId);
-  });
-
-  it("matches the code case-insensitively", async () => {
-    const code = await insertInvite({ email: "owner@lower.test", companyName: "Lower Co" });
-    const userId = "10000000-0000-0000-0000-000000000002";
-
-    await db.query(
-      `insert into auth.users (id, email, raw_user_meta_data) values ($1, $2, $3::jsonb)`,
-      [userId, "owner@lower.test", JSON.stringify({ invite_code: code.toLowerCase() })],
-    );
-
-    await expect(companyIdFor(db, userId)).resolves.toBeTruthy();
-  });
-});
-
-describe("handle_new_user rejects an invalid invite, aborting the whole signup", () => {
-  async function attemptSignup(userId: string, email: string, code: string): Promise<Error> {
-    try {
-      await db.query(
-        `insert into auth.users (id, email, raw_user_meta_data) values ($1, $2, $3::jsonb)`,
-        [userId, email, JSON.stringify({ invite_code: code })],
-      );
-      throw new Error("expected signup to be rejected, but it succeeded");
-    } catch (error) {
-      return error instanceof Error ? error : new Error(String(error));
-    }
-  }
-
-  async function expectNoTraceOfUser(userId: string): Promise<void> {
-    const users = await db.query(`select 1 from auth.users where id = $1`, [userId]);
-    expect(users.rows).toHaveLength(0);
-    const profiles = await db.query(`select 1 from public.profiles where id = $1`, [userId]);
-    expect(profiles.rows).toHaveLength(0);
-  }
-
-  it("rejects a code that does not exist", async () => {
-    const userId = "20000000-0000-0000-0000-000000000001";
-    const error = await attemptSignup(userId, "nobody@newco.test", "NOSUCHCODE");
-    expect(error.message).toMatch(/invalid or expired invite code/i);
-    await expectNoTraceOfUser(userId);
-  });
-
-  it("rejects an expired code", async () => {
-    const code = await insertInvite({
-      email: "late@newco.test",
-      expiresAt: "now() - interval '1 day'",
-    });
-    const userId = "20000000-0000-0000-0000-000000000002";
-    const error = await attemptSignup(userId, "late@newco.test", code);
-    expect(error.message).toMatch(/invalid or expired invite code/i);
-    await expectNoTraceOfUser(userId);
-  });
-
-  it("rejects a code redeemed with the wrong email", async () => {
-    const code = await insertInvite({ email: "intended@newco.test" });
-    const userId = "20000000-0000-0000-0000-000000000003";
-    const error = await attemptSignup(userId, "someone-else@newco.test", code);
-    expect(error.message).toMatch(/invalid or expired invite code/i);
-    await expectNoTraceOfUser(userId);
-  });
-
-  it("rejects a revoked code", async () => {
-    const code = await insertInvite({ email: "revoked@newco.test", status: "revoked" });
-    const userId = "20000000-0000-0000-0000-000000000004";
-    const error = await attemptSignup(userId, "revoked@newco.test", code);
-    expect(error.message).toMatch(/invalid or expired invite code/i);
-    await expectNoTraceOfUser(userId);
-  });
-
-  // Only the sequential case is exercised here: first redemption commits,
-  // then a second attempt sees status = 'used'. The `for update` lock in
-  // handle_new_user() also exists to fail closed under two *concurrent*
-  // redemptions racing for the same still-pending code - that guarantee
-  // rests on documented Postgres row-locking semantics, verified by manual
-  // review rather than an automated test in this file, because PGlite is a
-  // single in-memory instance and does not give us two genuinely
-  // overlapping in-flight transactions to race against each other. Same
-  // category of gap as the pg_net/pg_cron skip list and the GoTrue-stub
-  // caveat noted at the top of harness.ts.
-  it("rejects a code that has already been used", async () => {
-    const code = await insertInvite({ email: "reused@newco.test" });
-    const firstUser = "20000000-0000-0000-0000-000000000005";
-    await db.query(
-      `insert into auth.users (id, email, raw_user_meta_data) values ($1, $2, $3::jsonb)`,
-      [firstUser, "reused@newco.test", JSON.stringify({ invite_code: code })],
-    );
-
-    const secondUser = "20000000-0000-0000-0000-000000000006";
-    const error = await attemptSignup(secondUser, "reused@newco.test", code);
-    expect(error.message).toMatch(/invalid or expired invite code/i);
-    await expectNoTraceOfUser(secondUser);
+    expect(invite.rows[0]?.status).toBe("pending");
   });
 
   it("still creates a profile with no company when no code is sent at all", async () => {

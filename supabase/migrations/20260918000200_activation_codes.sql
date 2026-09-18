@@ -18,9 +18,11 @@
 -- once. This matches how every other tenant-scoped read in this schema already
 -- works (current_company_ids()).
 --
--- Apply through the normal migration process for this project (the Supabase SQL
--- editor or `supabase db push` against the staging project first). It is
--- re-runnable: every statement is either idempotent or guarded.
+-- Applied live to project fzrcowwonezflydicpbd via apply_migration and
+-- smoke-tested end to end (seeded staff + buyer auth.users, issue -> redeem ->
+-- verify company/membership/audit rows -> confirmed the "already has a
+-- workspace" and "not recognised" guards -> cleaned up), then backfilled here.
+-- It is re-runnable: every statement is either idempotent or guarded.
 
 -- ---------------------------------------------------------------------------
 -- companies: activation state

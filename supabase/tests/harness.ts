@@ -166,13 +166,23 @@ export function readMigration(name: string): string {
   return readFileSync(join(MIGRATIONS_DIR, name), "utf8");
 }
 
-/** A fresh in-memory database with every PGlite-compatible migration applied. */
-export async function createTestDb(): Promise<PGlite> {
+/**
+ * A fresh in-memory database with every PGlite-compatible migration applied.
+ *
+ * stopBeforeMigration halts iteration at (and excludes) the named file, for a
+ * test that needs to seed data in the schema state just before a specific
+ * migration - e.g. proving a backfill correctly upgrades pre-existing rows.
+ * The caller is then responsible for applying that migration itself (and the
+ * grants, since DEFAULT_GRANTS is skipped too - a superuser writing seed data
+ * doesn't need them).
+ */
+export async function createTestDb(options?: { stopBeforeMigration?: string }): Promise<PGlite> {
   const db = new PGlite();
   await db.waitReady;
   await db.exec(BOOTSTRAP);
 
   for (const file of migrationFiles()) {
+    if (file === options?.stopBeforeMigration) return db;
     if (SKIPPED_IN_PGLITE.includes(file)) continue;
     try {
       await db.exec(readMigration(file));
@@ -193,30 +203,32 @@ export interface TestUser {
   companyName?: string;
 }
 
-/** Inserts into auth.users, which fires handle_new_user exactly as signup does. */
+/**
+ * Inserts into auth.users, which fires handle_new_user exactly as signup does
+ * (profile-only under the activation-code access model - see
+ * 20260918000200_activation_codes.sql). When companyName is given, this also
+ * creates the company and an owner membership directly, standing in for
+ * redeem_activation_code() the same way a real activated workspace looks:
+ * this helper is scaffolding for the hundreds of unrelated tests that just
+ * need "a user who owns a company" to exist, not a test of redemption itself
+ * (that lives in activation-codes.test.ts).
+ */
 export async function signUp(db: PGlite, user: TestUser): Promise<void> {
-  let inviteCode: string | null = null;
+  await db.query(`insert into auth.users (id, email) values ($1, $2)`, [user.id, user.email]);
 
   if (user.companyName) {
-    // Provisions a matching, valid invite so existing callers of signUp()
-    // that pass companyName keep working under the new gate, without every
-    // test needing to know about invites. Leaves the trigger's own code
-    // generation and normalization in the loop rather than hand-rolling a
-    // code here, so this exercises the same defaults path production uses.
-    const invite = await db.query<{ code: string }>(
-      `insert into public.signup_invites (email, company_name, expires_at)
-       values ($1, $2, now() + interval '14 days')
-       returning code`,
-      [user.email, user.companyName],
+    const company = await db.query<{ id: string }>(
+      `insert into public.companies (name, activation_status, activated_at, activated_by)
+       values ($1, 'activated', now(), $2)
+       returning id`,
+      [user.companyName, user.id],
     );
-    inviteCode = invite.rows[0]!.code;
+    await db.query(
+      `insert into public.company_members (company_id, user_id, role, last_active_at)
+       values ($1, $2, 'owner', now())`,
+      [company.rows[0]!.id, user.id],
+    );
   }
-
-  const meta = inviteCode ? { invite_code: inviteCode } : {};
-  await db.query(
-    `insert into auth.users (id, email, raw_user_meta_data) values ($1, $2, $3::jsonb)`,
-    [user.id, user.email, JSON.stringify(meta)],
-  );
 }
 
 export async function companyIdFor(db: PGlite, userId: string): Promise<string> {

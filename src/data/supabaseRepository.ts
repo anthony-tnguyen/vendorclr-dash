@@ -529,7 +529,7 @@ export function createSupabaseRepository(
     },
 
     // ---------------------------------------------------------------------
-    // Activation codes (pending-migration 20260918000200_activation_codes.sql)
+    // Activation codes (supabase/migrations/20260918000200_activation_codes.sql)
     //
     // Every write here is a SECURITY DEFINER RPC, never a direct insert or
     // update: activation_codes has a SELECT policy for staff and deliberately no

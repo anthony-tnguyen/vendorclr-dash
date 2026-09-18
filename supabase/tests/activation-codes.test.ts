@@ -1,27 +1,13 @@
 import type { PGlite } from "@electric-sql/pglite";
-import { readFileSync } from "node:fs";
 import { beforeEach, describe, expect, it } from "vitest";
 
-import { asUser, createTestDb } from "./harness";
+import { asUser, createTestDb, readMigration } from "./harness";
 
 /**
  * The paid-access model: signup is open and lands on a demo workspace, and a
  * code issued by staff after payment is the only thing that turns it into a
  * customer's real one.
- *
- * The migration is still pending (it lives under docs/operations/pending-migrations
- * until it is committed to supabase/migrations), so this file applies it on top of
- * the checked-in schema. When the file moves, delete PENDING_MIGRATION and the
- * exec below - every assertion here is about the model rather than the file, so
- * they keep passing in the new location.
  */
-const PENDING_MIGRATION = readFileSync(
-  new URL(
-    "../../docs/operations/pending-migrations/20260918000200_activation_codes.sql",
-    import.meta.url,
-  ),
-  "utf8",
-);
 
 const STAFF = "a1111111-1111-1111-1111-111111111111";
 const BUYER = "b2222222-2222-2222-2222-222222222222";
@@ -75,10 +61,9 @@ async function raiseMessage(operation: () => Promise<unknown>): Promise<string> 
   throw new Error("expected the statement to be refused, but it succeeded");
 }
 
-describe("activation codes (pending 20260918000200)", () => {
+describe("activation codes (20260918000200)", () => {
   beforeEach(async () => {
     db = await createTestDb();
-    await db.exec(PENDING_MIGRATION);
   });
 
   it("leaves a new signup with a profile and no company", async () => {
@@ -291,12 +276,15 @@ describe("activation codes (pending 20260918000200)", () => {
   });
 
   it("counts companies that existed before the migration as paid", async () => {
-    // A separate database, because the backfill has to run against a schema that
-    // already has customers in it - which is exactly the state the live project
-    // is in when this migration is applied.
-    const existing = await createTestDb();
+    // A separate database stopped just before this migration, because the
+    // backfill has to run against a schema that already has customers in it -
+    // which is exactly the state the live project was in when this migration
+    // was applied.
+    const existing = await createTestDb({
+      stopBeforeMigration: "20260918000200_activation_codes.sql",
+    });
     await existing.query(`insert into public.companies (name, plan) values ('Legacy Co', 'Field')`);
-    await existing.exec(PENDING_MIGRATION);
+    await existing.exec(readMigration("20260918000200_activation_codes.sql"));
 
     const rows = await existing.query<{ activation_status: string }>(
       `select activation_status from public.companies`,

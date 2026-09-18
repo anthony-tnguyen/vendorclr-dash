@@ -225,8 +225,8 @@ export type DocumentExtractionRow = Omit<Row<"document_extractions">, "source"> 
 };
 
 /**
- * companies.activation_status - the access model (pending-migration
- * 20260918000200_activation_codes.sql). 'demo' is the column default, but a
+ * companies.activation_status - the access model
+ * (supabase/migrations/20260918000200_activation_codes.sql). 'demo' is the column default, but a
  * company only ever arrives through redeem_activation_code(), which sets
  * 'activated' in the same statement, so 'demo' should never be observed in
  * production - it is the fail-closed default for any future creation path that
