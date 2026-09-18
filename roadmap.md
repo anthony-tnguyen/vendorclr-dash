@@ -2,9 +2,24 @@
 
 ## Activation-code access model (approved plan: `.lovable/plan/activation-code-access-model-2026-09-18.md`)
 
-- [ ] PR 1 — Database migration file `20260918000200_activation_codes.sql` (activation columns, backfill, `activation_codes` table, definer functions, audit widening) + open sign-up + `/demo` screen + access enforcement in `AppShell`
-- [ ] PR 2 — Staff activation console (`/dashboard/admin/activation-codes`), companies-page revoke/restore, retire signup-invite surface
-- [ ] PR 3 — Database + app tests for activation, copy audit of touched screens, full suites + build + staging journey
+- [x] PR 1 — Migration authored and verified against a real Postgres:
+      `docs/operations/pending-migrations/20260918000200_activation_codes.sql`
+      (activation columns + backfill, `activation_codes`, security-definer functions,
+      audit widening). Open sign-up, the `/demo` screen and the access gate in
+      `AppShell` are in place.
+- [x] PR 2 — Staff activation console at `/dashboard/admin/activation`. The
+      signup-invite surface is retired end to end: pages, route, sidebar entry,
+      repository operations and types.
+- [ ] PR 2b — Staff control to close / reopen a workspace from the Companies page.
+      **Blocker:** `listCompanies()` reads the `admin_company_stats` view, which does
+      not carry `activation_status`. Showing a truthful button needs a second pending
+      migration (alter the view) first.
+- [x] PR 3 — `supabase/tests/activation-codes.test.ts` (11 checks) plus app coverage
+      for the demo screen and the console, and a copy audit of the touched screens
+      (`docs/product/action-truth-inventory.md` re-audited for sign-up, the demo
+      console and activation codes).
+- [ ] Final verification — full suites and production build on the merged branch, and
+      the staging journey sign-up → demo → code → dashboard.
 
 ## Carried from the earlier approved plan
 
@@ -16,6 +31,9 @@
 
 ## Waiting on the user
 
-- [ ] Settings audit-history check: confirm a change-history entry appears after saving in Dashboard → Settings
-- [ ] Apply `supabase/migrations/20260918000200_activation_codes.sql` and report the verification output
+- [ ] Apply `docs/operations/pending-migrations/20260918000200_activation_codes.sql`
+      to the hosted project and report the verification output - the steps are in
+      `docs/operations/pending-migrations/README.md`
+- [ ] Settings audit-history check: confirm a change-history entry appears after
+      saving in Dashboard → Settings
 - [ ] Confirm the customer-facing wording "activation code"
