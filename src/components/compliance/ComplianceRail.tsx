@@ -93,7 +93,7 @@ export function ComplianceRail({
             data-status={item.status}
             data-requirement={item.key}
             className={cn(
-              "relative flex min-w-0 items-center justify-center border-r border-border px-1 text-center text-[8px] font-semibold uppercase tracking-[0.08em] last:border-r-0",
+              "relative flex min-h-10 min-w-0 items-center justify-center border-r border-border px-1 text-center text-[8px] font-semibold uppercase tracking-[0.08em] last:border-r-0",
               statusCellStyles[item.status],
             )}
           >
