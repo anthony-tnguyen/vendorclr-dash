@@ -1,11 +1,6 @@
 import { ComplianceBadge } from "./ComplianceBadge";
 import { StatusIcon, statusCellStyles, statusIconStyles } from "./statusVisuals";
-import {
-  COMPLIANCE_LABELS,
-  COMPLIANCE_SHORT,
-  STATUS_LABELS,
-  type ComplianceItem,
-} from "@/data/contracts";
+import { COMPLIANCE_LABELS, COMPLIANCE_SHORT, STATUS_LABELS, type ComplianceItem } from "@/data/contracts";
 import { cn } from "@/lib/utils";
 
 export const RAIL_ORDER: ComplianceItem["key"][] = [
@@ -29,12 +24,7 @@ export interface ComplianceRailProps {
  * be scanned in one pass — COI, Additional Insured, Waiver of Subrogation,
  * lien waiver, renewal.
  */
-export function ComplianceRail({
-  items,
-  vendorName,
-  variant = "row",
-  className,
-}: ComplianceRailProps) {
+export function ComplianceRail({ items, vendorName, variant = "row", className }: ComplianceRailProps) {
   const ordered = RAIL_ORDER.map(
     (key) =>
       items.find((i) => i.key === key) ?? {
@@ -60,12 +50,8 @@ export function ComplianceRail({
             <div className="mt-2">
               <ComplianceBadge item={item} />
             </div>
-            <p className="numeric mt-2 text-xs text-muted-foreground">
-              {item.effectiveDate ?? "No date on file"}
-            </p>
-            <p className="mt-1 text-xs text-muted-foreground">
-              {item.note ?? STATUS_LABELS[item.status]}
-            </p>
+            <p className="numeric mt-2 text-xs text-muted-foreground">{item.effectiveDate ?? "No date on file"}</p>
+            <p className="mt-1 text-xs text-muted-foreground">{item.note ?? STATUS_LABELS[item.status]}</p>
           </li>
         ))}
       </ul>
@@ -75,10 +61,7 @@ export function ComplianceRail({
   return (
     <div
       aria-label={`Compliance rail for ${vendorName}`}
-      className={cn(
-        "grid w-full min-w-0 grid-cols-5 overflow-hidden border border-border bg-card",
-        className,
-      )}
+      className={cn("grid w-full min-w-0 grid-cols-5 overflow-hidden border border-border bg-card", className)}
     >
       {ordered.map((item) => {
         const aria = `${COMPLIANCE_LABELS[item.key]}: ${STATUS_LABELS[item.status]}${
@@ -93,14 +76,11 @@ export function ComplianceRail({
             data-status={item.status}
             data-requirement={item.key}
             className={cn(
-              "flex min-w-0 flex-col items-center gap-1 border-r border-border px-1 py-1.5 text-center text-[8px] font-semibold uppercase tracking-[0.08em] last:border-r-0",
+              "flex min-w-0 flex-col items-center gap-1 border-r border-border px-.5 py-1.5 text-center text-[8px] font-semibold uppercase tracking-[0.08em] last:border-r-0",
               statusCellStyles[item.status],
             )}
           >
-            <StatusIcon
-              status={item.status}
-              className={cn(statusIconStyles[item.status], "size-2.5")}
-            />
+            <StatusIcon status={item.status} className={cn(statusIconStyles[item.status], "size-2.5")} />
             <span className="break-words">{COMPLIANCE_SHORT[item.key]}</span>
           </span>
         );
