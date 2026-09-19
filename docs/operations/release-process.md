@@ -50,7 +50,7 @@ and is a blocking status check.
 deploy target is nitro's `cloudflare-module` preset, which builds a
 Cloudflare Workers module handler (`export default { fetch(request, env,
 context) {...} }`) - that file cannot run under plain Node (`node
-.output/server/index.mjs` fails; there is no HTTP server to start). Testing
+dist/server/index.mjs` fails; there is no HTTP server to start). Testing
 under `vite dev`/`vite preview` would only prove the dev server works, not
 the thing that actually gets deployed. `npx vite preview` (what nitro's own
 build output suggests) does not work here either - it looks for
