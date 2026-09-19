@@ -128,7 +128,7 @@ it is only ever imported from inside `createServerFn().handler()` bodies in
 `src/workflows/vendorUploadRequests.ts`, which itself lives in `src/workflows/`
 (not `src/server/`) specifically so its exported RPC stubs _can_ be imported by
 `VendorUploadPortal.tsx` and `RequestDocumentsAction.tsx`. Verified at
-`bun run build` time by grepping `.output/public` for the service-role path —
+`bun run build` time by grepping `dist/client` for the service-role path —
 see the PR for that check.
 
 ### Token security
