@@ -18,7 +18,7 @@ schema or code.
 | ----------- | ----------------------------------------------------------------------------------------------------------------------------------------- | ------------------ |
 | `quality`   | install, `tsc --noEmit`, `eslint .`, `prettier --check .`, `vitest run`                                                                   | **Yes**            |
 | `db-verify` | `vitest run --config vitest.db.config.ts` against a real Postgres (PGlite/WASM) - the only check that catches an RLS regression           | **Yes**            |
-| `build`     | `vite build` (nitro `cloudflare-module` preset) → uploads `dist` as an artifact                                                        | **Yes**            |
+| `build`     | `vite build` (nitro `cloudflare-module` preset) → uploads `dist` as an artifact                                                           | **Yes**            |
 | `e2e-smoke` | Downloads the `build` artifact, boots it under `wrangler dev`, runs the full `e2e/**` Playwright suite against the real production bundle | **Yes**            |
 
 Local equivalents:
