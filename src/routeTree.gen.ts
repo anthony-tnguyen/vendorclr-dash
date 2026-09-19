@@ -19,6 +19,7 @@ import { Route as DashboardHelpRouteImport } from './routes/dashboard.help'
 import { Route as DashboardReportsRouteImport } from './routes/dashboard.reports'
 import { Route as DashboardSettingsRouteImport } from './routes/dashboard.settings'
 import { Route as DashboardTasksRouteImport } from './routes/dashboard.tasks'
+import { Route as DashboardTeamRouteImport } from './routes/dashboard.team'
 import { Route as VendorUploadTokenRouteImport } from './routes/vendor-upload.$token'
 import { Route as ApiHealthLiveRouteImport } from './routes/api.health.live'
 import { Route as ApiHealthReadyRouteImport } from './routes/api.health.ready'
@@ -81,6 +82,11 @@ const DashboardSettingsRoute = DashboardSettingsRouteImport.update({
 const DashboardTasksRoute = DashboardTasksRouteImport.update({
   id: '/dashboard/tasks',
   path: '/dashboard/tasks',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DashboardTeamRoute = DashboardTeamRouteImport.update({
+  id: '/dashboard/team',
+  path: '/dashboard/team',
   getParentRoute: () => rootRouteImport,
 } as any)
 const VendorUploadTokenRoute = VendorUploadTokenRouteImport.update({
@@ -164,6 +170,7 @@ export interface FileRoutesByFullPath {
   '/dashboard/reports': typeof DashboardReportsRoute
   '/dashboard/settings': typeof DashboardSettingsRoute
   '/dashboard/tasks': typeof DashboardTasksRoute
+  '/dashboard/team': typeof DashboardTeamRoute
   '/vendor-upload/$token': typeof VendorUploadTokenRoute
   '/dashboard/': typeof DashboardIndexRoute
   '/api/health/live': typeof ApiHealthLiveRoute
@@ -189,6 +196,7 @@ export interface FileRoutesByTo {
   '/dashboard/reports': typeof DashboardReportsRoute
   '/dashboard/settings': typeof DashboardSettingsRoute
   '/dashboard/tasks': typeof DashboardTasksRoute
+  '/dashboard/team': typeof DashboardTeamRoute
   '/vendor-upload/$token': typeof VendorUploadTokenRoute
   '/dashboard': typeof DashboardIndexRoute
   '/api/health/live': typeof ApiHealthLiveRoute
@@ -215,6 +223,7 @@ export interface FileRoutesById {
   '/dashboard/reports': typeof DashboardReportsRoute
   '/dashboard/settings': typeof DashboardSettingsRoute
   '/dashboard/tasks': typeof DashboardTasksRoute
+  '/dashboard/team': typeof DashboardTeamRoute
   '/vendor-upload/$token': typeof VendorUploadTokenRoute
   '/dashboard/': typeof DashboardIndexRoute
   '/api/health/live': typeof ApiHealthLiveRoute
@@ -242,6 +251,7 @@ export interface FileRouteTypes {
     | '/dashboard/reports'
     | '/dashboard/settings'
     | '/dashboard/tasks'
+    | '/dashboard/team'
     | '/vendor-upload/$token'
     | '/dashboard/'
     | '/api/health/live'
@@ -267,6 +277,7 @@ export interface FileRouteTypes {
     | '/dashboard/reports'
     | '/dashboard/settings'
     | '/dashboard/tasks'
+    | '/dashboard/team'
     | '/vendor-upload/$token'
     | '/dashboard'
     | '/api/health/live'
@@ -292,6 +303,7 @@ export interface FileRouteTypes {
     | '/dashboard/reports'
     | '/dashboard/settings'
     | '/dashboard/tasks'
+    | '/dashboard/team'
     | '/vendor-upload/$token'
     | '/dashboard/'
     | '/api/health/live'
@@ -318,6 +330,7 @@ export interface RootRouteChildren {
   DashboardReportsRoute: typeof DashboardReportsRoute
   DashboardSettingsRoute: typeof DashboardSettingsRoute
   DashboardTasksRoute: typeof DashboardTasksRoute
+  DashboardTeamRoute: typeof DashboardTeamRoute
   VendorUploadTokenRoute: typeof VendorUploadTokenRoute
   DashboardIndexRoute: typeof DashboardIndexRoute
   ApiHealthLiveRoute: typeof ApiHealthLiveRoute
@@ -403,6 +416,13 @@ declare module '@tanstack/react-router' {
       path: '/dashboard/tasks'
       fullPath: '/dashboard/tasks'
       preLoaderRoute: typeof DashboardTasksRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/dashboard/team': {
+      id: '/dashboard/team'
+      path: '/dashboard/team'
+      fullPath: '/dashboard/team'
+      preLoaderRoute: typeof DashboardTeamRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/vendor-upload/$token': {
@@ -524,6 +544,7 @@ const rootRouteChildren: RootRouteChildren = {
   DashboardReportsRoute: DashboardReportsRoute,
   DashboardSettingsRoute: DashboardSettingsRoute,
   DashboardTasksRoute: DashboardTasksRoute,
+  DashboardTeamRoute: DashboardTeamRoute,
   VendorUploadTokenRoute: VendorUploadTokenRoute,
   DashboardIndexRoute: DashboardIndexRoute,
   ApiHealthLiveRoute: ApiHealthLiveRoute,
