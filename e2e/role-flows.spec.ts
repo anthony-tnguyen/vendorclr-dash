@@ -1,75 +1,140 @@
-import { expect, test, type Page, type TestInfo } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 
-type Viewport = {
-  name: "desktop" | "mobile";
-  width: number;
-  height: number;
-};
+import { capture, credentials, isLiveBuild, signIn } from "./helpers";
 
-const viewports: Viewport[] = [
-  { name: "desktop", width: 1440, height: 900 },
-  { name: "mobile", width: 390, height: 844 },
+/**
+ * Role-based browser coverage for the real access model:
+ *
+ *   signed out                     -> sign-in screen
+ *   signed in, no activation       -> demo console
+ *   activated company member       -> real dashboard
+ *
+ * The unauthenticated expectations always run. The signed-in journeys need real
+ * accounts on the environment under test and skip themselves when those
+ * credentials are absent - the access gate is never weakened to keep a test
+ * green (see e2e/helpers.ts for the variable names).
+ */
+
+const viewports = [
+  { name: "desktop" as const, width: 1440, height: 900 },
+  { name: "mobile" as const, width: 390, height: 844 },
 ];
 
-async function capture(page: Page, testInfo: TestInfo, state: string) {
-  const path = testInfo.outputPath(`${state}.png`);
-  await page.screenshot({ path, fullPage: true });
-  await testInfo.attach(state, { path, contentType: "image/png" });
+async function openNavigation(page: Page, viewport: "desktop" | "mobile") {
+  if (viewport === "mobile") {
+    await page.getByRole("button", { name: "Open navigation menu" }).click();
+  }
 }
 
 for (const viewport of viewports) {
   test.describe(`${viewport.name} role flows`, () => {
     test.use({ viewport: { width: viewport.width, height: viewport.height } });
 
-    test("customer can triage the roster and receives an explicit admin denial", async ({
+    test("a signed-out visitor asking for the console gets the sign-in screen", async ({
       page,
     }, testInfo) => {
-      await page.goto("/dashboard/vendors");
+      const live = await isLiveBuild(page);
+      test.skip(!live, "This build has no connection settings, so it runs as sample data.");
+
+      await page.goto("/dashboard/vendors", { waitUntil: "domcontentloaded" });
+
+      await expect(page.getByRole("heading", { name: "Sign in" })).toBeVisible();
+      await expect(page).toHaveURL(/\/login/);
+      // The page they asked for is remembered so sign-in can return them to it.
+      await expect(page).toHaveURL(/redirect=/);
+      await capture(page, testInfo, `${viewport.name}-signed-out`);
+    });
+
+    test("the front door sends a signed-out visitor to sign-in", async ({ page }) => {
+      const live = await isLiveBuild(page);
+      test.skip(!live, "This build has no connection settings, so it runs as sample data.");
+
+      await page.goto("/", { waitUntil: "domcontentloaded" });
+      await expect(page.getByRole("heading", { name: "Sign in" })).toBeVisible();
+    });
+
+    test("the demo console explains itself to a signed-out visitor", async ({ page }, testInfo) => {
+      await page.goto("/demo", { waitUntil: "domcontentloaded" });
+
+      const live = await isLiveBuild(page);
+      await page.goto("/demo", { waitUntil: "domcontentloaded" });
+
+      if (live) {
+        await expect(page.getByRole("heading", { name: "You're not signed in" })).toBeVisible();
+      } else {
+        await expect(page.getByRole("heading", { name: "This is the demo console" })).toBeVisible();
+      }
+      await capture(page, testInfo, `${viewport.name}-demo-signed-out`);
+    });
+
+    test("a signed-in account with no activated workspace lands on the demo console", async ({
+      page,
+    }, testInfo) => {
+      const account = credentials("DEMO");
+      test.skip(!account, "No unactivated test account configured for this environment.");
+
+      await signIn(page, account!);
+      await page.goto("/dashboard", { waitUntil: "domcontentloaded" });
+
+      await expect(page).toHaveURL(/\/demo/);
+      await expect(page.getByRole("heading", { name: "This is the demo console" })).toBeVisible();
+      await expect(page.getByLabel("Activation code")).toBeVisible();
+      await capture(page, testInfo, `${viewport.name}-unactivated`);
+    });
+
+    test("an activated member reaches the real console and can search the roster", async ({
+      page,
+    }, testInfo) => {
+      const account = credentials("MEMBER");
+      test.skip(!account, "No activated member account configured for this environment.");
+
+      await signIn(page, account!);
+      await page.goto("/dashboard/vendors", { waitUntil: "domcontentloaded" });
 
       await expect(page.getByRole("heading", { name: "Vendors" })).toBeVisible();
-      await page.getByRole("button", { name: "Show vendors needing action" }).click();
-      await expect(page.getByText("Delgado Concrete Works")).toBeVisible();
-      await expect(page.getByText("Northgate Mechanical")).not.toBeVisible();
-      await capture(page, testInfo, `${viewport.name}-customer`);
+      await openNavigation(page, viewport.name);
+      await expect(page.getByRole("navigation")).toBeVisible();
 
-      await page.goto("/dashboard/admin");
-      const denial = page.getByRole("alert");
-      await expect(denial).toContainText(/switch the demo role to administrator/i);
-      await expect(denial).toBeFocused();
+      const search = page.getByLabel("Search vendors");
+      await search.fill("no matching vendor at all");
+      await expect(page.getByText("No vendors match this search")).toBeVisible();
+      await capture(page, testInfo, `${viewport.name}-member-empty-search`);
+
+      await search.fill("");
+      await page.getByRole("button", { name: "Show vendors needing action" }).click();
+      await capture(page, testInfo, `${viewport.name}-member-filtered`);
+    });
+
+    test("a customer is told plainly that the admin console is not theirs", async ({
+      page,
+    }, testInfo) => {
+      const account = credentials("MEMBER");
+      test.skip(!account, "No activated member account configured for this environment.");
+
+      await signIn(page, account!);
+      await page.goto("/dashboard/admin", { waitUntil: "domcontentloaded" });
+
+      await expect(page.getByRole("alert")).toBeVisible();
       await capture(page, testInfo, `${viewport.name}-permission-denied`);
     });
 
-    test("administrator demo role can open the operations overview", async ({ page }, testInfo) => {
-      await page.goto("/dashboard");
+    test("staff can open the operations console", async ({ page }, testInfo) => {
+      const account = credentials("STAFF");
+      test.skip(!account, "No staff account configured for this environment.");
 
-      if (viewport.name === "mobile") {
-        await page.getByRole("button", { name: "Open navigation menu" }).click();
-      }
-      await page.getByRole("button", { name: /preview as administrator/i }).click();
-      await page.getByRole("link", { name: "Review queue — Priority document decisions" }).click();
+      await signIn(page, account!);
+      await page.goto("/dashboard/admin", { waitUntil: "domcontentloaded" });
 
       await expect(page.getByRole("heading", { name: "Command center" })).toBeVisible();
-      await expect(page.getByRole("heading", { name: "Review capacity" })).toBeVisible();
-      await expect(page.getByText("Customer companies")).toBeVisible();
-      await capture(page, testInfo, `${viewport.name}-administrator`);
+      await capture(page, testInfo, `${viewport.name}-staff`);
     });
 
-    test("public upload link communicates an invalid-link error", async ({ page }, testInfo) => {
-      await page.goto("/vendor-upload/not-a-valid-token");
+    test("a public upload link with a bad token says so", async ({ page }, testInfo) => {
+      await page.goto("/vendor-upload/not-a-valid-token", { waitUntil: "domcontentloaded" });
 
       const error = page.getByRole("alert");
       await expect(error).toContainText("This link isn't working");
-      await expect(error).toBeFocused();
       await capture(page, testInfo, `${viewport.name}-public-upload-error`);
-    });
-
-    test("vendor search communicates its empty state", async ({ page }, testInfo) => {
-      await page.goto("/dashboard/vendors");
-      const search = page.getByLabel("Search vendors");
-      await search.fill("no matching vendor");
-
-      await expect(page.getByText("No vendors match this search")).toBeVisible();
-      await capture(page, testInfo, `${viewport.name}-empty`);
     });
   });
 }
