@@ -1,6 +1,11 @@
 import { ComplianceBadge } from "./ComplianceBadge";
 import { StatusIcon, statusCellStyles, statusIconStyles } from "./statusVisuals";
-import { COMPLIANCE_LABELS, COMPLIANCE_SHORT, STATUS_LABELS, type ComplianceItem } from "@/data/contracts";
+import {
+  COMPLIANCE_LABELS,
+  COMPLIANCE_SHORT,
+  STATUS_LABELS,
+  type ComplianceItem,
+} from "@/data/contracts";
 import { cn } from "@/lib/utils";
 
 export const RAIL_ORDER: ComplianceItem["key"][] = [
@@ -24,7 +29,12 @@ export interface ComplianceRailProps {
  * be scanned in one pass — COI, Additional Insured, Waiver of Subrogation,
  * lien waiver, renewal.
  */
-export function ComplianceRail({ items, vendorName, variant = "row", className }: ComplianceRailProps) {
+export function ComplianceRail({
+  items,
+  vendorName,
+  variant = "row",
+  className,
+}: ComplianceRailProps) {
   const ordered = RAIL_ORDER.map(
     (key) =>
       items.find((i) => i.key === key) ?? {
@@ -50,8 +60,12 @@ export function ComplianceRail({ items, vendorName, variant = "row", className }
             <div className="mt-2">
               <ComplianceBadge item={item} />
             </div>
-            <p className="numeric mt-2 text-xs text-muted-foreground">{item.effectiveDate ?? "No date on file"}</p>
-            <p className="mt-1 text-xs text-muted-foreground">{item.note ?? STATUS_LABELS[item.status]}</p>
+            <p className="numeric mt-2 text-xs text-muted-foreground">
+              {item.effectiveDate ?? "No date on file"}
+            </p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              {item.note ?? STATUS_LABELS[item.status]}
+            </p>
           </li>
         ))}
       </ul>
@@ -83,7 +97,10 @@ export function ComplianceRail({ items, vendorName, variant = "row", className }
               statusCellStyles[item.status],
             )}
           >
-            <StatusIcon status={item.status} className={cn(statusIconStyles[item.status], "size-2.5")} />
+            <StatusIcon
+              status={item.status}
+              className={cn(statusIconStyles[item.status], "size-2.5")}
+            />
             <span className="break-words">{COMPLIANCE_SHORT[item.key]}</span>
           </span>
         );
