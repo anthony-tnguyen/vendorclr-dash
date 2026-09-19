@@ -5,7 +5,7 @@ import { defineConfig, devices } from "@playwright/test";
  *
  * This intentionally targets the *production bundle*, not the Vite dev
  * server: `webServer.command` boots the built Cloudflare Worker output
- * (`.output/server`, produced by `bun run build`) under `wrangler dev`,
+ * (`dist/server`, produced by `bun run build`) under `wrangler dev`,
  * the same runtime nitro's `cloudflare-module` preset deploys to
  * production. A dev-server smoke test would not catch a build- or
  * runtime-only regression (e.g. a Workers-incompatible API slipping into
@@ -35,13 +35,19 @@ const config: Parameters<typeof defineConfig>[0] = {
   use: {
     baseURL: externalBaseURL ?? "http://localhost:8788",
     trace: "on-first-retry",
+    // Environments whose system libraries do not satisfy Playwright's bundled
+    // Chromium can point at a working one, e.g. PLAYWRIGHT_CHROMIUM_EXECUTABLE
+    // from a nix-built chromium. CI uses the bundled browser.
+    ...(process.env["PLAYWRIGHT_CHROMIUM_EXECUTABLE"]
+      ? { executablePath: process.env["PLAYWRIGHT_CHROMIUM_EXECUTABLE"] }
+      : {}),
   },
   projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
 };
 
 if (!externalBaseURL) {
   config.webServer = {
-    command: "bunx wrangler dev --config .output/server/wrangler.json --port 8788",
+    command: "bunx wrangler dev --config dist/server/wrangler.json --port 8788",
     url: "http://localhost:8788",
     reuseExistingServer: !isCI,
     timeout: 60_000,

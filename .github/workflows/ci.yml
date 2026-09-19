@@ -94,11 +94,8 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: production-bundle
-          path: .output
+          path: dist
           retention-days: 1
-          # .output is a dotdir - upload-artifact@v4's glob skips hidden
-          # paths by default and silently uploads nothing without this.
-          include-hidden-files: true
 
   # Required status check. Runs the full role-based browser suite from e2e/**
   # against the built production bundle. Task 0B added coverage for customer,
@@ -129,7 +126,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: production-bundle
-          path: .output
+          path: dist
 
       - name: Cache Playwright browsers
         id: playwright-cache

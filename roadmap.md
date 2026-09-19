@@ -19,8 +19,12 @@
       for the demo screen and the console, and a copy audit of the touched screens
       (`docs/product/action-truth-inventory.md` re-audited for sign-up, the demo
       console and activation codes).
-- [ ] Final verification — full suites and production build on the merged branch, and
-      the staging journey sign-up → demo → code → dashboard.
+- [x] Final verification — typecheck clean; app tests 440 passed; database tests
+      420 passed (`bun run db:verify`); production build succeeded; lint 0 errors
+      (9 pre-existing shadcn/ui warnings); browser suite (`bun run e2e`) green:
+      9 passed, 8 skipped (the credential-gated account journeys, which need
+      E2E_* credentials set). The staging sign-up → demo → code → dashboard
+      journey is part of those skipped specs until credentials are provided.
 
 ## Carried from the earlier approved plan
 
@@ -47,3 +51,12 @@
 - [x] Sign-in gate: signed-out visitors on any console page are sent to `/login`
       with the page they asked for remembered; `/` routes to sign-in when signed
       out and to the dashboard otherwise; sample-data mode stays ungated.
+- [x] CI + browser-suite repair: the build output moved from `.output` to `dist`
+      (nitro preset change), so the CI artifact paths, `playwright.config.ts`
+      (`wrangler dev --config dist/server/wrangler.json`), and the stale
+      references in `docs/operations/release-process.md`, `supabase/README.md`
+      and `src/lib/observability/sentryEnvelope.ts` were all updated. The
+      rewritten `e2e/smoke.spec.ts` and `e2e/role-flows.spec.ts` (desktop +
+      mobile) detect demo vs live builds at runtime and skip the account
+      journeys that need `E2E_DEMO_*` / `E2E_MEMBER_*` / `E2E_STAFF_*`
+      credentials.

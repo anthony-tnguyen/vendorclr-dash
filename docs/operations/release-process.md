@@ -18,7 +18,7 @@ schema or code.
 | ----------- | ----------------------------------------------------------------------------------------------------------------------------------------- | ------------------ |
 | `quality`   | install, `tsc --noEmit`, `eslint .`, `prettier --check .`, `vitest run`                                                                   | **Yes**            |
 | `db-verify` | `vitest run --config vitest.db.config.ts` against a real Postgres (PGlite/WASM) - the only check that catches an RLS regression           | **Yes**            |
-| `build`     | `vite build` (nitro `cloudflare-module` preset) → uploads `.output` as an artifact                                                        | **Yes**            |
+| `build`     | `vite build` (nitro `cloudflare-module` preset) → uploads `dist` as an artifact                                                           | **Yes**            |
 | `e2e-smoke` | Downloads the `build` artifact, boots it under `wrangler dev`, runs the full `e2e/**` Playwright suite against the real production bundle | **Yes**            |
 
 Local equivalents:
@@ -45,12 +45,12 @@ and is a blocking status check.
 ### `wrangler dev`, not the Vite dev server
 
 `e2e-smoke` and `staging-smoke.yml` both point Playwright at
-`bunx wrangler dev --config .output/server/wrangler.json` (see
+`bunx wrangler dev --config dist/server/wrangler.json` (see
 `playwright.config.ts`), not `vite dev` or `vite preview`. The production
 deploy target is nitro's `cloudflare-module` preset, which builds a
 Cloudflare Workers module handler (`export default { fetch(request, env,
 context) {...} }`) - that file cannot run under plain Node (`node
-.output/server/index.mjs` fails; there is no HTTP server to start). Testing
+dist/server/index.mjs` fails; there is no HTTP server to start). Testing
 under `vite dev`/`vite preview` would only prove the dev server works, not
 the thing that actually gets deployed. `npx vite preview` (what nitro's own
 build output suggests) does not work here either - it looks for
