@@ -97,7 +97,10 @@ export function ComplianceRail({
               statusCellStyles[item.status],
             )}
           >
-            <StatusIcon status={item.status} className={cn(statusIconStyles[item.status], "size-2.5")} />
+            <StatusIcon
+              status={item.status}
+              className={cn(statusIconStyles[item.status], "size-2.5")}
+            />
             <span className="break-words">{COMPLIANCE_SHORT[item.key]}</span>
           </span>
         );
