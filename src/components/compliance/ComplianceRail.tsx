@@ -76,7 +76,7 @@ export function ComplianceRail({
     <div
       aria-label={`Compliance rail for ${vendorName}`}
       className={cn(
-        "grid w-max min-w-0 grid-cols-[repeat(5,3.575rem)] overflow-hidden border border-border bg-card",
+        "grid w-max min-w-0 grid-cols-[repeat(5,4.0625rem)] overflow-hidden border border-border bg-card",
         className,
       )}
     >
