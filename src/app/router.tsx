@@ -18,6 +18,7 @@ export const routes = {
   tasks: "/dashboard/tasks",
   reports: "/dashboard/reports",
   settings: "/dashboard/settings",
+  team: "/dashboard/team",
   adminOverview: "/dashboard/admin",
   adminCompanies: "/dashboard/admin/companies",
   adminCompliance: "/dashboard/admin/compliance",
@@ -40,6 +41,7 @@ export const customerNav = [
   { label: "Tasks", to: routes.tasks, description: "Open compliance follow-ups" },
   { label: "Reports", to: routes.reports, description: "Project level compliance reporting" },
   { label: "Settings", to: routes.settings, description: "Requirement defaults and contacts" },
+  { label: "Team", to: routes.team, description: "Teammate roles and access" },
   { label: "Help", to: routes.help, description: "FAQ and how VendorClr works" },
 ] as const satisfies readonly NavItem[];
 
