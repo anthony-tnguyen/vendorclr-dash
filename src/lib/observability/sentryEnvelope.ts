@@ -4,7 +4,7 @@
  * This app builds and deploys as a Cloudflare Worker (Nitro's
  * `cloudflare-module` preset - confirmed via `bun run build`, whose output
  * logs `[nitro] Building [Nitro] (preset: cloudflare-module...)` and emits
- * `dist/server/wrangler.json`). Plain `@sentry/node` is not guaranteed to
+ * `.output/server/wrangler.json`). Plain `@sentry/node` is not guaranteed to
  * work there - it assumes Node APIs the Workers runtime does not fully
  * provide. `@sentry/cloudflare`/`@sentry/react` were the two SDKs suggested
  * for this, but this project already has an established alternative for
