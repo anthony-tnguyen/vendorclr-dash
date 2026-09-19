@@ -79,7 +79,7 @@ export function ComplianceRail({ items, vendorName, variant = "row", className }
             data-status={item.status}
             data-requirement={item.key}
             className={cn(
-              "flex min-w-0 flex-col items-center gap-1 border-r border-border px-.5 py-1.5 text-center text-[8px] font-semibold uppercase tracking-[0.08em] last:border-r-0",
+              "flex min-w-0 flex-col items-center gap-0.5 border-r border-border px-.5 py-1 text-center text-[8px] font-semibold uppercase tracking-[0.08em] last:border-r-0",
               statusCellStyles[item.status],
             )}
           >
