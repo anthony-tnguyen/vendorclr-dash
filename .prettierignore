@@ -6,3 +6,9 @@ pnpm-lock.yaml
 package-lock.json
 bun.lock
 routeTree.gen.ts
+
+# Injected workspace skill documents - not this repository's source.
+.workspace
+
+# Archived plan documents are written by the planning tool, not by hand.
+.lovable/plan
