@@ -1,5 +1,5 @@
-import { AlertTriangle, Check, Clock3, Minus } from "lucide-react";
 import { RAIL_ORDER } from "./ComplianceRail";
+import { StatusIcon, statusCellStyles, statusIconStyles } from "./statusVisuals";
 import { COMPLIANCE_LABELS, STATUS_LABELS, type ComplianceItem } from "@/data/contracts";
 import { cn } from "@/lib/utils";
 
@@ -9,21 +9,7 @@ export interface ComplianceMatrixProps {
   className?: string;
 }
 
-const statusStyles: Record<ComplianceItem["status"], string> = {
-  compliant: "bg-ok-soft",
-  expiring: "bg-warn-soft",
-  pending: "bg-info-soft",
-  missing: "bg-danger-soft",
-  expired: "bg-danger-soft",
-};
-
-const statusIconStyles: Record<ComplianceItem["status"], string> = {
-  compliant: "text-ok",
-  expiring: "text-warn",
-  pending: "text-primary",
-  missing: "text-destructive",
-  expired: "text-destructive",
-};
+const statusStyles = statusCellStyles;
 
 const matrixLabels: Record<ComplianceItem["key"], string> = {
   coi: "COI",
@@ -32,23 +18,6 @@ const matrixLabels: Record<ComplianceItem["key"], string> = {
   lienWaiver: "LW",
   renewal: "REN",
 };
-
-function StatusIcon({
-  status,
-  className,
-}: {
-  status: ComplianceItem["status"];
-  className: string;
-}) {
-  if (status === "compliant")
-    return <Check aria-hidden="true" className={cn("size-3.5 stroke-[2.5]", className)} />;
-  if (status === "expiring" || status === "pending")
-    return <Clock3 aria-hidden="true" className={cn("size-3.5 stroke-[2.25]", className)} />;
-  if (status === "missing" || status === "expired") {
-    return <AlertTriangle aria-hidden="true" className={cn("size-3.5 stroke-[2.25]", className)} />;
-  }
-  return <Minus aria-hidden="true" className={cn("size-3.5 stroke-[2.25]", className)} />;
-}
 
 /** A fixed five-slot compliance read designed for register rows, not a replacement for the compact rail. */
 export function ComplianceMatrix({ items, vendorName, className }: ComplianceMatrixProps) {

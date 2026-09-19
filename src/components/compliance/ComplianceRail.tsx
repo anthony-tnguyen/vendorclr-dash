@@ -1,5 +1,11 @@
 import { ComplianceBadge } from "./ComplianceBadge";
-import { COMPLIANCE_LABELS, STATUS_LABELS, type ComplianceItem } from "@/data/contracts";
+import { StatusIcon, statusCellStyles, statusIconStyles } from "./statusVisuals";
+import {
+  COMPLIANCE_LABELS,
+  COMPLIANCE_SHORT,
+  STATUS_LABELS,
+  type ComplianceItem,
+} from "@/data/contracts";
 import { cn } from "@/lib/utils";
 
 export const RAIL_ORDER: ComplianceItem["key"][] = [
@@ -69,11 +75,33 @@ export function ComplianceRail({
   return (
     <div
       aria-label={`Compliance rail for ${vendorName}`}
-      className={cn("flex flex-wrap items-center gap-1.5", className)}
+      className={cn(
+        "grid w-full min-w-0 grid-cols-5 overflow-hidden border border-border bg-card",
+        className,
+      )}
     >
-      {ordered.map((item) => (
-        <ComplianceBadge key={item.key} item={item} />
-      ))}
+      {ordered.map((item) => {
+        const aria = `${COMPLIANCE_LABELS[item.key]}: ${STATUS_LABELS[item.status]}${
+          item.effectiveDate ? `, dated ${item.effectiveDate}` : ""
+        }`;
+        return (
+          <span
+            key={item.key}
+            role="status"
+            aria-label={aria}
+            title={aria}
+            data-status={item.status}
+            data-requirement={item.key}
+            className={cn(
+              "flex min-w-0 flex-col items-center gap-1.5 border-r border-border px-1.5 py-2 text-center text-[10px] font-semibold uppercase tracking-[0.08em] last:border-r-0",
+              statusCellStyles[item.status],
+            )}
+          >
+            <StatusIcon status={item.status} className={statusIconStyles[item.status]} />
+            <span className="break-words">{COMPLIANCE_SHORT[item.key]}</span>
+          </span>
+        );
+      })}
     </div>
   );
 }
