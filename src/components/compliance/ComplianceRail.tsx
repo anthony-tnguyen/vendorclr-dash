@@ -93,15 +93,18 @@ export function ComplianceRail({
             data-status={item.status}
             data-requirement={item.key}
             className={cn(
-              "flex min-w-0 flex-col items-center gap-0.5 border-r border-border px-.5 py-1 text-center text-[8px] font-semibold uppercase tracking-[0.08em] last:border-r-0",
+              "relative flex min-w-0 items-center justify-center border-r border-border px-1 text-center text-[8px] font-semibold uppercase tracking-[0.08em] last:border-r-0",
               statusCellStyles[item.status],
             )}
           >
             <StatusIcon
               status={item.status}
-              className={cn(statusIconStyles[item.status], "size-2.5")}
+              className={cn(
+                statusIconStyles[item.status],
+                "absolute left-1/2 top-1 size-2.5 -translate-x-1/2",
+              )}
             />
-            <span className="break-words">{COMPLIANCE_SHORT[item.key]}</span>
+            <span className="break-words pt-2">{COMPLIANCE_SHORT[item.key]}</span>
           </span>
         );
       })}
