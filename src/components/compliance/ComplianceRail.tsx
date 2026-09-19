@@ -93,7 +93,7 @@ export function ComplianceRail({
             data-status={item.status}
             data-requirement={item.key}
             className={cn(
-              "relative flex min-h-10 min-w-0 items-center justify-center border-r border-border px-1 text-center text-[8px] font-semibold uppercase tracking-[0.08em] last:border-r-0",
+              "relative flex h-14 min-w-0 items-center justify-center border-r border-border px-2 pt-4 text-center text-[8px] font-semibold uppercase tracking-[0.08em] last:border-r-0",
               statusCellStyles[item.status],
             )}
           >
@@ -101,10 +101,10 @@ export function ComplianceRail({
               status={item.status}
               className={cn(
                 statusIconStyles[item.status],
-                "absolute left-1/2 top-1 size-2.5 -translate-x-1/2",
+                "absolute left-1/2 top-2 size-2.5 -translate-x-1/2",
               )}
             />
-            <span className="break-words pt-1">{COMPLIANCE_SHORT[item.key]}</span>
+            <span className="break-words">{COMPLIANCE_SHORT[item.key]}</span>
           </span>
         );
       })}
