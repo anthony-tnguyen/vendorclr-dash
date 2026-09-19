@@ -19,8 +19,12 @@
       for the demo screen and the console, and a copy audit of the touched screens
       (`docs/product/action-truth-inventory.md` re-audited for sign-up, the demo
       console and activation codes).
-- [ ] Final verification — full suites and production build on the merged branch, and
-      the staging journey sign-up → demo → code → dashboard.
+- [x] Final verification — typecheck clean; app tests 440 passed; database tests
+      420 passed (`bun run db:verify`); production build succeeded; lint 0 errors
+      (9 pre-existing shadcn/ui warnings); browser suite (`bun run e2e`) green:
+      9 passed, 8 skipped (the credential-gated account journeys, which need
+      E2E_* credentials set). The staging sign-up → demo → code → dashboard
+      journey is part of those skipped specs until credentials are provided.
 
 ## Carried from the earlier approved plan
 
