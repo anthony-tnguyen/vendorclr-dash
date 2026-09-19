@@ -51,3 +51,12 @@
 - [x] Sign-in gate: signed-out visitors on any console page are sent to `/login`
       with the page they asked for remembered; `/` routes to sign-in when signed
       out and to the dashboard otherwise; sample-data mode stays ungated.
+- [x] CI + browser-suite repair: the build output moved from `.output` to `dist`
+      (nitro preset change), so the CI artifact paths, `playwright.config.ts`
+      (`wrangler dev --config dist/server/wrangler.json`), and the stale
+      references in `docs/operations/release-process.md`, `supabase/README.md`
+      and `src/lib/observability/sentryEnvelope.ts` were all updated. The
+      rewritten `e2e/smoke.spec.ts` and `e2e/role-flows.spec.ts` (desktop +
+      mobile) detect demo vs live builds at runtime and skip the account
+      journeys that need `E2E_DEMO_*` / `E2E_MEMBER_*` / `E2E_STAFF_*`
+      credentials.
