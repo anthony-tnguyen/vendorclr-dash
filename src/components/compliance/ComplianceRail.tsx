@@ -61,7 +61,10 @@ export function ComplianceRail({ items, vendorName, variant = "row", className }
   return (
     <div
       aria-label={`Compliance rail for ${vendorName}`}
-      className={cn("grid w-full min-w-0 grid-cols-5 overflow-hidden border border-border bg-card", className)}
+      className={cn(
+        "grid w-max min-w-0 grid-cols-[repeat(5,2.75rem)] overflow-hidden border border-border bg-card",
+        className,
+      )}
     >
       {ordered.map((item) => {
         const aria = `${COMPLIANCE_LABELS[item.key]}: ${STATUS_LABELS[item.status]}${
