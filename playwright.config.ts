@@ -35,6 +35,12 @@ const config: Parameters<typeof defineConfig>[0] = {
   use: {
     baseURL: externalBaseURL ?? "http://localhost:8788",
     trace: "on-first-retry",
+    // Environments whose system libraries do not satisfy Playwright's bundled
+    // Chromium can point at a working one, e.g. PLAYWRIGHT_CHROMIUM_EXECUTABLE
+    // from a nix-built chromium. CI uses the bundled browser.
+    ...(process.env["PLAYWRIGHT_CHROMIUM_EXECUTABLE"]
+      ? { executablePath: process.env["PLAYWRIGHT_CHROMIUM_EXECUTABLE"] }
+      : {}),
   },
   projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
 };
