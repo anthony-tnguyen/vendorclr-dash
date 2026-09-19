@@ -104,7 +104,7 @@ export function ComplianceRail({
                 "absolute left-1/2 top-1 size-2.5 -translate-x-1/2",
               )}
             />
-            <span className="break-words pt-2">{COMPLIANCE_SHORT[item.key]}</span>
+            <span className="break-words pt-1">{COMPLIANCE_SHORT[item.key]}</span>
           </span>
         );
       })}
