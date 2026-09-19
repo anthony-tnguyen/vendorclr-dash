@@ -243,6 +243,13 @@ export function SignupPage() {
         data: {
           full_name: text(form, "full-name"),
         },
+        // Without this, Supabase falls back to the project's Site URL setting
+        // to build the confirmation link - which is a project-level default
+        // most likely wrong for any deploy that isn't the one the project was
+        // first configured against. Set explicitly here, same as
+        // resetPasswordForEmail() below, so the link always lands back on
+        // whichever origin the signup actually happened from.
+        emailRedirectTo: `${window.location.origin}/demo`,
       },
     });
     if (signUpError) throw new Error(signUpError.message);
