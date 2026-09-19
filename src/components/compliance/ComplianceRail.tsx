@@ -1,5 +1,11 @@
 import { ComplianceBadge } from "./ComplianceBadge";
-import { COMPLIANCE_LABELS, STATUS_LABELS, type ComplianceItem } from "@/data/contracts";
+import { StatusIcon, statusCellStyles, statusIconStyles } from "./statusVisuals";
+import {
+  COMPLIANCE_LABELS,
+  COMPLIANCE_SHORT,
+  STATUS_LABELS,
+  type ComplianceItem,
+} from "@/data/contracts";
 import { cn } from "@/lib/utils";
 
 export const RAIL_ORDER: ComplianceItem["key"][] = [
