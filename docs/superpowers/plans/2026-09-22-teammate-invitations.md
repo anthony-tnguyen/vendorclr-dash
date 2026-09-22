@@ -28,6 +28,7 @@ Both should pass with no changes yet. If either fails on a clean checkout, stop 
 ### Task 1: Session exposes the signed-in user's email
 
 **Files:**
+
 - Modify: `src/app/App.tsx`
 
 The accept-invite route needs to compare the signed-in user's email to the invitation's locked email. `Session` currently has no `email` field (only `personName`, which can be a display name).
@@ -238,6 +239,7 @@ EOF
 ### Task 2: Extract shared role vocabulary
 
 **Files:**
+
 - Create: `src/features/team/roleOptions.ts`
 - Modify: `src/features/team/TeamPage.tsx`
 
@@ -397,6 +399,7 @@ EOF
 ### Task 3: Client-safe token preview
 
 **Files:**
+
 - Modify: `src/workflows/companyInvitations.ts`
 
 `previewCompanyInvitationByToken` (already built) uses the **service-role client** directly and is a plain async function, not a `createServerFn`. Every other function in this file that touches Supabase is wrapped in `createServerFn`, which is what keeps the actual client construction server-only when React components import this module — a plain function does not get that protection. The accept-invite page must not call `previewCompanyInvitationByToken` directly; it needs a thin server-fn wrapper.
@@ -421,7 +424,6 @@ Find the end of the file:
 Add immediately after it:
 
 ```ts
-
 const previewCompanyInvitationSchema = z.object({ token: z.string().min(1) });
 
 /**
@@ -468,6 +470,7 @@ EOF
 ### Task 4: Invite form
 
 **Files:**
+
 - Create: `src/features/team/InviteMemberForm.tsx`
 - Modify: `src/features/team/TeamPage.tsx`
 - Test: `src/tests/team-page.test.tsx`
@@ -531,32 +534,32 @@ vi.mock("@/workflows/companyInvitations", () => ({
 Then add this test inside `describe("team page", ...)`, after the existing "lets an owner change a teammate's role" test:
 
 ```tsx
-  it("lets an owner invite a teammate and shows the invitation link", async () => {
-    await renderTeam();
-    const user = userEvent.setup();
+it("lets an owner invite a teammate and shows the invitation link", async () => {
+  await renderTeam();
+  const user = userEvent.setup();
 
-    await user.type(await screen.findByLabelText("Email"), "new@acme.test");
-    await user.selectOptions(screen.getByLabelText("Role"), "read_only");
-    await user.click(screen.getByRole("button", { name: "Send invitation" }));
+  await user.type(await screen.findByLabelText("Email"), "new@acme.test");
+  await user.selectOptions(screen.getByLabelText("Role"), "read_only");
+  await user.click(screen.getByRole("button", { name: "Send invitation" }));
 
-    await waitFor(() => {
-      expect(inviteCompanyMember).toHaveBeenCalledWith({
-        data: { companyId: "c-1", email: "new@acme.test", role: "read_only" },
-      });
+  await waitFor(() => {
+    expect(inviteCompanyMember).toHaveBeenCalledWith({
+      data: { companyId: "c-1", email: "new@acme.test", role: "read_only" },
     });
-    expect(await screen.findByText("Invitation emailed to new@acme.test.")).toBeInTheDocument();
-    expect(
-      screen.getByRole("link", { name: "https://app.vendorclr.test/accept-invite/tok-abc" }),
-    ).toBeInTheDocument();
   });
+  expect(await screen.findByText("Invitation emailed to new@acme.test.")).toBeInTheDocument();
+  expect(
+    screen.getByRole("link", { name: "https://app.vendorclr.test/accept-invite/tok-abc" }),
+  ).toBeInTheDocument();
+});
 
-  it("hides the invite form from a non-owner", async () => {
-    membership = { company_id: "c-1", role: "read_only" };
-    await renderTeam();
+it("hides the invite form from a non-owner", async () => {
+  membership = { company_id: "c-1", role: "read_only" };
+  await renderTeam();
 
-    await screen.findByText("eng@acme.test");
-    expect(screen.queryByLabelText("Email")).not.toBeInTheDocument();
-  });
+  await screen.findByText("eng@acme.test");
+  expect(screen.queryByLabelText("Email")).not.toBeInTheDocument();
+});
 ```
 
 - [ ] **Step 2: Run the test to verify it fails**
@@ -772,6 +775,7 @@ EOF
 ### Task 5: Pending invitations table
 
 **Files:**
+
 - Create: `src/features/team/PendingInvitationsTable.tsx`
 - Modify: `src/features/team/TeamPage.tsx`
 - Test: `src/tests/team-page.test.tsx`
@@ -825,54 +829,54 @@ const revokeCompanyInvitation = vi.fn(async () => ({ status: "revoked" }));
 Then add these tests after the invite-form tests added in Task 4 (add `within` to the `@testing-library/react` import at the top of the file first — find `import { render, screen, waitFor } from "@testing-library/react";` and replace with `import { render, screen, waitFor, within } from "@testing-library/react";`):
 
 ```tsx
-  it("shows pending invitations and lets an owner resend", async () => {
-    await renderTeam();
-    const user = userEvent.setup();
+it("shows pending invitations and lets an owner resend", async () => {
+  await renderTeam();
+  const user = userEvent.setup();
 
-    expect(await screen.findByText("pending@acme.test")).toBeInTheDocument();
-    const pendingRow = screen.getByText("pending@acme.test").closest("tr")!;
-    await user.click(within(pendingRow).getByRole("button", { name: "Resend" }));
+  expect(await screen.findByText("pending@acme.test")).toBeInTheDocument();
+  const pendingRow = screen.getByText("pending@acme.test").closest("tr")!;
+  await user.click(within(pendingRow).getByRole("button", { name: "Resend" }));
 
-    await waitFor(() => {
-      expect(resendCompanyInvitation).toHaveBeenCalledWith({ data: { invitationId: "inv-1" } });
-    });
+  await waitFor(() => {
+    expect(resendCompanyInvitation).toHaveBeenCalledWith({ data: { invitationId: "inv-1" } });
   });
+});
 
-  it("lets an owner revoke a pending invitation after confirming", async () => {
-    // jsdom's window.confirm returns false by default; the revoke button
-    // asks before calling through, same as Remove/Make owner elsewhere on
-    // this page, so the confirm dialog must be stubbed to proceed.
-    vi.spyOn(window, "confirm").mockReturnValue(true);
-    await renderTeam();
-    const user = userEvent.setup();
+it("lets an owner revoke a pending invitation after confirming", async () => {
+  // jsdom's window.confirm returns false by default; the revoke button
+  // asks before calling through, same as Remove/Make owner elsewhere on
+  // this page, so the confirm dialog must be stubbed to proceed.
+  vi.spyOn(window, "confirm").mockReturnValue(true);
+  await renderTeam();
+  const user = userEvent.setup();
 
-    const pendingRow = (await screen.findByText("pending@acme.test")).closest("tr")!;
-    await user.click(within(pendingRow).getByRole("button", { name: "Revoke" }));
+  const pendingRow = (await screen.findByText("pending@acme.test")).closest("tr")!;
+  await user.click(within(pendingRow).getByRole("button", { name: "Revoke" }));
 
-    await waitFor(() => {
-      expect(revokeCompanyInvitation).toHaveBeenCalledWith({ data: { invitationId: "inv-1" } });
-    });
-    expect(await screen.findByRole("status")).toHaveTextContent(
-      "Invitation to pending@acme.test was revoked.",
-    );
+  await waitFor(() => {
+    expect(revokeCompanyInvitation).toHaveBeenCalledWith({ data: { invitationId: "inv-1" } });
   });
+  expect(await screen.findByRole("status")).toHaveTextContent(
+    "Invitation to pending@acme.test was revoked.",
+  );
+});
 
-  it("only shows resend/revoke actions for genuinely pending invitations", async () => {
-    await renderTeam();
+it("only shows resend/revoke actions for genuinely pending invitations", async () => {
+  await renderTeam();
 
-    await screen.findByText("already-joined@acme.test");
-    const acceptedRow = screen.getByText("already-joined@acme.test").closest("tr")!;
-    expect(within(acceptedRow).queryByRole("button", { name: "Resend" })).not.toBeInTheDocument();
-    expect(within(acceptedRow).queryByRole("button", { name: "Revoke" })).not.toBeInTheDocument();
-  });
+  await screen.findByText("already-joined@acme.test");
+  const acceptedRow = screen.getByText("already-joined@acme.test").closest("tr")!;
+  expect(within(acceptedRow).queryByRole("button", { name: "Resend" })).not.toBeInTheDocument();
+  expect(within(acceptedRow).queryByRole("button", { name: "Revoke" })).not.toBeInTheDocument();
+});
 
-  it("hides pending invitations from a non-owner", async () => {
-    membership = { company_id: "c-1", role: "read_only" };
-    await renderTeam();
+it("hides pending invitations from a non-owner", async () => {
+  membership = { company_id: "c-1", role: "read_only" };
+  await renderTeam();
 
-    await screen.findByText("eng@acme.test");
-    expect(screen.queryByText("Pending invitations")).not.toBeInTheDocument();
-  });
+  await screen.findByText("eng@acme.test");
+  expect(screen.queryByText("Pending invitations")).not.toBeInTheDocument();
+});
 ```
 
 - [ ] **Step 2: Run the test to verify it fails**
@@ -1142,6 +1146,7 @@ EOF
 ### Task 6: Preserve invitation state through sign-up
 
 **Files:**
+
 - Modify: `src/routes/signup.tsx`
 - Modify: `src/features/auth/AuthPages.tsx`
 - Test: `src/tests/signup-redirect.test.tsx` (new)
@@ -1414,6 +1419,7 @@ EOF
 ### Task 7: Register the accept-invite route
 
 **Files:**
+
 - Modify: `src/app/router.tsx`
 - Create: `src/routes/accept-invite.$token.tsx`
 - Modify (generated): `src/routeTree.gen.ts`
@@ -1530,6 +1536,7 @@ EOF
 ### Task 8: Accept-invite page
 
 **Files:**
+
 - Modify: `src/features/team/AcceptInvitePage.tsx`
 - Test: `src/tests/accept-invite.test.tsx` (new)
 
@@ -1859,8 +1866,8 @@ export function AcceptInvitePage({ token }: { token: string }) {
           Join {invite.companyName} on VendorClr
         </h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Sign in with <span className="font-medium text-foreground">{invite.email}</span> to
-          accept this invitation as {roleLabel(invite.role)}.
+          Sign in with <span className="font-medium text-foreground">{invite.email}</span> to accept
+          this invitation as {roleLabel(invite.role)}.
         </p>
         <div className="mt-4 flex flex-wrap gap-3 text-sm">
           <Link
@@ -1892,8 +1899,8 @@ export function AcceptInvitePage({ token }: { token: string }) {
           This invitation isn't for this account
         </h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          This invitation was sent to a different email address. Sign out and sign back in with
-          the address it was sent to, then open the link again.
+          This invitation was sent to a different email address. Sign out and sign back in with the
+          address it was sent to, then open the link again.
         </p>
         <button
           type="button"
@@ -1976,6 +1983,7 @@ EOF
 ### Task 9: Remove the legacy disabled invite control
 
 **Files:**
+
 - Modify: `src/features/admin/AccessPage.tsx`
 - Modify: `src/tests/production-action-truth.test.tsx`
 
@@ -1986,27 +1994,27 @@ Per the approved design decision: `/dashboard/admin/access` has an "Invite teamm
 In `src/tests/production-action-truth.test.tsx`, find:
 
 ```tsx
-  it("does not present teammate invitations as available in production", async () => {
-    renderWithQueryClient(<AccessPage />);
+it("does not present teammate invitations as available in production", async () => {
+  renderWithQueryClient(<AccessPage />);
 
-    expect(await main().findByText("No access grants")).toBeInTheDocument();
-    expect(
-      main().getByRole("button", { name: "Teammate invitations are not available" }),
-    ).toBeDisabled();
-    expect(main().queryByText(/demo/i)).not.toBeInTheDocument();
-  });
+  expect(await main().findByText("No access grants")).toBeInTheDocument();
+  expect(
+    main().getByRole("button", { name: "Teammate invitations are not available" }),
+  ).toBeDisabled();
+  expect(main().queryByText(/demo/i)).not.toBeInTheDocument();
+});
 ```
 
 Replace with:
 
 ```tsx
-  it("does not present a broken teammate-invite control on the legacy access page", async () => {
-    renderWithQueryClient(<AccessPage />);
+it("does not present a broken teammate-invite control on the legacy access page", async () => {
+  renderWithQueryClient(<AccessPage />);
 
-    expect(await main().findByText("No access grants")).toBeInTheDocument();
-    expect(main().queryByRole("button", { name: /invite/i })).not.toBeInTheDocument();
-    expect(main().queryByText(/demo/i)).not.toBeInTheDocument();
-  });
+  expect(await main().findByText("No access grants")).toBeInTheDocument();
+  expect(main().queryByRole("button", { name: /invite/i })).not.toBeInTheDocument();
+  expect(main().queryByText(/demo/i)).not.toBeInTheDocument();
+});
 ```
 
 - [ ] **Step 2: Run it to verify it fails against the current component**
@@ -2137,6 +2145,7 @@ EOF
 ### Task 10: Documentation
 
 **Files:**
+
 - Modify: `roadmap.md`
 - Modify: `docs/product/action-truth-inventory.md`
 
@@ -2219,6 +2228,7 @@ EOF
 ### Task 11: End-to-end coverage
 
 **Files:**
+
 - Modify: `e2e/helpers.ts`
 - Create: `e2e/team-invite.spec.ts`
 
@@ -2430,6 +2440,7 @@ Expected: the existing specs pass; `e2e/team-invite.spec.ts` and the credential-
 - [ ] **Step 8: Report external setup separately**
 
 In the final summary to the user, call out (do not fold into "done"):
+
 - `E2E_OWNER_EMAIL`/`E2E_OWNER_PASSWORD` and `E2E_INVITEE_EMAIL`/`E2E_INVITEE_PASSWORD` need provisioning on whichever environment should run `e2e/team-invite.spec.ts` for real (same category as the already-provisioned `DEMO`/`MEMBER`/`STAFF` accounts).
 - Real invitation email delivery depends on `RESEND_API_KEY` being configured for that environment (per `src/workflows/emailSender.ts`); without it, invitations are still created and the UI now always shows the accept link directly to the inviting owner, but no email is actually sent. This is pre-existing, unchanged by this plan.
 - `VITE_APP_URL` must be set to the real deployed origin for that environment so emailed/shown accept links don't fall back to `http://localhost:3000` (see `docs/operations/environment-matrix.md`).
