@@ -12,6 +12,8 @@ export const routes = {
   resetPassword: "/reset-password",
   /** Read-only sample console for accounts that have not been activated yet. */
   demo: "/demo",
+  /** Public link a teammate receives by email. Not in customerNav - nothing in-app links to it. */
+  acceptInvite: "/accept-invite/$token",
   dashboard: "/dashboard",
   vendors: "/dashboard/vendors",
   vendorDetail: "/dashboard/vendors/$vendorId",

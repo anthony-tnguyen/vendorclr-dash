@@ -28,7 +28,17 @@
 
 ## Carried from the earlier approved plan
 
-- [ ] Stage 2 — Teammate access UI + `/accept-invite/$token`
+- [x] Stage 2 — Teammate access UI + `/accept-invite/$token` (2026-09-22).
+      Invite/pending-invitations UI on `/dashboard/team` (create, resend,
+      revoke via `inviteCompanyMember`/`listCompanyInvitations`/
+      `resendCompanyInvitation`/`revokeCompanyInvitation`) and the
+      `/accept-invite/$token` acceptance route (unauthenticated,
+      correct-email, wrong-email, expired, revoked, already-accepted,
+      invalid-token and success states), both built entirely on the existing
+      `company_invitations` backend and `src/workflows/companyInvitations.ts`
+      from an earlier task. `/signup` now honors `?redirect=` so a brand-new
+      invitee resumes at the invitation after creating an account. Legacy
+      disabled invite control removed from `/dashboard/admin/access`.
 - [x] Stage 3 — Vendor/broker contacts + multi-recipient document requests
       (2026-09-22). Contacts panel on vendor detail (name, agency, email,
       phone, role, suppression state; add / edit / link / unlink / change role

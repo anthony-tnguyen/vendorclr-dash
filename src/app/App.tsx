@@ -59,6 +59,8 @@ export interface Session {
    */
   refresh: () => void;
   userId: string | null;
+  /** The signed-in user's own email, or null in demo mode / before load. Used to match an invited address — the real check is still server-side inside accept_company_invitation(). */
+  email: string | null;
   signOut: () => Promise<void>;
 }
 
@@ -78,6 +80,7 @@ const DEMO_FALLBACK: Session = {
   isStaff: false,
   refresh: () => {},
   userId: null,
+  email: null,
   signOut: async () => {},
 };
 
@@ -106,6 +109,7 @@ function useDemoSessionValue(): Session {
       isStaff: false,
       refresh: () => {},
       userId: null,
+      email: null,
       signOut: async () => {},
     }),
     [role],
@@ -118,6 +122,7 @@ function useDemoSessionValue(): Session {
 
 interface LiveIdentity {
   userId: string;
+  email: string;
   personName: string;
   companyName: string;
   companyId: string | null;
@@ -181,6 +186,7 @@ function useLiveSessionValue(): Session {
 
       setIdentity({
         userId,
+        email,
         personName: profileResult.data?.full_name ?? profileResult.data?.email ?? email,
         companyName: company?.name ?? "No company yet",
         companyId,
@@ -251,6 +257,7 @@ function useLiveSessionValue(): Session {
       isStaff: identity?.isPlatformAdmin === true,
       refresh,
       userId: identity?.userId ?? null,
+      email: identity?.email ?? null,
       signOut,
     }),
     [status, role, canSwitchRole, identity, setRole, signOut, refresh],

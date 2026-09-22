@@ -229,13 +229,20 @@ export function LoginPage() {
 export function SignupPage() {
   const navigate = useNavigate();
   const live = hasBackendEnv();
+  // Set when signup was reached from a flow like accept-invite that needs to
+  // resume after account creation. Already validated as a same-origin
+  // relative path by the route's validateSearch.
+  const search = useSearch({ strict: false }) as { redirect?: string };
+  const destination = (search.redirect ?? "/demo") as "/demo";
 
   const { notice, error, pending, onSubmit } = useAuthForm(async (form) => {
     // Sign-up is open: an account is created with no company attached, and the
     // handle_new_user() trigger creates the profile only. The workspace itself
     // arrives later, when an activation code is redeemed on the demo screen -
     // redeem_activation_code() is what creates the company and the owner seat,
-    // in one transaction. So a fresh account lands on /demo, not /dashboard.
+    // in one transaction. So a fresh account lands on /demo by default -
+    // unless `destination` says otherwise, e.g. accept-invite sending someone
+    // back to finish accepting an invitation instead.
     const { data, error: signUpError } = await getSupabaseClient().auth.signUp({
       email: text(form, "signup-email"),
       password: String(form.get("signup-password") ?? ""),
@@ -248,14 +255,15 @@ export function SignupPage() {
         // most likely wrong for any deploy that isn't the one the project was
         // first configured against. Set explicitly here, same as
         // resetPasswordForEmail() below, so the link always lands back on
-        // whichever origin the signup actually happened from.
-        emailRedirectTo: `${window.location.origin}/demo`,
+        // whichever origin the signup actually happened from, and on
+        // `destination` rather than always /demo.
+        emailRedirectTo: `${window.location.origin}${destination}`,
       },
     });
     if (signUpError) throw new Error(signUpError.message);
 
     if (data.session) {
-      await navigate({ to: "/demo" });
+      await navigate({ to: destination });
       return "Account created.";
     }
     return "Check your email to confirm the account, then sign in.";

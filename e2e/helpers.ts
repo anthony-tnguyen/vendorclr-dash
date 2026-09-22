@@ -31,11 +31,16 @@ export async function capture(page: Page, testInfo: TestInfo, state: string) {
  * themselves rather than inventing a session or weakening the access gate.
  *
  * Set in a GitHub environment to enable them:
- *   E2E_DEMO_EMAIL / E2E_DEMO_PASSWORD      - account with no activated workspace
- *   E2E_MEMBER_EMAIL / E2E_MEMBER_PASSWORD  - member of an activated company
- *   E2E_STAFF_EMAIL / E2E_STAFF_PASSWORD    - VendorClr staff account
+ *   E2E_DEMO_EMAIL / E2E_DEMO_PASSWORD        - account with no activated workspace
+ *   E2E_MEMBER_EMAIL / E2E_MEMBER_PASSWORD    - member of an activated company
+ *   E2E_STAFF_EMAIL / E2E_STAFF_PASSWORD      - VendorClr staff account
+ *   E2E_OWNER_EMAIL / E2E_OWNER_PASSWORD      - owner of an activated company (for the invite journey)
+ *   E2E_INVITEE_EMAIL / E2E_INVITEE_PASSWORD  - a second, already-signed-up account the owner
+ *                                                invites and that signs in to accept (no real
+ *                                                inbox needed: InviteMemberForm always shows the
+ *                                                accept link directly to the inviting owner)
  */
-export function credentials(prefix: "DEMO" | "MEMBER" | "STAFF") {
+export function credentials(prefix: "DEMO" | "MEMBER" | "STAFF" | "OWNER" | "INVITEE") {
   const email = process.env[`E2E_${prefix}_EMAIL`];
   const password = process.env[`E2E_${prefix}_PASSWORD`];
   return email && password ? { email, password } : null;
