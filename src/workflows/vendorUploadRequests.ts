@@ -238,6 +238,7 @@ export interface ResolvedUploadRequest {
   requestId: string;
   vendorName: string;
   companyName: string;
+  purpose: string;
   expiresAt: string;
   currentPolicies: Array<{
     policyType: string;
@@ -247,7 +248,10 @@ export interface ResolvedUploadRequest {
   }>;
 }
 
-const resolveUploadTokenSchema = z.object({ token: z.string().min(1) });
+const resolveUploadTokenSchema = z.object({
+  token: z.string().min(1),
+  captchaToken: z.string().min(1).optional(),
+});
 
 /** Thrown for every invalid-token case. Deliberately one message: telling an
  *  attacker "expired" vs "not found" vs "already used" narrows their guesses.
@@ -326,9 +330,10 @@ export interface ResolvedTokenRow {
 export async function resolveActiveUploadRequestByToken(
   token: string,
   ipAddress: string,
+  captchaToken?: string,
 ): Promise<ResolvedTokenRow> {
   const { assertUploadAllowed } = await getUploadAbuseModule();
-  await assertUploadAllowed({ operation: "resolve", ipAddress });
+  await assertUploadAllowed({ operation: "resolve", ipAddress, captchaToken });
 
   const supabase = await getServiceRoleClient();
   const tokenHash = await hashToken(token);
@@ -370,7 +375,7 @@ export const resolveUploadToken = createServerFn({ method: "GET" })
     // Governs total resolve attempts per IP regardless of token validity -
     // checked before the token is even looked up, so it cannot itself leak
     // anything about whether data.token exists.
-    await assertUploadAllowed({ operation: "resolve", ipAddress });
+    await assertUploadAllowed({ operation: "resolve", ipAddress, captchaToken: data.captchaToken });
 
     const supabase = await getServiceRoleClient();
     const tokenHash = await hashToken(data.token);
@@ -378,7 +383,7 @@ export const resolveUploadToken = createServerFn({ method: "GET" })
     const { data: request } = await supabase
       .from("vendor_upload_requests")
       .select(
-        "id, status, expires_at, vendor_id, company_id, " +
+        "id, status, expires_at, purpose, vendor_id, company_id, " +
           "vendors ( name, companies ( name ), vendor_policies ( policy_type, carrier_name, policy_number, expiration_date, status ) )",
       )
       .eq("token_hash", tokenHash)
@@ -390,6 +395,7 @@ export const resolveUploadToken = createServerFn({ method: "GET" })
       id: string;
       status: string;
       expires_at: string;
+      purpose: string;
       vendors: {
         name: string;
         companies: { name: string } | null;
@@ -426,6 +432,7 @@ export const resolveUploadToken = createServerFn({ method: "GET" })
       requestId: row.id,
       vendorName: row.vendors.name,
       companyName: row.vendors.companies?.name ?? "your client",
+      purpose: row.purpose,
       expiresAt: row.expires_at,
       currentPolicies: row.vendors.vendor_policies
         .filter((p) => p.status === "active")

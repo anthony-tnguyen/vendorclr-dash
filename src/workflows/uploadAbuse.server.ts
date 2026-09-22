@@ -48,7 +48,7 @@ export interface AssertUploadAllowedInput {
    * on a retry after the vendor solves the challenge CaptchaRequiredError
    * signaled.
    */
-  captchaToken?: string;
+  captchaToken?: string | undefined;
 }
 
 /**
@@ -96,6 +96,7 @@ export class UploadThrottledError extends Error {
  * whether the caller is a human, so neither is a captcha-eligible signal.
  */
 export class CaptchaRequiredError extends Error {
+  readonly code = "turnstile_required" as const;
   constructor() {
     super("Please complete the verification challenge and try again.");
     this.name = "CaptchaRequiredError";
