@@ -12,8 +12,10 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as DemoRouteImport } from './routes/demo'
 import { Route as LoginRouteImport } from './routes/login'
+import { Route as PrivacyRouteImport } from './routes/privacy'
 import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as SignupRouteImport } from './routes/signup'
+import { Route as TermsRouteImport } from './routes/terms'
 import { Route as AcceptInviteTokenRouteImport } from './routes/accept-invite.$token'
 import { Route as DashboardIndexRouteImport } from './routes/dashboard.index'
 import { Route as DashboardHelpRouteImport } from './routes/dashboard.help'
@@ -36,6 +38,7 @@ import { Route as DashboardProjectsIndexRouteImport } from './routes/dashboard.p
 import { Route as DashboardProjectsProjectIdRouteImport } from './routes/dashboard.projects.$projectId'
 import { Route as DashboardVendorsIndexRouteImport } from './routes/dashboard.vendors.index'
 import { Route as DashboardVendorsVendorIdRouteImport } from './routes/dashboard.vendors.$vendorId'
+import { Route as DashboardVendorsImportRouteImport } from './routes/dashboard.vendors.import'
 import { Route as DashboardAdminComplianceQueueItemIdRouteImport } from './routes/dashboard.admin.compliance.$queueItemId'
 
 const IndexRoute = IndexRouteImport.update({
@@ -53,6 +56,11 @@ const LoginRoute = LoginRouteImport.update({
   path: '/login',
   getParentRoute: () => rootRouteImport,
 } as any)
+const PrivacyRoute = PrivacyRouteImport.update({
+  id: '/privacy',
+  path: '/privacy',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ResetPasswordRoute = ResetPasswordRouteImport.update({
   id: '/reset-password',
   path: '/reset-password',
@@ -61,6 +69,11 @@ const ResetPasswordRoute = ResetPasswordRouteImport.update({
 const SignupRoute = SignupRouteImport.update({
   id: '/signup',
   path: '/signup',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const TermsRoute = TermsRouteImport.update({
+  id: '/terms',
+  path: '/terms',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AcceptInviteTokenRoute = AcceptInviteTokenRouteImport.update({
@@ -179,6 +192,11 @@ const DashboardVendorsVendorIdRoute =
     path: '/dashboard/vendors/$vendorId',
     getParentRoute: () => rootRouteImport,
   } as any)
+const DashboardVendorsImportRoute = DashboardVendorsImportRouteImport.update({
+  id: '/dashboard/vendors/import',
+  path: '/dashboard/vendors/import',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const DashboardAdminComplianceQueueItemIdRoute =
   DashboardAdminComplianceQueueItemIdRouteImport.update({
     id: '/$queueItemId',
@@ -190,8 +208,10 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/demo': typeof DemoRoute
   '/login': typeof LoginRoute
+  '/privacy': typeof PrivacyRoute
   '/reset-password': typeof ResetPasswordRoute
   '/signup': typeof SignupRoute
+  '/terms': typeof TermsRoute
   '/accept-invite/$token': typeof AcceptInviteTokenRoute
   '/dashboard/help': typeof DashboardHelpRoute
   '/dashboard/reports': typeof DashboardReportsRoute
@@ -211,6 +231,7 @@ export interface FileRoutesByFullPath {
   '/dashboard/admin/operations': typeof DashboardAdminOperationsRoute
   '/dashboard/projects/$projectId': typeof DashboardProjectsProjectIdRoute
   '/dashboard/vendors/$vendorId': typeof DashboardVendorsVendorIdRoute
+  '/dashboard/vendors/import': typeof DashboardVendorsImportRoute
   '/dashboard/admin/': typeof DashboardAdminIndexRoute
   '/dashboard/projects/': typeof DashboardProjectsIndexRoute
   '/dashboard/vendors/': typeof DashboardVendorsIndexRoute
@@ -220,8 +241,10 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/demo': typeof DemoRoute
   '/login': typeof LoginRoute
+  '/privacy': typeof PrivacyRoute
   '/reset-password': typeof ResetPasswordRoute
   '/signup': typeof SignupRoute
+  '/terms': typeof TermsRoute
   '/accept-invite/$token': typeof AcceptInviteTokenRoute
   '/dashboard/help': typeof DashboardHelpRoute
   '/dashboard/reports': typeof DashboardReportsRoute
@@ -241,6 +264,7 @@ export interface FileRoutesByTo {
   '/dashboard/admin/operations': typeof DashboardAdminOperationsRoute
   '/dashboard/projects/$projectId': typeof DashboardProjectsProjectIdRoute
   '/dashboard/vendors/$vendorId': typeof DashboardVendorsVendorIdRoute
+  '/dashboard/vendors/import': typeof DashboardVendorsImportRoute
   '/dashboard/admin': typeof DashboardAdminIndexRoute
   '/dashboard/projects': typeof DashboardProjectsIndexRoute
   '/dashboard/vendors': typeof DashboardVendorsIndexRoute
@@ -251,8 +275,10 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/demo': typeof DemoRoute
   '/login': typeof LoginRoute
+  '/privacy': typeof PrivacyRoute
   '/reset-password': typeof ResetPasswordRoute
   '/signup': typeof SignupRoute
+  '/terms': typeof TermsRoute
   '/accept-invite/$token': typeof AcceptInviteTokenRoute
   '/dashboard/help': typeof DashboardHelpRoute
   '/dashboard/reports': typeof DashboardReportsRoute
@@ -272,6 +298,7 @@ export interface FileRoutesById {
   '/dashboard/admin/operations': typeof DashboardAdminOperationsRoute
   '/dashboard/projects/$projectId': typeof DashboardProjectsProjectIdRoute
   '/dashboard/vendors/$vendorId': typeof DashboardVendorsVendorIdRoute
+  '/dashboard/vendors/import': typeof DashboardVendorsImportRoute
   '/dashboard/admin/': typeof DashboardAdminIndexRoute
   '/dashboard/projects/': typeof DashboardProjectsIndexRoute
   '/dashboard/vendors/': typeof DashboardVendorsIndexRoute
@@ -283,8 +310,10 @@ export interface FileRouteTypes {
     | '/'
     | '/demo'
     | '/login'
+    | '/privacy'
     | '/reset-password'
     | '/signup'
+    | '/terms'
     | '/accept-invite/$token'
     | '/dashboard/help'
     | '/dashboard/reports'
@@ -304,6 +333,7 @@ export interface FileRouteTypes {
     | '/dashboard/admin/operations'
     | '/dashboard/projects/$projectId'
     | '/dashboard/vendors/$vendorId'
+    | '/dashboard/vendors/import'
     | '/dashboard/admin/'
     | '/dashboard/projects/'
     | '/dashboard/vendors/'
@@ -313,8 +343,10 @@ export interface FileRouteTypes {
     | '/'
     | '/demo'
     | '/login'
+    | '/privacy'
     | '/reset-password'
     | '/signup'
+    | '/terms'
     | '/accept-invite/$token'
     | '/dashboard/help'
     | '/dashboard/reports'
@@ -334,6 +366,7 @@ export interface FileRouteTypes {
     | '/dashboard/admin/operations'
     | '/dashboard/projects/$projectId'
     | '/dashboard/vendors/$vendorId'
+    | '/dashboard/vendors/import'
     | '/dashboard/admin'
     | '/dashboard/projects'
     | '/dashboard/vendors'
@@ -343,8 +376,10 @@ export interface FileRouteTypes {
     | '/'
     | '/demo'
     | '/login'
+    | '/privacy'
     | '/reset-password'
     | '/signup'
+    | '/terms'
     | '/accept-invite/$token'
     | '/dashboard/help'
     | '/dashboard/reports'
@@ -364,6 +399,7 @@ export interface FileRouteTypes {
     | '/dashboard/admin/operations'
     | '/dashboard/projects/$projectId'
     | '/dashboard/vendors/$vendorId'
+    | '/dashboard/vendors/import'
     | '/dashboard/admin/'
     | '/dashboard/projects/'
     | '/dashboard/vendors/'
@@ -374,8 +410,10 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   DemoRoute: typeof DemoRoute
   LoginRoute: typeof LoginRoute
+  PrivacyRoute: typeof PrivacyRoute
   ResetPasswordRoute: typeof ResetPasswordRoute
   SignupRoute: typeof SignupRoute
+  TermsRoute: typeof TermsRoute
   AcceptInviteTokenRoute: typeof AcceptInviteTokenRoute
   DashboardHelpRoute: typeof DashboardHelpRoute
   DashboardReportsRoute: typeof DashboardReportsRoute
@@ -395,6 +433,7 @@ export interface RootRouteChildren {
   DashboardAdminOperationsRoute: typeof DashboardAdminOperationsRoute
   DashboardProjectsProjectIdRoute: typeof DashboardProjectsProjectIdRoute
   DashboardVendorsVendorIdRoute: typeof DashboardVendorsVendorIdRoute
+  DashboardVendorsImportRoute: typeof DashboardVendorsImportRoute
   DashboardAdminIndexRoute: typeof DashboardAdminIndexRoute
   DashboardProjectsIndexRoute: typeof DashboardProjectsIndexRoute
   DashboardVendorsIndexRoute: typeof DashboardVendorsIndexRoute
@@ -423,6 +462,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LoginRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/privacy': {
+      id: '/privacy'
+      path: '/privacy'
+      fullPath: '/privacy'
+      preLoaderRoute: typeof PrivacyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/reset-password': {
       id: '/reset-password'
       path: '/reset-password'
@@ -435,6 +481,13 @@ declare module '@tanstack/react-router' {
       path: '/signup'
       fullPath: '/signup'
       preLoaderRoute: typeof SignupRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/terms': {
+      id: '/terms'
+      path: '/terms'
+      fullPath: '/terms'
+      preLoaderRoute: typeof TermsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/accept-invite/$token': {
@@ -591,6 +644,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DashboardVendorsVendorIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/dashboard/vendors/import': {
+      id: '/dashboard/vendors/import'
+      path: '/dashboard/vendors/import'
+      fullPath: '/dashboard/vendors/import'
+      preLoaderRoute: typeof DashboardVendorsImportRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/dashboard/admin/compliance/$queueItemId': {
       id: '/dashboard/admin/compliance/$queueItemId'
       path: '/$queueItemId'
@@ -620,8 +680,10 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   DemoRoute: DemoRoute,
   LoginRoute: LoginRoute,
+  PrivacyRoute: PrivacyRoute,
   ResetPasswordRoute: ResetPasswordRoute,
   SignupRoute: SignupRoute,
+  TermsRoute: TermsRoute,
   AcceptInviteTokenRoute: AcceptInviteTokenRoute,
   DashboardHelpRoute: DashboardHelpRoute,
   DashboardReportsRoute: DashboardReportsRoute,
@@ -641,6 +703,7 @@ const rootRouteChildren: RootRouteChildren = {
   DashboardAdminOperationsRoute: DashboardAdminOperationsRoute,
   DashboardProjectsProjectIdRoute: DashboardProjectsProjectIdRoute,
   DashboardVendorsVendorIdRoute: DashboardVendorsVendorIdRoute,
+  DashboardVendorsImportRoute: DashboardVendorsImportRoute,
   DashboardAdminIndexRoute: DashboardAdminIndexRoute,
   DashboardProjectsIndexRoute: DashboardProjectsIndexRoute,
   DashboardVendorsIndexRoute: DashboardVendorsIndexRoute,

@@ -1,5 +1,14 @@
 # VendorClr-Dash
 
+> **Current state (2026-09-22).** The text below is the original bootstrap prompt this
+> project started from; it no longer describes the app. VendorClr is now Supabase-backed
+> (auth, tenancy, RLS, Edge Functions) with a sample-data mode that runs only when no backend
+> is configured. For how the backend works, read [`supabase/README.md`](supabase/README.md).
+> For what each visible action really does, read
+> [`docs/product/action-truth-inventory.md`](docs/product/action-truth-inventory.md). For what
+> still blocks a pilot, read [`docs/operations/go-live-checklist.md`](docs/operations/go-live-checklist.md).
+> Routes live in `src/routes/` (file-based) and `src/app/router.tsx` (names and navigation).
+
 Create a new private project named VendorClr Dashboard. Build a frontend-first authenticated operations dashboard for a construction vendor-compliance service. Do not enable Lovable Cloud, provision a database, run migrations, or connect Supabase. Use a typed in-memory demo repository behind one DashboardRepository interface, and label backend-dependent behavior as demo-only.
 
 Use Manrope for interface text and IBM Plex Mono for dates, limits, policy numbers, and counts. Use #0F172A, #2563EB, #F8FAFC, #15803D, #D97706, and #DC2626. Avoid gradients, oversized marketing cards, ornamental metrics, and excessive animation. The product should feel like a precise construction-risk operations console.

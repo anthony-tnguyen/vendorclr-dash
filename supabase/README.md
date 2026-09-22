@@ -900,6 +900,43 @@ calls the email sender outside `sendUnlessSuppressed()`, if
 without the gate. **The three Edge Functions must be redeployed** for the
 Deno half of this to be live - see Known compromises.
 
+### Pilot-blocker UI: reports, CSV import, reviewer editing, legal pages
+
+Customer UI over backend that already existed (2026-09-22):
+
+- **Reports** (`/dashboard/reports`) - thirteen reports from
+  `src/workflows/reportCatalog.ts`, each backed by an existing
+  `reportRepository.ts` read (no new report SQL). The only new read is
+  `getAssignmentComplianceRows()`, which adds `compliance_cases` so the
+  project/trade rollups can say "not yet evaluated" instead of counting an
+  unevaluated assignment as compliant. `getReportRows()` (view) and
+  `exportReport()` (CSV) both run `assertCompanyMember()` first; only the
+  export writes a `report_exported` audit row. The CSV uses the catalog's
+  column list, so the file matches the table.
+- **CSV import** (`/dashboard/vendors/import`) - upload → preview →
+  `validateVendorImportRows()` → explicit confirmation →
+  `executeVendorImport()` (idempotent on a key minted once per validated
+  file). Validation now also predicts whether each row creates or matches
+  the (project, vendor) assignment, using the same oldest-first vendor
+  lookup `import_vendor_row()` uses, and rejects fractional contract values
+  up front (the column is `bigint`).
+- **Migration `20260922140000_import_write_role_and_extraction_immutability.sql`**
+  - `import_vendor_row()` now requires `can_write_company()` (owner / risk
+    manager / project engineer). It previously accepted any member,
+    including `read_only`, because a SECURITY DEFINER function bypasses the
+    table write policies - a read-only member could create projects and
+    vendors through it. `executeVendorImportHandler()` also checks
+    `can_write_company` before attempting any row.
+  - `document_extractions` rejects every UPDATE (trigger
+    `document_extractions_immutable`); deletes still cascade from
+    `vendor_documents`.
+  - **Not yet applied to staging or production** at the time of writing -
+    apply it after merge and confirm with `list_migrations`.
+- **Reviewer editing** - see [The review queue screen](#the-review-queue-screen)
+  and the Known compromises entry above.
+- **`/terms` and `/privacy`** - factual descriptions only, every commitment
+  section marked "Pending legal/product approval".
+
 ### Deployment verification
 
 Two operational checks, neither part of the app's own request path -
@@ -1267,14 +1304,14 @@ update` on the invite row before checking and marking it used, so two
   test of the lock itself — the guarantee rests on documented Postgres
   row-locking semantics, verified by manual review, the same category of
   gap as the pg_net/pg_cron skip list and the GoTrue-stub caveat above.
-- **`compliance_exceptions` has no persisted internal note.** The exception
-  approval UI collects an internal note, but the table only stores `reason`
-  (which the UI marks as vendor-visible when `vendor_visible` is true),
-  `remaining_risk_acknowledged`, dates and the optional supporting document.
-  The UI therefore shows the note as part of the same record without
-  claiming it is kept separately from anything the vendor can see; a real
-  internal-only note field is a schema change for a later migration, not
-  something to fake in the UI.
+- **`compliance_exceptions` has no internal note.** The table stores
+  `reason` (vendor-visible when `vendor_visible` is true),
+  `remaining_risk_acknowledged`, dates and the optional supporting document,
+  and the approval form (`ComplianceCasesSection.tsx`) asks for exactly
+  those - it has no internal-note field (re-checked 2026-09-22; an earlier
+  version of this note said the UI collected one, which was not true). An
+  internal-only note is a schema change for a later migration, not something
+  to fake in the UI.
 - **Deficiency reopen on exception expiry relies on the housekeeping sweep**
   (`compliance-housekeeping`, fixed schedule). The expired waiver is shown
   as "Expired — deficiency reopens on the next sweep" until that run
@@ -1342,23 +1379,24 @@ src/data/db-types.ts` followed by `git diff --exit-code src/data/db-types.ts`.
   `RESEND_API_KEY` is set (at which point it stops being reachable at all);
   would need real backoff if a _configured_ Resend integration started
   failing repeatedly for one vendor (a bad address, e.g.) instead.
-- **The review screen's approve is all-or-nothing per document, not per
-  coverage line**, and the values it applies are exactly what the model
-  extracted - a reviewer cannot edit a carrier name or fix a misread number
-  before approving. Fine for what triggers review today (a changed carrier,
-  a new coverage type, a date that didn't move forward - all things a
-  reviewer is either fine with as extracted or not); would need real
-  per-line approval and editable fields once a common review reason becomes
-  "the extraction is close but slightly wrong" rather than "the change
-  itself needs a person's judgment."
-- **The review screen's approve does not check `compliance_requirements`.**
+- ~~**The review screen's approve is all-or-nothing per document, and a
+  reviewer cannot edit extracted values.**~~ **Closed.** Approval applies only
+  the coverage lines the reviewer selects, and since the pilot-blockers
+  change (2026-09-22) the review screen has a field editor that saves a new
+  `reviewer_edit` revision through `saveExtractionEdit()` →
+  `record_document_extraction()`. The model's own `document_extractions` row
+  is never touched; migration `20260922140000` makes that a database rule
+  (any UPDATE on `document_extractions` raises). An approval applies the
+  current revision (`vendor_documents.parsed_data`, the cache of
+  `current_extraction_id`).
+- **The review screen's approve does not block on `compliance_requirements`.**
   A reviewer can knowingly apply a certificate below what the company
   requires - the same human-override reasoning as approving a changed
-  carrier. The shortfall is still visible afterward on the vendor's own
-  Coverage Limits table (carried amounts are read live), just not surfaced
-  _during_ the review decision itself - would be a natural addition to the
-  review screen once it's clear reviewers want that context in the moment
-  rather than checking the vendor detail page separately after.
+  carrier. Since 2026-09-22 the vendor's open deficiencies are listed on the
+  review screen ("Requirement shortfalls") so the reviewer sees them during
+  the decision; they are still not a hard gate on approval, and
+  would only become one if reviewers should be prevented, not just
+  informed.
 - **`audit_log` covers three actions, not every mutation in this schema.**
   Direct `vendor_policies`/`vendor_upload_requests`/etc. writes by a company
   member through the normal dashboard flows leave no audit_log row - only
@@ -1445,7 +1483,9 @@ src/data/db-types.ts` followed by `git diff --exit-code src/data/db-types.ts`.
   real email has gone out to bounce yet either - `suppressed_recipients`
   and `handle_bounce_suppression()` are schema-proven
   (`supabase/tests/communications.test.ts`) but not yet exercised by a real
-  bounce end to end.
+  bounce end to end. (Whether `RESEND_API_KEY` is now set on production was
+  not re-verified in the 2026-09-22 pilot-blockers audit - check the
+  Edge Function secrets before relying on this sentence either way.)
 - **Certificate-holder mismatch detection is a loose string comparison,
   not a real legal-name match.** `looksLikeMismatch()` (`VendorDetailPage.tsx`,
   `DocumentReviewPage.tsx`) trims and lowercases before comparing - "Halstead
@@ -1566,15 +1606,20 @@ automated retry queue for failed extraction
 ([Automated retry queue](#automated-retry-queue)), and delivery/bounce
 tracking on outbound email ([Email bounce handling](#email-bounce-handling)).
 
-Every item originally planned across Phases 0-4 is built. That is not the
-same claim as "nothing is left" - see [Known compromises](#known-compromises)
-for the real, ongoing list of deliberate simplifications each phase left
-behind on purpose (narrower scope than a fuller design would have, not
-missing functionality): live provider keys still unset
-(`RESEND_API_KEY`/`ANTHROPIC_API_KEY`/`VIRUSTOTAL_API_KEY`/
-`RESEND_WEBHOOK_SECRET` - everything gracefully degrades until each is
-configured), company-wide (not per-trade) coverage requirements, no
-per-line review-screen editing, and the others listed there.
+Every item originally planned across Phases 0-4 is built, and as of
+2026-09-22 so is every customer-facing screen in the go-live blocker plan
+(projects, requirement profiles, team and invitations, contacts and
+suppression-safe requests, the submission-package portal, deficiencies and
+exceptions, reports with server-side CSV export, bulk CSV import, reviewer
+editing, and draft `/terms` + `/privacy`). That is not the same claim as
+"nothing is left" or "go-live ready" - see [Known compromises](#known-compromises)
+for the deliberate simplifications, and
+[`docs/operations/go-live-checklist.md`](../docs/operations/go-live-checklist.md)
+for what is still open: provider keys per environment (production
+Edge Functions reported `ANTHROPIC_API_KEY` unset at the 2026-09-22 deploy),
+approved legal text, backups and the restore drill, Turnstile keys, alerting,
+and signed-in browser journeys that have never run because no `E2E_*`
+accounts exist.
 
 Nothing here claims otherwise: a `processed` extraction that fails
 `matchExtractedPolicy()` for even one coverage type on the certificate leaves

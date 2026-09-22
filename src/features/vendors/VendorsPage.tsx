@@ -72,14 +72,22 @@ export function VendorsPage() {
       title="Vendors"
       subtitle="Subcontractor roster with the five-slot compliance rail."
       actions={
-        <button
-          type="button"
-          onClick={() => setShowForm((v) => !v)}
-          aria-expanded={showForm}
-          className="focusable rounded-sm bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground"
-        >
-          {showForm ? "Close vendor form" : "Add vendor"}
-        </button>
+        <>
+          <Link
+            to="/dashboard/vendors/import"
+            className="focusable rounded-sm border border-border px-3 py-2 text-sm font-medium"
+          >
+            Import CSV
+          </Link>
+          <button
+            type="button"
+            onClick={() => setShowForm((v) => !v)}
+            aria-expanded={showForm}
+            className="focusable rounded-sm bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground"
+          >
+            {showForm ? "Close vendor form" : "Add vendor"}
+          </button>
+        </>
       }
     >
       <div className="space-y-4">

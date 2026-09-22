@@ -1,6 +1,6 @@
 # VendorClr go-live blockers — verified status and delivery plan
 
-## What I checked in the repo today
+## What I checked in the repo (2026-09-19 snapshot — see the re-verified status table below)
 
 - `bun run format:check` fails on **13 files only**: 12 injected skill docs under `.workspace/skills/` and one archived plan file. No application source is misformatted.
 - Customer screens that exist: overview, vendors, vendor detail, tasks, reports, settings, help, demo. **No projects, requirement-profile, contacts, accept-invite, CSV-import, terms or privacy screens exist.**
@@ -10,27 +10,31 @@
 - Vendor upload portal is still the single-file experience (239 lines).
 - Document review page is substantial (455 lines) — needs auditing, not rebuilding.
 
-## Status of each blocker
+## Status of each blocker (re-verified 2026-09-22)
+
+Checked against `main` at `d5f8897`, the `pilot-blockers-reports-import-legal` branch, CI
+(`gh run list`), and `list_migrations` on production and staging. Nothing is copied forward
+from the 2026-09-19 table. Full evidence: `docs/operations/go-live-checklist.md`.
 
 | Item | Status |
 | --- | --- |
-| P0-1 formatting | 🟡 Partial — only non-source files fail |
-| P0-1 E2E vs new auth model | 🔴 Open — tests still assume anonymous dashboard access |
-| P0-2 Projects UI | 🔴 Open (backend complete) |
-| P0-3 Requirement profiles UI | 🔴 Open (backend complete) |
-| P0-4 Teammate access UI | 🔴 Open (backend complete) |
-| P0-5 `/accept-invite/$token` | 🔴 Open |
-| P0-6 Contacts / broker UI | ✅ Done 2026-09-22 — Contacts panel + communication history on vendor detail |
-| P0-7 Retire legacy request path | ✅ Done 2026-09-22 — legacy path deleted; every send path checks suppression. Migration + 3 Edge Functions deployed to staging and production |
-| P0-8 Package upload portal | 🔴 Open (backend complete) |
-| P0-9 Turnstile client UI | 🔴 Open; keys are ⚪ external |
-| P0-10 Deficiency UI | ✅ Done 2026-09-22 — case/deficiency views on vendor + project detail, suppression-safe correction requests on the existing RPCs |
-| P0-11 Exception UI | ✅ Done 2026-09-22 — owner/risk-manager exception approval with explicit remaining-risk acknowledgement; no "Mark compliant" shortcut. Known limit: no persisted internal-note column |
-| P0-12 Reviewer editing | 🟡 Audit + tests, likely complete |
-| P0-13 Reports CSV export UI | 🔴 Open (backend complete) |
-| P1-1 CSV import UI | 🔴 Open (backend complete) |
-| P0-14 Terms / Privacy routes | 🔴 Open |
-| P0-15…P0-19, P1-2, branch protection | ⚪ External — staging deploy, provider keys, Vault, backups, restore drill, alert destination all need accounts/credentials I cannot provision |
+| P0-1 formatting | ✅ `bun run format:check` passes |
+| P0-1 E2E vs new auth model | 🟡 Specs rewritten for the real access model and CI is green on `main`, but every signed-in journey skips: no `E2E_*` accounts exist |
+| P0-2 Projects UI | ✅ #53/#54, migrations live |
+| P0-3 Requirement profiles UI | ✅ #53/#54 |
+| P0-4 Teammate access UI | ✅ #52 (member management) + #58 (invitations) |
+| P0-5 `/accept-invite/$token` | 🟡 Shipped in #58; browser journey never run |
+| P0-6 Contacts / broker UI | ✅ #55, deployed |
+| P0-7 Retire legacy request path | ✅ #55, deployed |
+| P0-8 Package upload portal | ✅ #57 + #62 |
+| P0-9 Turnstile client UI | 🟡 UI ships; keys ⚪ external |
+| P0-10 Deficiency UI | ✅ |
+| P0-11 Exception UI | 🟡 Shipped; no internal-note column (and no note field) |
+| P0-12 Reviewer editing | 🟡 Pilot-blockers branch: editor → new reviewer revision, revision history + diff, shortfalls, required rejection reason, internal note, review history; invariant tested at unit, UI and DB level. Not merged; migration `20260922140000` not applied |
+| P0-13 Reports CSV export UI | 🟡 Pilot-blockers branch: 13 reports + server CSV export with audit event. Not merged; E2E skipped |
+| P1-1 CSV import UI | 🟡 Pilot-blockers branch. Not merged; E2E skipped |
+| P0-14 Terms / Privacy routes | 🟡 Pilot-blockers branch: routes + links; content pending legal/product approval (⚪) |
+| P0-15…P0-19, P1-2, branch protection | ⚪ External — no staging app deployment, staging provider keys, Turnstile keys, backups/restore drill, alert destination; `main` unprotected |
 
 ## Delivery plan
 

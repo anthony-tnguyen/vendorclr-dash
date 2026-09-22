@@ -2,12 +2,22 @@ import { createServerFn } from "@tanstack/react-start";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { z } from "zod";
 
+import {
+  REPORT_DEFINITIONS,
+  REPORT_KINDS,
+  summarizeComplianceBy,
+  type ReportColumn,
+  type ReportKind,
+  type ReportRow,
+} from "./reportCatalog";
+
 /**
- * Task 11b - server-side CSV export generation. Wired to at least two report
- * shapes (the plan's own explicit "point-in-time audit report" export, plus
- * getOpenDeficienciesReport() as a second, independently-computed report) to
- * prove the generic export path actually works against more than one shape,
- * per the plan's own instruction - not all ten reports need wiring here.
+ * Task 11b - server-side CSV export generation, originally wired to two
+ * report shapes (the point-in-time audit report and open deficiencies).
+ * Since the pilot-blockers Reports UI, every report in reportCatalog.ts is
+ * exportable through the same handler: loadReportRows() below maps each
+ * catalog kind onto its existing reportRepository.ts read, and the CSV uses
+ * the catalog's column list so the file matches the on-screen table.
  *
  * PDF export is explicitly OUT OF SCOPE for this dispatch - see
  * supabase/README.md's Known compromises for the full reasoning (a real
@@ -90,7 +100,7 @@ export function buildExportFilename(companyName: string, reportName: string, dat
 const exportReportSchema = z.object({
   companyId: z.string().uuid(),
   companyName: z.string().min(1),
-  reportKind: z.enum(["audit_snapshot", "open_deficiencies"]),
+  reportKind: z.enum(["audit_snapshot", ...REPORT_KINDS]),
   /** Required when reportKind === "audit_snapshot" - the existing snapshot to render from. */
   snapshotId: z.string().uuid().optional(),
 });
@@ -176,24 +186,157 @@ async function defaultRowsProvider(
     };
   }
 
-  const { getOpenDeficienciesReport } = await import("@/data/repositories/reportRepository");
-  const rows = await getOpenDeficienciesReport(data.companyId);
+  const definition = REPORT_DEFINITIONS[data.reportKind];
+  const rows = await loadReportRows(data.reportKind, data.companyId);
   return {
-    csv: rowsToCsv(rows, [
-      { key: "deficiencyId", header: "Deficiency ID" },
-      { key: "requirementKey", header: "Requirement" },
-      { key: "kind", header: "Kind" },
-      { key: "policyType", header: "Policy Type" },
-      { key: "vendorName", header: "Vendor" },
-      { key: "projectName", header: "Project" },
-      { key: "explanation", header: "Explanation" },
-    ]),
-    reportName: "open-deficiencies",
+    csv: reportTableToCsv(definition.columns, rows),
+    reportName: definition.fileSlug,
     targetType: "company",
     targetId: data.companyId,
     rowCount: rows.length,
   };
 }
+
+/** CSV for a catalog report - the same column list the Reports page renders, in the same order. */
+export function reportTableToCsv(columns: ReportColumn[], rows: ReportRow[]): string {
+  return rowsToCsv(
+    rows,
+    columns.map((c) => ({ key: c.key, header: c.header })),
+  );
+}
+
+/**
+ * Loads one catalog report's rows through the existing Task 11b report
+ * reads (reportRepository.ts - request-scoped client, RLS-scoped to the
+ * caller's company) and flattens them to the catalog's column keys. No
+ * report SQL lives here; each branch is a direct call to the matching
+ * repository function.
+ */
+export async function loadReportRows(kind: ReportKind, companyId: string): Promise<ReportRow[]> {
+  const repo = await import("@/data/repositories/reportRepository");
+  const yesNo = (value: boolean) => (value ? "Yes" : "No");
+
+  switch (kind) {
+    case "compliance_by_project":
+    case "compliance_by_trade":
+      return summarizeComplianceBy(
+        await repo.getAssignmentComplianceRows(companyId),
+        kind === "compliance_by_project" ? "project" : "trade",
+      );
+    case "expiring_30":
+    case "expiring_60":
+    case "expiring_90": {
+      const window = kind === "expiring_30" ? 30 : kind === "expiring_60" ? 60 : 90;
+      const rows = await repo.getExpiryReport(companyId, window);
+      return rows
+        .map((r) => ({
+          vendorName: r.vendorName,
+          policyType: r.policyType,
+          expirationDate: r.expirationDate,
+          projectName: r.projectName,
+          policyId: r.policyId,
+        }))
+        .sort((a, b) => a.expirationDate.localeCompare(b.expirationDate));
+    }
+    case "missing_evidence":
+    case "open_deficiencies": {
+      const rows =
+        kind === "missing_evidence"
+          ? await repo.getMissingDocumentationReport(companyId)
+          : await repo.getOpenDeficienciesReport(companyId);
+      return rows.map((r) => ({
+        vendorName: r.vendorName,
+        projectName: r.projectName,
+        requirementKey: r.requirementKey,
+        kind: r.kind,
+        policyType: r.policyType,
+        explanation: r.explanation,
+        deficiencyId: r.deficiencyId,
+      }));
+    }
+    case "active_exceptions":
+      return (await repo.getExceptionsReport(companyId))
+        .filter((r) => r.isActive)
+        .map((r) => ({
+          vendorName: r.vendorName,
+          projectName: r.projectName,
+          requirementKey: r.requirementKey,
+          reason: r.reason,
+          effectiveOn: r.effectiveOn,
+          expiresOn: r.expiresOn,
+          exceptionId: r.exceptionId,
+        }));
+    case "unresponsive_vendors":
+      return (await repo.getUnresponsiveReport(companyId)).map((r) => ({
+        vendorName: r.vendorName,
+        signal:
+          r.signal === "upload_request_expired"
+            ? "Upload request expired"
+            : "Correction request overdue",
+        since: r.since,
+      }));
+    case "bounced_communications":
+      return (await repo.getBouncedReport(companyId)).map((r) => ({
+        vendorName: r.vendorName,
+        toEmail: r.toEmail,
+        eventType: r.eventType === "bounced" ? "Bounced" : "Marked as spam",
+        occurredAt: r.occurredAt,
+      }));
+    case "time_to_compliance":
+      return (await repo.getTimeToComplianceReport(companyId)).map((r) => ({
+        vendorName: r.vendorName,
+        requirementKey: r.requirementKey,
+        firstEvaluatedAt: r.firstEvaluatedAt,
+        resolvedAt: r.resolvedAt,
+        durationHours: r.durationHours,
+      }));
+    case "resubmissions":
+      return (await repo.getResubmissionsReport(companyId)).map((r) => ({
+        vendorName: r.vendorName,
+        projectName: r.projectName,
+        evaluationRunCount: r.evaluationRunCount,
+        hasResubmission: yesNo(r.hasResubmission),
+      }));
+    case "reviewer_turnaround":
+      return (await repo.getReviewerTurnaroundReport(companyId)).map((r) => ({
+        vendorName: r.vendorName,
+        createdAt: r.createdAt,
+        resolvedAt: r.resolvedAt,
+        durationHours: r.durationHours,
+      }));
+  }
+}
+
+// ---------------------------------------------------------------------------
+// getReportRows - the on-screen read. Same explicit membership check as the
+// export, so viewing and exporting a report are gated identically.
+// ---------------------------------------------------------------------------
+
+const getReportRowsSchema = z.object({
+  companyId: z.string().uuid(),
+  reportKind: z.enum(REPORT_KINDS),
+});
+
+export interface ReportRowsView {
+  reportKind: ReportKind;
+  rows: ReportRow[];
+}
+
+export async function getReportRowsHandler(
+  supabase: SupabaseClient,
+  data: z.infer<typeof getReportRowsSchema>,
+  loadRowsFn: (kind: ReportKind, companyId: string) => Promise<ReportRow[]> = loadReportRows,
+): Promise<ReportRowsView> {
+  await assertCompanyMember(supabase, data.companyId);
+  return { reportKind: data.reportKind, rows: await loadRowsFn(data.reportKind, data.companyId) };
+}
+
+export const getReportRows = createServerFn({ method: "POST" })
+  .validator(getReportRowsSchema)
+  .handler(async ({ data }): Promise<ReportRowsView> => {
+    const supabase = await getRequestScopedClient();
+    return getReportRowsHandler(supabase, data);
+  });
 
 /**
  * The actual logic, taking the SupabaseClient (and, for tests, the

@@ -4,11 +4,14 @@ import {
   buildExportFilename,
   csvEscapeField,
   exportReportHandler,
+  getReportRowsHandler,
+  reportTableToCsv,
   rowsToCsv,
   sanitizeFilenamePart,
   type ReportRowsResult,
 } from "@/workflows/reportExports";
 import { parseCsv } from "@/workflows/vendorImports";
+import { REPORT_DEFINITIONS, REPORT_KINDS, summarizeComplianceBy } from "@/workflows/reportCatalog";
 
 /**
  * Task 11b - src/workflows/reportExports.ts. RLS/permission enforcement
@@ -282,5 +285,171 @@ describe("exportReportHandler()", () => {
         fakeRowsProvider,
       ),
     ).rejects.toThrow(/not authorized/i);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Report catalog (the customer Reports page) - rollup, CSV shape, read gate.
+// ---------------------------------------------------------------------------
+
+describe("summarizeComplianceBy()", () => {
+  const rows = [
+    {
+      projectName: "Harbor Tower",
+      tradeCode: "Electrical",
+      assignmentStatus: "active",
+      evaluated: true,
+      openDeficiencyCount: 0,
+    },
+    {
+      projectName: "Harbor Tower",
+      tradeCode: "Concrete",
+      assignmentStatus: "active",
+      evaluated: true,
+      openDeficiencyCount: 2,
+    },
+    {
+      projectName: "Harbor Tower",
+      tradeCode: "Electrical",
+      assignmentStatus: "active",
+      evaluated: false,
+      openDeficiencyCount: 0,
+    },
+    {
+      projectName: "Pier 9",
+      tradeCode: null,
+      assignmentStatus: "active",
+      evaluated: true,
+      openDeficiencyCount: 0,
+    },
+    {
+      projectName: "Pier 9",
+      tradeCode: "Electrical",
+      assignmentStatus: "terminated",
+      evaluated: true,
+      openDeficiencyCount: 5,
+    },
+  ];
+
+  it("rolls active assignments up by project, never counting an unevaluated assignment as compliant", () => {
+    expect(summarizeComplianceBy(rows, "project")).toEqual([
+      {
+        group: "Harbor Tower",
+        assignments: 3,
+        compliant: 1,
+        nonCompliant: 1,
+        notEvaluated: 1,
+        compliantPct: 50,
+        openDeficiencies: 2,
+      },
+      {
+        group: "Pier 9",
+        assignments: 1,
+        compliant: 1,
+        nonCompliant: 0,
+        notEvaluated: 0,
+        compliantPct: 100,
+        openDeficiencies: 0,
+      },
+    ]);
+  });
+
+  it("rolls up by trade, grouping a missing trade explicitly and skipping ended assignments", () => {
+    const byTrade = summarizeComplianceBy(rows, "trade");
+    expect(byTrade.map((r) => [r.group, r.assignments, r.compliantPct])).toEqual([
+      ["Concrete", 1, 0],
+      ["Electrical", 2, 100],
+      ["No trade set", 1, 100],
+    ]);
+  });
+
+  it("reports no percentage when nothing in a group has been evaluated yet", () => {
+    const [only] = summarizeComplianceBy(
+      [
+        {
+          projectName: "New",
+          tradeCode: null,
+          assignmentStatus: "active",
+          evaluated: false,
+          openDeficiencyCount: 0,
+        },
+      ],
+      "project",
+    );
+    expect(only!.compliantPct).toBeNull();
+  });
+});
+
+describe("report catalog", () => {
+  it("covers every report the pilot requires, each with a unique export filename slug", () => {
+    expect(REPORT_KINDS).toEqual([
+      "compliance_by_project",
+      "compliance_by_trade",
+      "expiring_30",
+      "expiring_60",
+      "expiring_90",
+      "missing_evidence",
+      "open_deficiencies",
+      "active_exceptions",
+      "unresponsive_vendors",
+      "bounced_communications",
+      "time_to_compliance",
+      "resubmissions",
+      "reviewer_turnaround",
+    ]);
+    const slugs = REPORT_KINDS.map((k) => REPORT_DEFINITIONS[k].fileSlug);
+    expect(new Set(slugs).size).toBe(slugs.length);
+  });
+
+  it("exports the same columns, in the same order, as the on-screen table", () => {
+    const { columns } = REPORT_DEFINITIONS.expiring_30;
+    const csv = reportTableToCsv(columns, [
+      {
+        vendorName: "Cascade, Steel",
+        policyType: "general_liability",
+        expirationDate: "2026-10-01",
+        projectName: null,
+        policyId: "p1",
+      },
+    ]);
+    const [header, row] = parseCsv(csv);
+    expect(header).toEqual(columns.map((c) => c.header));
+    expect(row).toEqual(["Cascade, Steel", "general_liability", "2026-10-01", "", "p1"]);
+  });
+});
+
+describe("getReportRowsHandler()", () => {
+  it("refuses a non-member before loading any rows", async () => {
+    const state: FakeState = { userId: NON_MEMBER_ID, members: [], auditLogInserts: [] };
+    let loaded = false;
+    await expect(
+      getReportRowsHandler(
+        makeFakeSupabase(state) as never,
+        { companyId: COMPANY_ID, reportKind: "expiring_30" },
+        async () => {
+          loaded = true;
+          return [];
+        },
+      ),
+    ).rejects.toThrow(/not authorized/i);
+    expect(loaded).toBe(false);
+  });
+
+  it("returns the loaded rows for an active member without writing an audit row (viewing is not exporting)", async () => {
+    const state: FakeState = {
+      userId: MEMBER_ID,
+      members: [{ company_id: COMPANY_ID, user_id: MEMBER_ID, deactivated_at: null }],
+      auditLogInserts: [],
+    };
+    const result = await getReportRowsHandler(
+      makeFakeSupabase(state) as never,
+      { companyId: COMPANY_ID, reportKind: "bounced_communications" },
+      async (kind, companyId) => [{ vendorName: `${kind}:${companyId}` }],
+    );
+    expect(result).toEqual({
+      reportKind: "bounced_communications",
+      rows: [{ vendorName: `bounced_communications:${COMPANY_ID}` }],
+    });
+    expect(state.auditLogInserts).toHaveLength(0);
   });
 });

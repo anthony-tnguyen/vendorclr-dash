@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState, type DragEvent } from "react";
 import { ErrorState, LoadingState } from "@/components/states/AsyncState";
+import { LegalLinks } from "@/features/legal/LegalPages";
 import type { DocumentKind } from "@/data/dbTypeAliases";
 import { ALLOWED_UPLOAD_MIME_TYPES, MAX_UPLOAD_BYTES } from "@/workflows/uploadTokens";
 import {
@@ -341,6 +342,7 @@ export function VendorUploadPortal({ token }: { token: string }) {
             </p>
           </div>
         )}
+        <LegalLinks className="mt-6 flex gap-3 text-xs text-muted-foreground" />
       </main>
     </div>
   );

@@ -1,8 +1,37 @@
 # VendorClr go-live blockers — implementation plan
 
+## Status (re-verified 2026-09-22)
+
+Checked against `main` at `d5f8897`, the `pilot-blockers-reports-import-legal` branch, CI, and
+`list_migrations` on production and staging. The authoritative, row-by-row version is
+`docs/operations/go-live-checklist.md`. ✅ complete · 🟡 partial · 🔴 open · ⚪ external.
+
+| Stage | Status | Notes |
+| --- | --- | --- |
+| 1 — Settings | ✅ | Live on `main`; saves the company default profile with audit history. |
+| 1 — Projects | ✅ | #53/#54; migrations live on both projects. |
+| 1 — Requirement profiles | ✅ | #53/#54. |
+| 2 — Team access + `/accept-invite` | 🟡 | #52/#58 shipped; the browser journey has never run (no `E2E_*` accounts). |
+| 3 — Contacts and requests | ✅ | #55; deployed to staging + production 2026-09-22. |
+| 4 — Vendor upload portal (packages) | 🟡 | #57/#62 shipped; Turnstile keys ⚪. |
+| 5 — Deficiencies and exceptions | 🟡 | Shipped; exceptions have no internal-note column. |
+| 6 — Document review editing | 🟡 | Built on the pilot-blockers branch (new reviewer revision, never overwrites the model's); not merged; migration `20260922140000` not applied. |
+| 6 — CSV import | 🟡 | Built on the pilot-blockers branch; not merged. |
+| 6 — Reports + CSV export | 🟡 | Built on the pilot-blockers branch (13 reports, server exporter, audit event); not merged. PDF out of scope. |
+| 6 — `/terms`, `/privacy` | 🟡 | Routes + links built; content marked "Pending legal/product approval". Approved text ⚪. |
+| 7 — Verification | 🟡 | Unit, DB, build and signed-out browser tests pass; every signed-in browser journey skips (no `E2E_*` accounts). |
+| Staging deployment + provider keys | ⚪ | Staging Supabase exists (`ukbgjriqszthtgwxyirr`); no staging app deployment; staging provider keys not provisioned. |
+| Turnstile | ⚪ | No keys in either environment. |
+| Backups + restore drill | ⚪ | Free plan (no automatic backups); no backup workflow in `.github/workflows/`. |
+| Branch protection | ⚪ | `main` is not protected (GitHub API, 2026-09-22). |
+
+The sections below are the original 2026-09-18 plan, kept as written. Its "What I verified"
+list describes the repository on that date, not today.
+
+
 The brief lists 24 items. Most of the backend exists; what is missing is the customer-facing path, plus some account/infrastructure work that has to happen outside this project. This plan groups the work into shippable stages and separates what I can build from what needs you.
 
-## What I verified in the project today
+## What I verified in the project (2026-09-18 snapshot — superseded by the status table above)
 
 - Settings, Reports export, and Access (invite teammate) still show "not available" outside demo mode.
 - Read paths already exist for projects, assignments, requirement profiles, contacts, suppression, communications history, and all the reports named in the brief (compliance by project/trade, expiring, missing docs, deficiencies, exceptions, unresponsive, bounced, time-to-compliance, resubmissions, reviewer turnaround) plus audit snapshots.

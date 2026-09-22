@@ -8,11 +8,14 @@ import { EmptyState, ErrorState, LoadingState } from "@/components/states/AsyncS
 import {
   getReviewQueueItem,
   resolveReviewItem,
+  saveExtractionEdit,
   selectClassifiedPolicies,
   type ReviewQueueItemDetail,
 } from "@/workflows/documentReview";
+import { diffExtractions } from "@/workflows/extractionDiff";
 import { reprocessDocument } from "@/workflows/vendorUploadRequests";
-import type { PolicyType } from "@/workflows/insuranceExtractionSchema";
+import type { InsuranceExtraction, PolicyType } from "@/workflows/insuranceExtractionSchema";
+import { ExtractionEditor, ExtractionRevisions, ReviewHistory, Shortfalls } from "./ReviewPanels";
 
 /**
  * The screen "What is still not built" in supabase/README.md used to flag as
@@ -49,6 +52,8 @@ function looksLikeMismatch(certificateHolderName: string | null, companyName: st
 export function DocumentReviewPage({ queueItemId }: { queueItemId: string }) {
   const queryClient = useQueryClient();
   const [note, setNote] = useState("");
+  const [rejecting, setRejecting] = useState(false);
+  const [rejectReason, setRejectReason] = useState("");
   const [selectedPolicyTypes, setSelectedPolicyTypes] = useState<PolicyType[]>([]);
   const [confirmingApproval, setConfirmingApproval] = useState(false);
 
@@ -72,13 +77,26 @@ export function DocumentReviewPage({ queueItemId }: { queueItemId: string }) {
           },
         });
       }
+      const reason = rejectReason.trim();
       return resolveReviewItem({
-        data: { queueItemId, decision: "reject", note: trimmedNote },
+        data: {
+          queueItemId,
+          decision: "reject",
+          note: trimmedNote ? `${reason}\n\nInternal note: ${trimmedNote}` : reason,
+        },
       });
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["review-queue-item", queueItemId] });
       void queryClient.invalidateQueries({ queryKey: ["queue"] });
+    },
+  });
+
+  const saveEdit = useMutation({
+    mutationFn: (correctedData: InsuranceExtraction) =>
+      saveExtractionEdit({ data: { documentId: detail.data!.document!.id, correctedData } }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["review-queue-item", queueItemId] });
     },
   });
 
@@ -226,9 +244,30 @@ export function DocumentReviewPage({ queueItemId }: { queueItemId: string }) {
               ) : null}
             </section>
 
+            <Shortfalls shortfalls={data.shortfalls} />
+
+            {data.extractions.length > 0 ? (
+              <ExtractionRevisions
+                revisions={data.extractions}
+                changes={(() => {
+                  const current = data.extractions.find((r) => r.current);
+                  const model = [...data.extractions]
+                    .reverse()
+                    .find((r) => r.source === "model" && r.parsedData);
+                  return current?.source === "reviewer_edit"
+                    ? diffExtractions(model?.parsedData ?? null, current.parsedData)
+                    : [];
+                })()}
+              />
+            ) : null}
+
             {data.document?.parsedData ? (
               <section className="rounded-md border border-border bg-card p-4">
-                <h2 className="text-sm font-semibold text-foreground">Extracted vs. on file</h2>
+                <h2 className="text-sm font-semibold text-foreground">
+                  {data.extractions.find((r) => r.current)?.source === "reviewer_edit"
+                    ? "Current extraction (reviewer revision) vs. on file"
+                    : "Extracted vs. on file"}
+                </h2>
 
                 <div className="mt-3 rounded-sm border border-border bg-muted px-3 py-2">
                   <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
@@ -320,6 +359,24 @@ export function DocumentReviewPage({ queueItemId }: { queueItemId: string }) {
               </section>
             ) : null}
 
+            {!resolved && data.document?.parsedData ? (
+              <ExtractionEditor
+                key={data.extractions.find((r) => r.current)?.id ?? "none"}
+                value={data.document.parsedData}
+                saving={saveEdit.isPending}
+                error={
+                  saveEdit.isError
+                    ? saveEdit.error instanceof Error
+                      ? saveEdit.error.message
+                      : "Could not save this correction."
+                    : null
+                }
+                saved={saveEdit.isSuccess}
+                onSave={(value) => saveEdit.mutate(value)}
+                onChange={() => saveEdit.reset()}
+              />
+            ) : null}
+
             {canApproveOrReject ? (
               <section className="rounded-md border border-border bg-card p-4">
                 <h2 className="text-sm font-semibold text-foreground">Decision</h2>
@@ -352,13 +409,18 @@ export function DocumentReviewPage({ queueItemId }: { queueItemId: string }) {
                     ))}
                   </div>
                 </fieldset>
-                <textarea
-                  value={note}
-                  onChange={(e) => setNote(e.target.value)}
-                  placeholder="Optional note for the audit trail"
-                  rows={2}
-                  className="focusable mt-3 w-full rounded-sm border border-input bg-background px-2 py-1.5 text-sm"
-                />
+                <label className="mt-3 block text-xs font-semibold text-foreground">
+                  Internal note (optional)
+                  <span className="block font-normal text-muted-foreground">
+                    Stored in the review record and audit history. Never sent to the vendor.
+                  </span>
+                  <textarea
+                    value={note}
+                    onChange={(e) => setNote(e.target.value)}
+                    rows={2}
+                    className="focusable mt-1 w-full rounded-sm border border-input bg-background px-2 py-1.5 text-sm font-normal"
+                  />
+                </label>
                 <div className="mt-3 flex flex-wrap gap-2">
                   {!confirmingApproval ? (
                     <button
@@ -407,17 +469,50 @@ export function DocumentReviewPage({ queueItemId }: { queueItemId: string }) {
                       </div>
                     </div>
                   )}
-                  <button
-                    type="button"
-                    disabled={resolve.isPending}
-                    onClick={() => resolve.mutate({ decision: "reject" })}
-                    className="focusable rounded-sm border border-border px-3 py-2 text-xs font-semibold disabled:opacity-60"
-                  >
-                    {resolve.isPending && resolve.variables.decision === "reject"
-                      ? "Rejecting…"
-                      : "Reject"}
-                  </button>
+                  {!rejecting ? (
+                    <button
+                      type="button"
+                      disabled={resolve.isPending}
+                      onClick={() => setRejecting(true)}
+                      className="focusable rounded-sm border border-border px-3 py-2 text-xs font-semibold disabled:opacity-60"
+                    >
+                      Reject…
+                    </button>
+                  ) : null}
                 </div>
+                {rejecting ? (
+                  <div className="mt-3 rounded-sm border border-destructive/40 p-3">
+                    <label className="block text-xs font-semibold text-foreground">
+                      Rejection reason (required)
+                      <textarea
+                        value={rejectReason}
+                        onChange={(e) => setRejectReason(e.target.value)}
+                        rows={2}
+                        className="focusable mt-1 w-full rounded-sm border border-input bg-background px-2 py-1.5 text-sm font-normal"
+                      />
+                    </label>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        disabled={resolve.isPending || rejectReason.trim().length === 0}
+                        onClick={() => resolve.mutate({ decision: "reject" })}
+                        className="focusable rounded-sm bg-destructive px-3 py-2 text-xs font-semibold text-destructive-foreground disabled:opacity-60"
+                      >
+                        {resolve.isPending && resolve.variables.decision === "reject"
+                          ? "Rejecting…"
+                          : "Confirm rejection"}
+                      </button>
+                      <button
+                        type="button"
+                        disabled={resolve.isPending}
+                        onClick={() => setRejecting(false)}
+                        className="focusable rounded-sm border border-border px-3 py-2 text-xs font-semibold"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                ) : null}
                 {!data.document?.parsedData ? (
                   <p className="mt-2 text-xs text-muted-foreground">
                     No extracted data to approve — reprocess this document first, or reject it.
@@ -447,6 +542,8 @@ export function DocumentReviewPage({ queueItemId }: { queueItemId: string }) {
                 ) : null}
               </section>
             ) : null}
+
+            <ReviewHistory history={data.history} />
           </div>
         )}
       </AdminGuard>
