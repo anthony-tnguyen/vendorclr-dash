@@ -33,6 +33,17 @@ export function validateProjectInput(input: ProjectInput): ValidProjectInput {
   };
 }
 
+/** Labels the provenance returned by resolve_assignment_requirements(). */
+export function requirementSourceLabel(source: string): string {
+  const labels: Record<string, string> = {
+    assignment_profile: "Assignment profile",
+    project_profile: "Project profile",
+    company_profile: "Company default",
+    project_override: "Project override",
+  };
+  return labels[source] ?? source.replaceAll("_", " ");
+}
+
 /**
  * Persists an existing project or creates one for the active company. RLS,
  * relationship triggers, and profile-archive triggers make the authorization

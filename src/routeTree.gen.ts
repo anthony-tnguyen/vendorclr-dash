@@ -32,6 +32,7 @@ import { Route as DashboardAdminComplianceRouteImport } from './routes/dashboard
 import { Route as DashboardAdminLeadsRouteImport } from './routes/dashboard.admin.leads'
 import { Route as DashboardAdminOperationsRouteImport } from './routes/dashboard.admin.operations'
 import { Route as DashboardProjectsIndexRouteImport } from './routes/dashboard.projects.index'
+import { Route as DashboardProjectsProjectIdRouteImport } from './routes/dashboard.projects.$projectId'
 import { Route as DashboardVendorsIndexRouteImport } from './routes/dashboard.vendors.index'
 import { Route as DashboardVendorsVendorIdRouteImport } from './routes/dashboard.vendors.$vendorId'
 import { Route as DashboardAdminComplianceQueueItemIdRouteImport } from './routes/dashboard.admin.compliance.$queueItemId'
@@ -155,6 +156,12 @@ const DashboardProjectsIndexRoute = DashboardProjectsIndexRouteImport.update({
   path: '/dashboard/projects/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const DashboardProjectsProjectIdRoute =
+  DashboardProjectsProjectIdRouteImport.update({
+    id: '/dashboard/projects/$projectId',
+    path: '/dashboard/projects/$projectId',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const DashboardVendorsIndexRoute = DashboardVendorsIndexRouteImport.update({
   id: '/dashboard/vendors/',
   path: '/dashboard/vendors/',
@@ -195,6 +202,7 @@ export interface FileRoutesByFullPath {
   '/dashboard/admin/compliance': typeof DashboardAdminComplianceRouteWithChildren
   '/dashboard/admin/leads': typeof DashboardAdminLeadsRoute
   '/dashboard/admin/operations': typeof DashboardAdminOperationsRoute
+  '/dashboard/projects/$projectId': typeof DashboardProjectsProjectIdRoute
   '/dashboard/vendors/$vendorId': typeof DashboardVendorsVendorIdRoute
   '/dashboard/admin/': typeof DashboardAdminIndexRoute
   '/dashboard/projects/': typeof DashboardProjectsIndexRoute
@@ -223,6 +231,7 @@ export interface FileRoutesByTo {
   '/dashboard/admin/compliance': typeof DashboardAdminComplianceRouteWithChildren
   '/dashboard/admin/leads': typeof DashboardAdminLeadsRoute
   '/dashboard/admin/operations': typeof DashboardAdminOperationsRoute
+  '/dashboard/projects/$projectId': typeof DashboardProjectsProjectIdRoute
   '/dashboard/vendors/$vendorId': typeof DashboardVendorsVendorIdRoute
   '/dashboard/admin': typeof DashboardAdminIndexRoute
   '/dashboard/projects': typeof DashboardProjectsIndexRoute
@@ -252,6 +261,7 @@ export interface FileRoutesById {
   '/dashboard/admin/compliance': typeof DashboardAdminComplianceRouteWithChildren
   '/dashboard/admin/leads': typeof DashboardAdminLeadsRoute
   '/dashboard/admin/operations': typeof DashboardAdminOperationsRoute
+  '/dashboard/projects/$projectId': typeof DashboardProjectsProjectIdRoute
   '/dashboard/vendors/$vendorId': typeof DashboardVendorsVendorIdRoute
   '/dashboard/admin/': typeof DashboardAdminIndexRoute
   '/dashboard/projects/': typeof DashboardProjectsIndexRoute
@@ -282,6 +292,7 @@ export interface FileRouteTypes {
     | '/dashboard/admin/compliance'
     | '/dashboard/admin/leads'
     | '/dashboard/admin/operations'
+    | '/dashboard/projects/$projectId'
     | '/dashboard/vendors/$vendorId'
     | '/dashboard/admin/'
     | '/dashboard/projects/'
@@ -310,6 +321,7 @@ export interface FileRouteTypes {
     | '/dashboard/admin/compliance'
     | '/dashboard/admin/leads'
     | '/dashboard/admin/operations'
+    | '/dashboard/projects/$projectId'
     | '/dashboard/vendors/$vendorId'
     | '/dashboard/admin'
     | '/dashboard/projects'
@@ -338,6 +350,7 @@ export interface FileRouteTypes {
     | '/dashboard/admin/compliance'
     | '/dashboard/admin/leads'
     | '/dashboard/admin/operations'
+    | '/dashboard/projects/$projectId'
     | '/dashboard/vendors/$vendorId'
     | '/dashboard/admin/'
     | '/dashboard/projects/'
@@ -367,6 +380,7 @@ export interface RootRouteChildren {
   DashboardAdminComplianceRoute: typeof DashboardAdminComplianceRouteWithChildren
   DashboardAdminLeadsRoute: typeof DashboardAdminLeadsRoute
   DashboardAdminOperationsRoute: typeof DashboardAdminOperationsRoute
+  DashboardProjectsProjectIdRoute: typeof DashboardProjectsProjectIdRoute
   DashboardVendorsVendorIdRoute: typeof DashboardVendorsVendorIdRoute
   DashboardAdminIndexRoute: typeof DashboardAdminIndexRoute
   DashboardProjectsIndexRoute: typeof DashboardProjectsIndexRoute
@@ -536,6 +550,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DashboardProjectsIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/dashboard/projects/$projectId': {
+      id: '/dashboard/projects/$projectId'
+      path: '/dashboard/projects/$projectId'
+      fullPath: '/dashboard/projects/$projectId'
+      preLoaderRoute: typeof DashboardProjectsProjectIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/dashboard/vendors/': {
       id: '/dashboard/vendors/'
       path: '/dashboard/vendors'
@@ -597,6 +618,7 @@ const rootRouteChildren: RootRouteChildren = {
   DashboardAdminComplianceRoute: DashboardAdminComplianceRouteWithChildren,
   DashboardAdminLeadsRoute: DashboardAdminLeadsRoute,
   DashboardAdminOperationsRoute: DashboardAdminOperationsRoute,
+  DashboardProjectsProjectIdRoute: DashboardProjectsProjectIdRoute,
   DashboardVendorsVendorIdRoute: DashboardVendorsVendorIdRoute,
   DashboardAdminIndexRoute: DashboardAdminIndexRoute,
   DashboardProjectsIndexRoute: DashboardProjectsIndexRoute,

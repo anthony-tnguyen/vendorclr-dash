@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { validateProjectInput } from "@/workflows/projects";
+import { requirementSourceLabel, validateProjectInput } from "@/workflows/projects";
 
 describe("validateProjectInput", () => {
   it("rejects a blank project name before any persistence attempt", () => {
@@ -24,3 +24,9 @@ describe("validateProjectInput", () => {
   });
 });
 
+describe("requirementSourceLabel", () => {
+  it("explains the resolver precedence source without reimplementing it in the client", () => {
+    expect(requirementSourceLabel("assignment_profile")).toBe("Assignment profile");
+    expect(requirementSourceLabel("project_override")).toBe("Project override");
+  });
+});
