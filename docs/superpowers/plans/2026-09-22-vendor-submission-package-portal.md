@@ -26,11 +26,13 @@
 ### Task 1: Add package portal contracts and safe open-package attachment removal
 
 **Files:**
+
 - Modify: `src/workflows/submissionPackages.ts`
 - Modify: `src/workflows/vendorUploadRequests.ts`
 - Test: `src/tests/submission-packages.test.ts`
 
 **Interfaces:**
+
 - Consumes: `resolveActiveUploadRequestByToken`, `openOrGetCurrentPackage`, `fetchChecklistView`, and `DocumentKind`.
 - Produces: `loadPackagePortal(token) -> PackagePortalView` and `removePackageDocument({ token, packageId, documentId }) -> { packageId, checklist }`.
 
@@ -44,11 +46,13 @@
 ### Task 2: Surface Turnstile challenge-required state safely
 
 **Files:**
+
 - Modify: `src/workflows/uploadAbuse.server.ts`
 - Modify: `src/workflows/submissionPackages.ts`
 - Test: `src/tests/upload-abuse.test.ts`
 
 **Interfaces:**
+
 - Consumes: `CaptchaRequiredError`, `assertUploadAllowed`, and `verifyTurnstileToken`.
 - Produces: stable `turnstile_required` public error metadata and a portal retry path accepting a captcha token.
 
@@ -62,10 +66,12 @@
 ### Task 3: Replace the single-file portal with package lifecycle UI
 
 **Files:**
+
 - Modify: `src/features/vendor-upload/VendorUploadPortal.tsx`
 - Create: `src/tests/vendor-upload-portal.test.tsx`
 
 **Interfaces:**
+
 - Consumes: `resolveUploadToken`, `loadPackagePortal`, `addPackageDocument`, `removePackageDocument`, `finalizePackage`, and `replaceDeficientDocument`.
 - Produces: four states: request context, upload, review, receipt.
 
@@ -80,11 +86,13 @@
 ### Task 4: Add accessible conditional Turnstile widget
 
 **Files:**
+
 - Create: `src/features/vendor-upload/TurnstileChallenge.tsx`
 - Modify: `src/features/vendor-upload/VendorUploadPortal.tsx`
 - Modify: `src/tests/vendor-upload-portal.test.tsx`
 
 **Interfaces:**
+
 - Consumes: `turnstile_required` and `VITE_TURNSTILE_SITE_KEY`.
 - Produces: `TurnstileChallenge({ siteKey, onToken, onError })` with no secret exposed.
 
@@ -98,6 +106,7 @@
 ### Task 5: Add database and browser evidence
 
 **Files:**
+
 - Modify: `src/tests/submission-packages.test.ts`
 - Modify: `supabase/tests/submission-packages.test.ts`
 - Create: `e2e/vendor-submission-package.spec.ts`
@@ -114,6 +123,7 @@
 ### Task 6: Update truth documentation and complete release checks
 
 **Files:**
+
 - Modify: `roadmap.md`
 - Modify: `docs/product/action-truth-inventory.md`
 - Modify: `supabase/README.md`
