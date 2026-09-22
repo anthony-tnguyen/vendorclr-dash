@@ -90,13 +90,11 @@ describe("production action truthfulness", () => {
     expect(main().queryByText(/demo/i)).not.toBeInTheDocument();
   });
 
-  it("does not present teammate invitations as available in production", async () => {
+  it("does not present a broken teammate-invite control on the legacy access page", async () => {
     renderWithQueryClient(<AccessPage />);
 
     expect(await main().findByText("No access grants")).toBeInTheDocument();
-    expect(
-      main().getByRole("button", { name: "Teammate invitations are not available" }),
-    ).toBeDisabled();
+    expect(main().queryByRole("button", { name: /invite/i })).not.toBeInTheDocument();
     expect(main().queryByText(/demo/i)).not.toBeInTheDocument();
   });
 

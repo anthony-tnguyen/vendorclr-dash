@@ -202,16 +202,6 @@ describe("administrator route behavior", () => {
     );
   });
 
-  it("keeps access invitations demo-only", async () => {
-    const { user } = await renderAdminRoute("/dashboard/admin/access");
-
-    await screen.findByText("Rosa Sandoval");
-    await user.click(screen.getByRole("button", { name: /invite teammate/i }));
-    expect(await screen.findByRole("status")).toHaveTextContent(
-      /no invitation was created or emailed/i,
-    );
-  });
-
   // Mutates the shared demo repository singleton (creates then withdraws a code
   // in its in-memory store). Kept last in this describe block since nothing
   // resets the repository between tests in this file - a test added after this
