@@ -10,7 +10,11 @@ let companyId: string;
 
 beforeAll(async () => {
   db = await createTestDb();
-  await signUp(db, { id: OWNER, email: "projects-owner@halstead.test", companyName: "Halstead Builders" });
+  await signUp(db, {
+    id: OWNER,
+    email: "projects-owner@halstead.test",
+    companyName: "Halstead Builders",
+  });
   companyId = await companyIdFor(db, OWNER);
 }, 60_000);
 
@@ -32,10 +36,9 @@ describe("customer projects and requirement profiles", () => {
       [companyId],
     );
 
-    await db.query(
-      `update public.requirement_profiles set archived_at = now() where id = $1`,
-      [profile.rows[0]!.id],
-    );
+    await db.query(`update public.requirement_profiles set archived_at = now() where id = $1`, [
+      profile.rows[0]!.id,
+    ]);
 
     await expect(
       asUser(

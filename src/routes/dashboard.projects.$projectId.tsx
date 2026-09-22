@@ -3,5 +3,10 @@ import { ProjectDetailPage } from "@/features/projects/ProjectDetailPage";
 
 export const Route = createFileRoute("/dashboard/projects/$projectId")({
   head: () => ({ meta: [{ title: "Project detail — VendorClr" }] }),
-  component: () => <ProjectDetailPage projectId={Route.useParams().projectId} />,
+  component: ProjectDetailRoute,
 });
+
+function ProjectDetailRoute() {
+  const { projectId } = Route.useParams();
+  return <ProjectDetailPage projectId={projectId} />;
+}
