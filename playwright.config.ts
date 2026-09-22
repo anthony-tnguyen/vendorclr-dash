@@ -39,13 +39,11 @@ const config: Parameters<typeof defineConfig>[0] = {
     // Chromium can point at a working one, e.g. PLAYWRIGHT_CHROMIUM_EXECUTABLE
     // from a nix-built chromium. CI uses the bundled browser.
     ...(process.env["PLAYWRIGHT_CHROMIUM_EXECUTABLE"]
-      ? { executablePath: process.env["PLAYWRIGHT_CHROMIUM_EXECUTABLE"] }
+      ? { launchOptions: { executablePath: process.env["PLAYWRIGHT_CHROMIUM_EXECUTABLE"] } }
       : {}),
   },
   projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
 };
-
-console.log("[pw-config] executable =", process.env["PLAYWRIGHT_CHROMIUM_EXECUTABLE"] ?? "(unset)");
 
 if (!externalBaseURL) {
   config.webServer = {
