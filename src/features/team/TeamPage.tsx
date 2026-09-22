@@ -14,7 +14,7 @@ import {
   type CompanyMemberSummary,
 } from "@/workflows/companyInvitations";
 import { InviteMemberForm } from "./InviteMemberForm";
-// import { PendingInvitationsTable } from "./PendingInvitationsTable";
+import { PendingInvitationsTable } from "./PendingInvitationsTable";
 import { ROLE_OPTIONS, roleLabel } from "./roleOptions";
 
 /**
@@ -130,6 +130,7 @@ export function TeamPage() {
                 }
               />
             ) : null}
+            {isOwner ? <PendingInvitationsTable companyId={companyId as string} /> : null}
             {error ? (
               <p
                 role="alert"
