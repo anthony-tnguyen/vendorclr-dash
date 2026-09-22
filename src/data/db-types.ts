@@ -1568,6 +1568,7 @@ export type Database = {
           created_at: string;
           default_requirement_profile_id: string | null;
           id: string;
+          location: string;
           name: string;
           project_number: string | null;
           status: string;
@@ -1580,6 +1581,7 @@ export type Database = {
           created_at?: string;
           default_requirement_profile_id?: string | null;
           id?: string;
+          location?: string;
           name: string;
           project_number?: string | null;
           status?: string;
@@ -1592,6 +1594,7 @@ export type Database = {
           created_at?: string;
           default_requirement_profile_id?: string | null;
           id?: string;
+          location?: string;
           name?: string;
           project_number?: string | null;
           status?: string;
@@ -1687,6 +1690,7 @@ export type Database = {
       };
       requirement_profiles: {
         Row: {
+          archived_at: string | null;
           company_id: string;
           created_at: string;
           id: string;
@@ -1695,6 +1699,7 @@ export type Database = {
           updated_at: string;
         };
         Insert: {
+          archived_at?: string | null;
           company_id: string;
           created_at?: string;
           id?: string;
@@ -1703,6 +1708,7 @@ export type Database = {
           updated_at?: string;
         };
         Update: {
+          archived_at?: string | null;
           company_id?: string;
           created_at?: string;
           id?: string;

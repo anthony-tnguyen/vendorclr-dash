@@ -17,6 +17,9 @@ export const routes = {
   vendorDetail: "/dashboard/vendors/$vendorId",
   tasks: "/dashboard/tasks",
   reports: "/dashboard/reports",
+  projects: "/dashboard/projects",
+  projectDetail: "/dashboard/projects/$projectId",
+  requirementProfiles: "/dashboard/requirement-profiles",
   settings: "/dashboard/settings",
   team: "/dashboard/team",
   adminOverview: "/dashboard/admin",
@@ -38,6 +41,7 @@ export interface NavItem {
 export const customerNav = [
   { label: "Command center", to: routes.dashboard, description: "Compliance priorities and KPIs" },
   { label: "Vendors", to: routes.vendors, description: "Vendor roster and compliance rail" },
+  { label: "Projects", to: routes.projects, description: "Project assignments and requirements" },
   { label: "Tasks", to: routes.tasks, description: "Open compliance follow-ups" },
   { label: "Reports", to: routes.reports, description: "Project level compliance reporting" },
   { label: "Settings", to: routes.settings, description: "Requirement defaults and contacts" },
