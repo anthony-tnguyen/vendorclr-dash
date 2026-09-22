@@ -311,7 +311,7 @@ export function VendorUploadPortal({ token }: { token: string }) {
         ) : failed ? (
           <div className="mt-3">
             <ErrorState
-              title="This link isn’t working"
+              title="This link isn't working"
               description={
                 request.error instanceof Error
                   ? request.error.message
