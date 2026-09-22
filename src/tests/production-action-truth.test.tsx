@@ -82,12 +82,15 @@ describe("production action truthfulness", () => {
     expect(main().queryByText(/demo/i)).not.toBeInTheDocument();
   });
 
-  it("does not present the unavailable CSV export as a production download", async () => {
+  it("offers the real CSV export in production, and only once there is a company to export", async () => {
     renderWithQueryClient(<ReportsPage />);
 
-    expect(await main().findByText("No reportable projects")).toBeInTheDocument();
-    expect(main().getByRole("button", { name: "CSV export is not available" })).toBeDisabled();
+    // The mocked live session has no company: the page says so, and the
+    // server-backed export stays disabled rather than pretending to work.
+    expect(await main().findByText("No company workspace")).toBeInTheDocument();
+    expect(main().getByRole("button", { name: "Export CSV" })).toBeDisabled();
     expect(main().queryByText(/demo/i)).not.toBeInTheDocument();
+    expect(main().queryByText(/not available/i)).not.toBeInTheDocument();
   });
 
   it("does not present a broken teammate-invite control on the legacy access page", async () => {
@@ -104,13 +107,5 @@ describe("production action truthfulness", () => {
     const form = screen.getByRole("form", { name: "Add vendor" });
     expect(within(form).getByRole("button", { name: "Add vendor" })).toBeEnabled();
     expect(within(form).queryByText(/demo/i)).not.toBeInTheDocument();
-  });
-
-  it("keeps production report errors free of demo language", async () => {
-    repository.listReportRows.mockRejectedValueOnce(new Error("Network unavailable"));
-    renderWithQueryClient(<ReportsPage />);
-
-    expect(await main().findByRole("alert")).toHaveTextContent("Could not load report data.");
-    expect(main().queryByText(/demo/i)).not.toBeInTheDocument();
   });
 });

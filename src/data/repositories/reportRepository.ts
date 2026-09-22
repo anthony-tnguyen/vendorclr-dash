@@ -110,6 +110,91 @@ export async function getProjectTradeReport(companyId: string): Promise<ProjectT
 }
 
 // ---------------------------------------------------------------------------
+// 1b. Per-assignment compliance state - underlies the "compliance by
+// project" and "compliance by trade" rollups (summarizeComplianceBy() in
+// src/workflows/reportCatalog.ts). Same two reads as getProjectTradeReport()
+// above plus one read of compliance_cases, so an assignment that has never
+// been evaluated is reported as exactly that rather than silently counted as
+// compliant just because it has no open deficiency yet.
+// ---------------------------------------------------------------------------
+
+export interface AssignmentComplianceRow {
+  assignmentId: string;
+  projectId: string;
+  projectName: string;
+  tradeCode: string | null;
+  assignmentStatus: string;
+  /** At least one compliance case exists for this assignment. */
+  evaluated: boolean;
+  openDeficiencyCount: number;
+}
+
+export async function getAssignmentComplianceRows(
+  companyId: string,
+): Promise<AssignmentComplianceRow[]> {
+  const supabase = await getRequestScopedClient();
+
+  const assignmentsResult = (await supabase
+    .from("project_vendor_assignments")
+    .select("id, trade_code, status, project:projects(id, name)")
+    .eq("company_id", companyId)) as unknown as {
+    data: Array<{
+      id: string;
+      trade_code: string | null;
+      status: string;
+      project: { id: string; name: string } | null;
+    }> | null;
+    error: { message: string } | null;
+  };
+  const assignments = unwrap({
+    data: assignmentsResult.data ?? [],
+    error: assignmentsResult.error,
+  });
+
+  const casesResult = (await supabase
+    .from("compliance_cases")
+    .select("assignment_id")
+    .eq("company_id", companyId)) as unknown as {
+    data: Array<{ assignment_id: string }> | null;
+    error: { message: string } | null;
+  };
+  const cases = unwrap({ data: casesResult.data ?? [], error: casesResult.error });
+  const evaluatedAssignments = new Set(cases.map((c) => c.assignment_id));
+
+  const deficienciesResult = (await supabase
+    .from("compliance_deficiencies")
+    .select("id, case:compliance_cases(assignment_id)")
+    .eq("company_id", companyId)
+    .eq("status", "open")) as unknown as {
+    data: Array<{ id: string; case: { assignment_id: string } | null }> | null;
+    error: { message: string } | null;
+  };
+  const deficiencies = unwrap({
+    data: deficienciesResult.data ?? [],
+    error: deficienciesResult.error,
+  });
+
+  const openCountByAssignment = new Map<string, number>();
+  for (const d of deficiencies) {
+    const assignmentId = d.case?.assignment_id;
+    if (!assignmentId) continue;
+    openCountByAssignment.set(assignmentId, (openCountByAssignment.get(assignmentId) ?? 0) + 1);
+  }
+
+  return assignments
+    .filter((a) => a.project !== null)
+    .map((a) => ({
+      assignmentId: a.id,
+      projectId: a.project!.id,
+      projectName: a.project!.name,
+      tradeCode: a.trade_code,
+      assignmentStatus: a.status,
+      evaluated: evaluatedAssignments.has(a.id),
+      openDeficiencyCount: openCountByAssignment.get(a.id) ?? 0,
+    }));
+}
+
+// ---------------------------------------------------------------------------
 // 2. 30/60/90 expiry report
 // ---------------------------------------------------------------------------
 

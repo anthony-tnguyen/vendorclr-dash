@@ -211,6 +211,36 @@ describe("record_document_extraction()", () => {
     expect(history.rows[0]?.n).toBe(2);
   });
 
+  it("rejects every UPDATE of an extraction row, even from a role that bypasses RLS (20260922140000)", async () => {
+    const documentId = await insertDocument();
+    const modelResult = await db.query<{ record_document_extraction: string }>(
+      `select public.record_document_extraction($1, $2, 'model', 'anthropic', 'claude-opus-5', 'v1', $3, $4::jsonb, null)`,
+      [documentId, companyA, 0.5, JSON.stringify(MODEL_PARSED)],
+    );
+    const modelExtractionId = modelResult.rows[0]!.record_document_extraction;
+
+    // The test connection is a superuser - stricter than the service role.
+    await expect(
+      db.query(`update public.document_extractions set parsed_data = '{}'::jsonb where id = $1`, [
+        modelExtractionId,
+      ]),
+    ).rejects.toThrow(/immutable/);
+
+    const unchanged = await db.query<{ parsed_data: typeof MODEL_PARSED }>(
+      `select parsed_data from public.document_extractions where id = $1`,
+      [modelExtractionId],
+    );
+    expect(unchanged.rows[0]?.parsed_data).toEqual(MODEL_PARSED);
+
+    // Deleting the document still cascades (customer deletion keeps working).
+    await db.query(`delete from public.vendor_documents where id = $1`, [documentId]);
+    const remaining = await db.query<{ n: number }>(
+      `select count(*)::int n from public.document_extractions where document_id = $1`,
+      [documentId],
+    );
+    expect(remaining.rows[0]?.n).toBe(0);
+  });
+
   it("rejects a reviewer_edit row with no reviewer_id, and a model row with one", async () => {
     const documentId = await insertDocument();
     await expect(

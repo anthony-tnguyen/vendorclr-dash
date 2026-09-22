@@ -237,6 +237,8 @@ describe("validateRows()", () => {
 // ---------------------------------------------------------------------------
 
 interface FakeTableState {
+  /** Result of the can_write_company() role check; defaults to true (a writer). */
+  canWrite?: boolean;
   projects: Array<{ name: string }>;
   vendors: Array<{ name: string; contact_email: string }>;
   batches: Map<
@@ -266,6 +268,7 @@ function makeFakeSupabase(
     const builder: any = {};
     Object.assign(builder, {
       select: () => builder,
+      order: () => builder,
       eq: (col: string, val: unknown) => {
         filters[col] = val;
         return builder;
@@ -327,7 +330,10 @@ function makeFakeSupabase(
 
   return {
     from: (table: string) => builderFor(table),
-    rpc: async (_name: string, params: Record<string, unknown>) => rpcImpl(params),
+    rpc: async (name: string, params: Record<string, unknown>) =>
+      name === "can_write_company"
+        ? { data: state.canWrite ?? true, error: null }
+        : rpcImpl(params),
   };
 }
 
@@ -503,5 +509,81 @@ describe("executeVendorImportHandler()", () => {
 
     expect(dispatchCalls).toBe(0);
     expect(result.rowResults[0]!.dispatch).toBeUndefined();
+  });
+});
+
+describe("assignment prediction and write-role guard", () => {
+  it("predicts create vs. match for the assignment, mirroring import_vendor_row()'s (project, vendor) lookup", () => {
+    const ctx = {
+      ...emptyValidationContext(),
+      existingProjectNames: new Set(["Harbor Tower", "Pier 9"]),
+      existingVendorNames: new Set(["cascade steel"]),
+      existingVendorEmails: new Set(["ops@cascadesteel.test"]),
+      projectIdsByName: new Map([
+        ["Harbor Tower", "p-harbor"],
+        ["Pier 9", "p-pier"],
+      ]),
+      vendors: [{ id: "v-cascade", name: "cascade steel", email: "ops@cascadesteel.test" }],
+      assignmentKeys: new Set(["p-harbor:v-cascade"]),
+    };
+
+    const results = validateRows(
+      [
+        row({ rowNumber: 1, projectName: "Harbor Tower", vendorName: "Cascade Steel" }),
+        row({ rowNumber: 2, projectName: "Pier 9", vendorName: "Cascade Steel" }),
+        // Matched by contact email even though the name differs - same as the SQL lookup.
+        row({
+          rowNumber: 3,
+          projectName: "Pier 9",
+          vendorName: "Cascade Steel LLC",
+          contactEmail: "OPS@cascadesteel.test",
+        }),
+        row({ rowNumber: 4, projectName: "New Site", vendorName: "Cascade Steel" }),
+      ],
+      ctx,
+    );
+
+    expect(results.map((r) => r.willCreateAssignment)).toEqual([false, true, false, true]);
+    expect(results[2]).toMatchObject({ willCreateProject: false, willCreateVendor: false });
+  });
+
+  it("returns null (unknown) for the assignment when the context carries names but no ids", () => {
+    const result = validateOneRow(row({ projectName: "Harbor Tower", vendorName: "Cascade" }), {
+      existingProjectNames: new Set(["Harbor Tower"]),
+      existingVendorNames: new Set(["cascade"]),
+      existingVendorEmails: new Set(),
+    });
+    expect(result.willCreateAssignment).toBeNull();
+  });
+
+  it("rejects a fractional contract value up front instead of failing at the bigint write", () => {
+    const result = validateOneRow(row({ contractValue: 1500.5 }), emptyValidationContext());
+    expect(result.status).toBe("rejected");
+    expect(result.errors).toEqual([
+      {
+        field: "contract_value",
+        reason: "Contract value must be a whole dollar amount (no cents).",
+      },
+    ]);
+  });
+
+  it("refuses a read-only member before attempting any row", async () => {
+    const state = { ...emptyState(), canWrite: false };
+    const rpcCalls: unknown[] = [];
+    const supabase = makeFakeSupabase(state, (params) => {
+      rpcCalls.push(params);
+      return successfulRpc(params);
+    });
+
+    await expect(
+      executeVendorImportHandler(supabase as never, {
+        companyId: "company-1",
+        idempotencyKey: "read-only-key",
+        rows: [row({ rowNumber: 1 })],
+        dispatchRequests: false,
+      }),
+    ).rejects.toThrow(/cannot import/);
+    expect(rpcCalls).toHaveLength(0);
+    expect(state.batches.size).toBe(0);
   });
 });

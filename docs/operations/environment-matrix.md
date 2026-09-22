@@ -3,6 +3,14 @@
 Status: Task 13 (deployment, backup and smoke matrix).
 Last verified against the live projects on 2026-09-17.
 
+> **2026-09-22 observation (not a full re-verification):** at the production deploy of the
+> contacts/suppression change, the production `process-document-jobs` Edge Function reported
+> `notConfigured`, which means the `ANTHROPIC_API_KEY` Edge Function secret was unset on
+> production that day. That contradicts the "one live key, used today" wording in the
+> provider table below. The Worker-side key was not checked. Confirm the Edge Function
+> secrets before relying on either statement. `list_migrations` on 2026-09-22 showed staging
+> and production at schema parity with `main`.
+
 This is the authoritative list of every environment-specific value the
 implementation plan names for Task 13, split into a STAGING column and a
 PRODUCTION column, with an explicit note on whether each one is **already

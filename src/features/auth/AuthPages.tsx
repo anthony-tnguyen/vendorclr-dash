@@ -1,4 +1,5 @@
 import { Link, useNavigate, useSearch } from "@tanstack/react-router";
+import { LegalLinks } from "@/features/legal/LegalPages";
 import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 
 import { useSession } from "@/app/App";
@@ -77,6 +78,7 @@ function AuthLayout({
           {children}
         </div>
         <div className="mt-4 text-sm text-muted-foreground">{footer}</div>
+        <LegalLinks className="mt-6 flex gap-3 text-xs text-muted-foreground" />
       </div>
     </div>
   );

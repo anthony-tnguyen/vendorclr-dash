@@ -77,6 +77,55 @@ export interface ReviewQueueItemDetail {
     policyNumber: string;
     expirationDate: string | null;
   }>;
+  /**
+   * Every document_extractions row for this document, oldest first. Model
+   * attempts and reviewer revisions are separate immutable rows; `current`
+   * marks the one vendor_documents.current_extraction_id points at.
+   */
+  extractions: ExtractionRevision[];
+  /** Open compliance deficiencies for this vendor - the requirement shortfalls a reviewer weighs before approving. */
+  shortfalls: Array<{
+    id: string;
+    requirementKey: string;
+    kind: string | null;
+    policyType: string | null;
+    explanation: string;
+    projectName: string | null;
+  }>;
+  /** audit_log rows for this document and this queue item, newest first. */
+  history: Array<{
+    id: string;
+    action: string;
+    createdAt: string;
+    actorEmail: string | null;
+    /** detail.note when the row carries one (review decisions do). */
+    note: string | null;
+  }>;
+}
+
+export interface ExtractionRevision {
+  id: string;
+  source: "model" | "reviewer_edit";
+  model: string | null;
+  promptVersion: string | null;
+  confidence: number | null;
+  createdAt: string;
+  reviewerEmail: string | null;
+  error: string | null;
+  parsedData: InsuranceExtraction | null;
+  current: boolean;
+}
+
+async function emailsFor(
+  supabase: Awaited<ReturnType<typeof getServiceRoleClient>>,
+  userIds: Array<string | null>,
+): Promise<Map<string, string>> {
+  const ids = [...new Set(userIds.filter((id): id is string => !!id))];
+  if (ids.length === 0) return new Map();
+  const { data } = await supabase.from("profiles").select("id, email").in("id", ids);
+  return new Map(
+    ((data ?? []) as Array<{ id: string; email: string }>).map((p) => [p.id, p.email]),
+  );
 }
 
 export const getReviewQueueItem = createServerFn({ method: "GET" })
@@ -116,7 +165,7 @@ export const getReviewQueueItem = createServerFn({ method: "GET" })
       const { data: docRow } = await supabase
         .from("vendor_documents")
         .select(
-          "id, file_name, mime_type, storage_path, processing_status, processing_error, review_reason, parsed_data, applied_policy_id",
+          "id, file_name, mime_type, storage_path, processing_status, processing_error, review_reason, parsed_data, applied_policy_id, current_extraction_id",
         )
         .eq("id", queueRow.document_id)
         .maybeSingle();
@@ -143,6 +192,118 @@ export const getReviewQueueItem = createServerFn({ method: "GET" })
     }
 
     const existingByType = await fetchActivePoliciesByType(supabase, queueRow.vendor_id);
+
+    let extractions: ExtractionRevision[] = [];
+    if (document) {
+      const [{ data: extractionRows }, { data: currentRow }] = await Promise.all([
+        supabase
+          .from("document_extractions")
+          .select(
+            "id, source, model, prompt_version, confidence, created_at, reviewer_id, error, parsed_data",
+          )
+          .eq("document_id", document.id)
+          .order("created_at", { ascending: true }),
+        supabase
+          .from("vendor_documents")
+          .select("current_extraction_id")
+          .eq("id", document.id)
+          .maybeSingle(),
+      ]);
+      const rows = (extractionRows ?? []) as Array<{
+        id: string;
+        source: "model" | "reviewer_edit";
+        model: string | null;
+        prompt_version: string | null;
+        confidence: number | null;
+        created_at: string;
+        reviewer_id: string | null;
+        error: string | null;
+        parsed_data: InsuranceExtraction | null;
+      }>;
+      const reviewerEmails = await emailsFor(
+        supabase,
+        rows.map((r) => r.reviewer_id),
+      );
+      extractions = rows.map((r) => ({
+        id: r.id,
+        source: r.source,
+        model: r.model,
+        promptVersion: r.prompt_version,
+        confidence: r.confidence,
+        createdAt: r.created_at,
+        reviewerEmail: r.reviewer_id ? (reviewerEmails.get(r.reviewer_id) ?? null) : null,
+        error: r.error,
+        parsedData: r.parsed_data,
+        current: r.id === currentRow?.current_extraction_id,
+      }));
+    }
+
+    // Two plain reads (cases for this vendor, then their open deficiencies)
+    // rather than filtering through an embedded resource - PostgREST embed
+    // behavior is not exercised by the PGlite suite, so keep it to direct FKs.
+    const { data: caseRows } = await supabase
+      .from("compliance_cases")
+      .select("id")
+      .eq("vendor_id", queueRow.vendor_id);
+    const caseIds = ((caseRows ?? []) as Array<{ id: string }>).map((c) => c.id);
+    const { data: deficiencyRows } =
+      caseIds.length === 0
+        ? { data: [] }
+        : await supabase
+            .from("compliance_deficiencies")
+            .select(
+              "id, requirement_key, kind, policy_type, explanation, case:compliance_cases(assignment:project_vendor_assignments(project:projects(name)))",
+            )
+            .eq("status", "open")
+            .in("case_id", caseIds);
+    const shortfalls = (
+      (deficiencyRows ?? []) as unknown as Array<{
+        id: string;
+        requirement_key: string;
+        kind: string | null;
+        policy_type: string | null;
+        explanation: string;
+        case: { assignment: { project: { name: string } | null } | null } | null;
+      }>
+    ).map((d) => ({
+      id: d.id,
+      requirementKey: d.requirement_key,
+      kind: d.kind,
+      policyType: d.policy_type,
+      explanation: d.explanation,
+      projectName: d.case?.assignment?.project?.name ?? null,
+    }));
+
+    const historyTargets = [queueRow.id, ...(document ? [document.id] : [])];
+    const { data: auditRows } = await supabase
+      .from("audit_log")
+      .select("id, action, created_at, actor_id, detail")
+      .in("target_id", historyTargets)
+      .order("created_at", { ascending: false })
+      .limit(50);
+    const auditList = (auditRows ?? []) as Array<{
+      id: string;
+      action: string;
+      created_at: string;
+      actor_id: string | null;
+      detail: unknown;
+    }>;
+    const actorEmails = await emailsFor(
+      supabase,
+      auditList.map((a) => a.actor_id),
+    );
+    const history = auditList.map((a) => ({
+      id: a.id,
+      action: a.action,
+      createdAt: a.created_at,
+      actorEmail: a.actor_id ? (actorEmails.get(a.actor_id) ?? null) : null,
+      note:
+        a.detail &&
+        typeof a.detail === "object" &&
+        typeof (a.detail as { note?: unknown }).note === "string"
+          ? (a.detail as { note: string }).note
+          : null,
+    }));
 
     // Two steps, not a PostgREST embed: audit_log.actor_id references
     // auth.users, and profiles independently references auth.users too -
@@ -196,6 +357,9 @@ export const getReviewQueueItem = createServerFn({ method: "GET" })
         policyNumber: p.policyNumber,
         expirationDate: p.expirationDate,
       })),
+      extractions,
+      shortfalls,
+      history,
     };
   });
 
@@ -219,7 +383,8 @@ const resolveReviewItemSchema = z.discriminatedUnion("decision", [
   z.object({
     queueItemId: z.string().uuid(),
     decision: z.literal("reject"),
-    note: z.string().max(2000).optional(),
+    /** A rejection must say why - it is the only record of the reason. */
+    note: z.string().trim().min(1, "Give a reason for rejecting this document.").max(2000),
   }),
 ]);
 
@@ -461,48 +626,82 @@ export interface SaveExtractionEditResult {
  * fresh (now reflecting this edit, since the cache was just updated) when a
  * reviewer goes on to approve.
  */
+/** Structural subset of the service-role client this handler touches - lets a unit test pass a fake. */
+export interface ExtractionEditClient {
+  from(table: string): {
+    select(columns: string): {
+      eq(
+        column: string,
+        value: string,
+      ): {
+        maybeSingle(): PromiseLike<{
+          data: { id: string; company_id: string } | null;
+          error: { message: string } | null;
+        }>;
+      };
+    };
+    insert(row: Record<string, unknown>): PromiseLike<{ error: { message: string } | null }>;
+  };
+  rpc(
+    fn: "record_document_extraction",
+    params: Record<string, unknown>,
+  ): PromiseLike<{ data: unknown; error: { message: string } | null }>;
+}
+
+/**
+ * The testable core of saveExtractionEdit(). Its ONLY write to extraction
+ * data is record_document_extraction() with source 'reviewer_edit' - which
+ * inserts a NEW document_extractions row attributed to the reviewer and
+ * repoints vendor_documents.current_extraction_id at it. The model's own row
+ * is never updated (and since 20260922140000 the database rejects any UPDATE
+ * on document_extractions outright).
+ */
+export async function saveExtractionEditHandler(
+  supabase: ExtractionEditClient,
+  actorId: string,
+  data: z.infer<typeof saveExtractionEditSchema>,
+): Promise<SaveExtractionEditResult> {
+  const { data: docRow, error: docError } = await supabase
+    .from("vendor_documents")
+    .select("id, company_id")
+    .eq("id", data.documentId)
+    .maybeSingle();
+
+  if (docError || !docRow) throw new Error("Document not found.");
+
+  const { data: extractionId, error: rpcError } = await supabase.rpc("record_document_extraction", {
+    p_document_id: docRow.id,
+    p_company_id: docRow.company_id,
+    p_source: "reviewer_edit",
+    p_provider: null,
+    p_model: null,
+    p_prompt_version: null,
+    p_confidence: null,
+    p_parsed_data: data.correctedData,
+    p_error: null,
+    p_reviewer_id: actorId,
+  });
+
+  if (rpcError || !extractionId) {
+    throw new Error(rpcError?.message ?? "Could not save this correction. Try again.");
+  }
+
+  await supabase.from("audit_log").insert({
+    company_id: docRow.company_id,
+    actor_id: actorId,
+    action: "extraction_reviewer_edit",
+    target_type: "vendor_document",
+    target_id: docRow.id,
+    detail: { extractionId },
+  });
+
+  return { extractionId: extractionId as string };
+}
+
 export const saveExtractionEdit = createServerFn({ method: "POST" })
   .validator(saveExtractionEditSchema)
   .handler(async ({ data }): Promise<SaveExtractionEditResult> => {
     const actorId = await assertPlatformAdmin();
     const supabase = await getServiceRoleClient();
-
-    const { data: docRow, error: docError } = await supabase
-      .from("vendor_documents")
-      .select("id, company_id")
-      .eq("id", data.documentId)
-      .maybeSingle();
-
-    if (docError || !docRow) throw new Error("Document not found.");
-
-    const { data: extractionId, error: rpcError } = await supabase.rpc(
-      "record_document_extraction",
-      {
-        p_document_id: docRow.id,
-        p_company_id: docRow.company_id,
-        p_source: "reviewer_edit",
-        p_provider: null,
-        p_model: null,
-        p_prompt_version: null,
-        p_confidence: null,
-        p_parsed_data: data.correctedData,
-        p_error: null,
-        p_reviewer_id: actorId,
-      },
-    );
-
-    if (rpcError || !extractionId) {
-      throw new Error(rpcError?.message ?? "Could not save this correction. Try again.");
-    }
-
-    await supabase.from("audit_log").insert({
-      company_id: docRow.company_id,
-      actor_id: actorId,
-      action: "extraction_reviewer_edit",
-      target_type: "vendor_document",
-      target_id: docRow.id,
-      detail: { extractionId },
-    });
-
-    return { extractionId: extractionId as string };
+    return saveExtractionEditHandler(supabase as unknown as ExtractionEditClient, actorId, data);
   });

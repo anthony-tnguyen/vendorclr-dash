@@ -17,6 +17,8 @@ export const routes = {
   dashboard: "/dashboard",
   vendors: "/dashboard/vendors",
   vendorDetail: "/dashboard/vendors/$vendorId",
+  /** Bulk CSV onboarding. Reached from the Vendors page, not the sidebar. */
+  vendorImport: "/dashboard/vendors/import",
   tasks: "/dashboard/tasks",
   reports: "/dashboard/reports",
   projects: "/dashboard/projects",
@@ -32,6 +34,9 @@ export const routes = {
   adminActivation: "/dashboard/admin/activation",
   adminOperations: "/dashboard/admin/operations",
   help: "/dashboard/help",
+  /** Public, signed-out pages linked from auth, the vendor portal and the console footer. */
+  terms: "/terms",
+  privacy: "/privacy",
 } as const;
 
 export interface NavItem {

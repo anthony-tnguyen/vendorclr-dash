@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { useSession } from "@/app/App";
 import { adminNav, customerNav } from "@/app/router";
 import { LoadingState } from "@/components/states/AsyncState";
+import { LegalLinks } from "@/features/legal/LegalPages";
 import { cn } from "@/lib/utils";
 
 type NavItems = typeof customerNav | typeof adminNav;
@@ -80,6 +81,7 @@ function SidebarContents({
       </nav>
       <div className="px-3 pb-6">
         <SessionPanel />
+        <LegalLinks className="mt-4 flex gap-3 px-1 text-[11px] text-sidebar-foreground/70" />
       </div>
     </>
   );

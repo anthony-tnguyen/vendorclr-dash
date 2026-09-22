@@ -59,9 +59,34 @@
       `request_deficiency_correction()`, exception approval via
       `approve_compliance_exception()` with required remaining-risk
       acknowledgement, escalation display from the fixed 3/7/14-day clock).
-      Known backend limitation: no persisted internal note column on
-      `compliance_exceptions` (documented in Known compromises).
-- [ ] Stage 6 — Review editing, CSV import UI, reports/CSV export, `/terms` + `/privacy`
+      Known limitation: `compliance_exceptions` has no internal-note column,
+      and the form has no note field (documented in Known compromises).
+- [ ] Stage 6 — Review editing, CSV import UI, reports/CSV export, `/terms` + `/privacy`.
+      **Built on branch `pilot-blockers-reports-import-legal` (2026-09-22), not
+      yet merged:**
+  - [x] Reports page: 13 assignment-based reports on the existing report reads,
+        with the real server-side CSV export (membership check, safe filename,
+        browser download, `report_exported` audit row). No PDF.
+  - [x] CSV import UI at `/dashboard/vendors/import` on the existing
+        preview → validate → execute backend, with create-vs-match for project,
+        vendor and assignment, explicit confirmation, idempotent execute,
+        results and a rejected-rows CSV.
+  - [x] Reviewer editing: field editor saves a new `reviewer_edit` revision;
+        revision history, reviewer-changes diff, requirement shortfalls,
+        required rejection reason, internal note, review history.
+  - [x] `/terms` + `/privacy`: factual content only, every commitment section
+        marked "Pending legal/product approval"; linked from sign-in, sign-up,
+        the vendor portal and the console sidebar.
+  - [ ] Merge, then apply migration
+        `20260922140000_import_write_role_and_extraction_immutability.sql` to
+        staging and production (`import_vendor_row()` → `can_write_company()`;
+        `document_extractions` UPDATE blocked). Not applied anywhere yet.
+  - [ ] Run `e2e/reports.spec.ts`, `e2e/vendor-import.spec.ts` and
+        `e2e/reviewer-editing.spec.ts` with real `E2E_*` accounts. They skip
+        today, like every signed-in spec.
+  - [ ] Approved legal text (external).
+
+Current go-live status, verified item by item: `docs/operations/go-live-checklist.md`.
 
 ## Waiting on the user
 
@@ -80,12 +105,10 @@
 - [x] Sign-in gate: signed-out visitors on any console page are sent to `/login`
       with the page they asked for remembered; `/` routes to sign-in when signed
       out and to the dashboard otherwise; sample-data mode stays ungated.
-- [x] CI + browser-suite repair: the build output moved from `.output` to `dist`
-      (nitro preset change), so the CI artifact paths, `playwright.config.ts`
-      (`wrangler dev --config dist/server/wrangler.json`), and the stale
-      references in `docs/operations/release-process.md`, `supabase/README.md`
-      and `src/lib/observability/sentryEnvelope.ts` were all updated. The
-      rewritten `e2e/smoke.spec.ts` and `e2e/role-flows.spec.ts` (desktop +
-      mobile) detect demo vs live builds at runtime and skip the account
-      journeys that need `E2E_DEMO_*` / `E2E_MEMBER_*` / `E2E_STAFF_*`
-      credentials.
+- [x] CI + browser-suite repair. The build output is `.output/` (`.output/server/wrangler.json`),
+      and `playwright.config.ts` and `ci.yml` use that path. An earlier edit moved them to
+      `dist/` on a mistaken assumption; #59 moved them back (re-verified 2026-09-22 by a
+      fresh `bun run build`). The rewritten `e2e/smoke.spec.ts` and `e2e/role-flows.spec.ts`
+      (desktop + mobile) detect demo vs live builds at runtime and skip the account journeys
+      that need `E2E_DEMO_*` / `E2E_MEMBER_*` / `E2E_STAFF_*` credentials. Those credentials
+      are still not configured anywhere, so every signed-in journey skips in CI.

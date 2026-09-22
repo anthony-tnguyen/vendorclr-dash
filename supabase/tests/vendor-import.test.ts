@@ -15,6 +15,8 @@ import { asUser, companyIdFor, createTestDb, signUp } from "./harness";
 
 const OWNER = "11111111-1111-1111-1111-111111111111";
 const OTHER_OWNER = "44444444-4444-4444-4444-444444444444";
+const READ_ONLY = "55555555-5555-5555-5555-555555555555";
+const ENGINEER = "66666666-6666-6666-6666-666666666666";
 
 let db: PGlite;
 let companyId: string;
@@ -72,6 +74,13 @@ beforeAll(async () => {
 
   await signUp(db, { id: OTHER_OWNER, email: "owner@other.test", companyName: "Other Co" });
   otherCompanyId = await companyIdFor(db, OTHER_OWNER);
+
+  await signUp(db, { id: READ_ONLY, email: "viewer@ridgeline.test" });
+  await signUp(db, { id: ENGINEER, email: "pe@ridgeline.test" });
+  await db.query(
+    `insert into public.company_members (company_id, user_id, role) values ($1, $2, 'read_only'), ($1, $3, 'project_engineer')`,
+    [companyId, READ_ONLY, ENGINEER],
+  );
 }, 60_000);
 
 describe("import_vendor_row()", () => {
@@ -242,6 +251,35 @@ describe("import_vendor_row()", () => {
         vendorName: "Cross Tenant Vendor",
       }),
     ).rejects.toThrow(/not authorized/);
+  });
+
+  it("refuses a read_only member and writes nothing - same write roles as the direct table policies (20260922140000)", async () => {
+    await expect(
+      importRow(READ_ONLY, {
+        companyId,
+        projectName: "Read Only Project",
+        vendorName: "Read Only Vendor",
+      }),
+    ).rejects.toThrow(/not authorized/);
+
+    const written = await db.query<{ n: number }>(
+      `select (select count(*) from public.projects where name = 'Read Only Project')
+            + (select count(*) from public.vendors where name = 'Read Only Vendor') as n`,
+    );
+    expect(Number(written.rows[0]!.n)).toBe(0);
+  });
+
+  it("still lets a project_engineer import", async () => {
+    const result = await importRow(ENGINEER, {
+      companyId,
+      projectName: "Engineer Project",
+      vendorName: "Engineer Vendor",
+    });
+    expect(result).toMatchObject({
+      project_created: true,
+      vendor_created: true,
+      assignment_created: true,
+    });
   });
 
   it("rejects an invalid trade value via the existing CHECK constraint, not silent coercion", async () => {

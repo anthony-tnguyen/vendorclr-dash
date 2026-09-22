@@ -329,12 +329,32 @@ export interface ValidatedRow {
   errors: RowValidationError[];
   willCreateProject: boolean;
   willCreateVendor: boolean;
+  /**
+   * true = import_vendor_row() will insert a new assignment, false = it will
+   * find the existing (project, vendor) assignment, null = the context this
+   * row was validated against carried names only (no ids), so the assignment
+   * outcome cannot be predicted. fetchValidationContext() always supplies ids.
+   */
+  willCreateAssignment: boolean | null;
+}
+
+/** A vendor as import_vendor_row() will see it: normalized name/email, in created_at order (its lookup takes the FIRST match). */
+export interface VendorMatchRecord {
+  id: string;
+  name: string;
+  email: string;
 }
 
 export interface RowValidationContext {
   existingProjectNames: Set<string>;
   existingVendorNames: Set<string>;
   existingVendorEmails: Set<string>;
+  /** normalizeProjectMatch(name) -> project id. Optional: without it the assignment action is unknown. */
+  projectIdsByName?: Map<string, string>;
+  /** Oldest first, mirroring import_vendor_row()'s `order by v.created_at asc limit 1`. */
+  vendors?: VendorMatchRecord[];
+  /** `${projectId}:${vendorId}` for every existing assignment. */
+  assignmentKeys?: Set<string>;
 }
 
 export function emptyValidationContext(): RowValidationContext {
@@ -342,7 +362,20 @@ export function emptyValidationContext(): RowValidationContext {
     existingProjectNames: new Set(),
     existingVendorNames: new Set(),
     existingVendorEmails: new Set(),
+    projectIdsByName: new Map(),
+    vendors: [],
+    assignmentKeys: new Set(),
   };
+}
+
+/** The vendor import_vendor_row() will match: the first (oldest) vendor whose name OR contact email matches. */
+function findMatchingVendor(
+  row: ParsedRow,
+  vendors: VendorMatchRecord[],
+): VendorMatchRecord | undefined {
+  const name = normalizeMatch(row.vendorName);
+  const email = row.contactEmail ? normalizeMatch(row.contactEmail) : "";
+  return vendors.find((v) => v.name === name || (email !== "" && v.email === email));
 }
 
 /**
@@ -384,6 +417,14 @@ export function validateOneRow(row: ParsedRow, ctx: RowValidationContext): Valid
       field: "contract_value",
       reason: "Contract value must be a non-negative number.",
     });
+  } else if (row.contractValue !== null && !Number.isInteger(row.contractValue)) {
+    // import_vendor_row() takes p_contract_value as bigint - a fractional
+    // value would only fail at write time, after the reviewer had already
+    // been told the row was valid.
+    errors.push({
+      field: "contract_value",
+      reason: "Contract value must be a whole dollar amount (no cents).",
+    });
   }
 
   const willCreateProject = row.projectName
@@ -398,12 +439,24 @@ export function validateOneRow(row: ParsedRow, ctx: RowValidationContext): Valid
       )
     : false;
 
+  let willCreateAssignment: boolean | null = null;
+  if (willCreateProject || willCreateVendor) {
+    willCreateAssignment = true;
+  } else if (ctx.projectIdsByName && ctx.vendors && ctx.assignmentKeys) {
+    const projectId = ctx.projectIdsByName.get(normalizeProjectMatch(row.projectName));
+    const vendor = findMatchingVendor(row, ctx.vendors);
+    if (projectId && vendor) {
+      willCreateAssignment = !ctx.assignmentKeys.has(`${projectId}:${vendor.id}`);
+    }
+  }
+
   return {
     rowNumber: row.rowNumber,
     status: errors.length === 0 ? "valid" : "rejected",
     errors,
     willCreateProject,
     willCreateVendor,
+    willCreateAssignment,
   };
 }
 
@@ -416,7 +469,8 @@ export function validateOneRow(row: ParsedRow, ctx: RowValidationContext): Valid
  * second row's lookup runs, since each row is its own sequential RPC call).
  * A rejected row's own project/vendor is NOT folded in - executeVendorImport()
  * never calls import_vendor_row() for a rejected row, so nothing about it
- * actually gets created.
+ * actually gets created. Rows that will create a project or vendor get a
+ * placeholder id so a later row naming the same pair predicts "match".
  */
 export function validateRows(rows: ParsedRow[], seed: RowValidationContext): ValidatedRow[] {
   const ctx: RowValidationContext = {
@@ -424,10 +478,31 @@ export function validateRows(rows: ParsedRow[], seed: RowValidationContext): Val
     existingVendorNames: new Set(seed.existingVendorNames),
     existingVendorEmails: new Set(seed.existingVendorEmails),
   };
+  if (seed.projectIdsByName && seed.vendors && seed.assignmentKeys) {
+    ctx.projectIdsByName = new Map(seed.projectIdsByName);
+    ctx.vendors = [...seed.vendors];
+    ctx.assignmentKeys = new Set(seed.assignmentKeys);
+  }
 
   return rows.map((row) => {
     const result = validateOneRow(row, ctx);
     if (result.status === "valid") {
+      if (ctx.projectIdsByName && ctx.vendors && ctx.assignmentKeys) {
+        const projectKey = normalizeProjectMatch(row.projectName);
+        const projectId =
+          ctx.projectIdsByName.get(projectKey) ?? `pending-project:${row.rowNumber}`;
+        ctx.projectIdsByName.set(projectKey, projectId);
+        let vendor = findMatchingVendor(row, ctx.vendors);
+        if (!vendor) {
+          vendor = {
+            id: `pending-vendor:${row.rowNumber}`,
+            name: normalizeMatch(row.vendorName),
+            email: row.contactEmail ? normalizeMatch(row.contactEmail) : "",
+          };
+          ctx.vendors.push(vendor);
+        }
+        ctx.assignmentKeys.add(`${projectId}:${vendor.id}`);
+      }
       if (row.projectName) ctx.existingProjectNames.add(normalizeProjectMatch(row.projectName));
       if (row.vendorName) ctx.existingVendorNames.add(normalizeMatch(row.vendorName));
       if (row.contactEmail) {
@@ -439,31 +514,64 @@ export function validateRows(rows: ParsedRow[], seed: RowValidationContext): Val
   });
 }
 
-/** Reads existing projects/vendors for this company on the request-scoped client - RLS-protected, exactly the read an ordinary signed-in company member may already do for their own company (no elevated privilege needed for preview/validate; only execute()'s writes need import_vendor_row()'s SECURITY DEFINER escalation). */
+/** Reads existing projects/vendors/assignments for this company on the request-scoped client - RLS-protected, exactly the read an ordinary signed-in company member may already do for their own company (no elevated privilege needed for preview/validate; only execute()'s writes need import_vendor_row()'s SECURITY DEFINER escalation). */
 async function fetchValidationContext(
   supabase: SupabaseClient,
   companyId: string,
 ): Promise<RowValidationContext> {
-  const [{ data: projects, error: projectsError }, { data: vendors, error: vendorsError }] =
-    await Promise.all([
-      supabase.from("projects").select("name").eq("company_id", companyId),
-      supabase.from("vendors").select("name, contact_email").eq("company_id", companyId),
-    ]);
+  const [
+    { data: projects, error: projectsError },
+    { data: vendors, error: vendorsError },
+    { data: assignments, error: assignmentsError },
+  ] = await Promise.all([
+    supabase.from("projects").select("id, name").eq("company_id", companyId),
+    supabase
+      .from("vendors")
+      .select("id, name, contact_email, created_at")
+      .eq("company_id", companyId)
+      .order("created_at", { ascending: true }),
+    supabase
+      .from("project_vendor_assignments")
+      .select("project_id, vendor_id")
+      .eq("company_id", companyId),
+  ]);
 
   if (projectsError) throw new Error(projectsError.message);
   if (vendorsError) throw new Error(vendorsError.message);
+  if (assignmentsError) throw new Error(assignmentsError.message);
 
-  const vendorRows = (vendors ?? []) as Array<{ name: string; contact_email: string }>;
+  const projectRows = (projects ?? []) as Array<{ id: string; name: string }>;
+  const vendorRows = (vendors ?? []) as Array<{ id: string; name: string; contact_email: string }>;
+  const assignmentRows = (assignments ?? []) as Array<{ project_id: string; vendor_id: string }>;
 
   return {
-    existingProjectNames: new Set(
-      ((projects ?? []) as Array<{ name: string }>).map((p) => normalizeProjectMatch(p.name)),
-    ),
+    existingProjectNames: new Set(projectRows.map((p) => normalizeProjectMatch(p.name))),
     existingVendorNames: new Set(vendorRows.map((v) => normalizeMatch(v.name))),
     existingVendorEmails: new Set(
-      vendorRows.map((v) => normalizeMatch(v.contact_email)).filter((email) => email !== ""),
+      vendorRows.map((v) => normalizeMatch(v.contact_email ?? "")).filter((email) => email !== ""),
     ),
+    projectIdsByName: new Map(projectRows.map((p) => [normalizeProjectMatch(p.name), p.id])),
+    vendors: vendorRows.map((v) => ({
+      id: v.id,
+      name: normalizeMatch(v.name),
+      email: normalizeMatch(v.contact_email ?? ""),
+    })),
+    assignmentKeys: new Set(assignmentRows.map((a) => `${a.project_id}:${a.vendor_id}`)),
   };
+}
+
+/**
+ * import_vendor_row() only lets owners/risk managers/project engineers write
+ * (can_write_company(), migration 20260922140000). Checked up front so a
+ * read-only member gets one clear refusal before any row is attempted,
+ * instead of a per-row "not authorized" on every line.
+ */
+async function assertCanWriteCompany(supabase: SupabaseClient, companyId: string) {
+  const { data, error } = await supabase.rpc("can_write_company", { target_company: companyId });
+  if (error) throw new Error(error.message);
+  if (data !== true) {
+    throw new Error("Your role can view this company's data but cannot import into it.");
+  }
 }
 
 const parsedRowSchema = z.object({
@@ -639,7 +747,9 @@ export async function executeVendorImportHandler(
 ): Promise<ExecuteResult> {
   const data = params;
 
-  // Idempotency check FIRST, before anything else runs - a retried
+  await assertCanWriteCompany(supabase, data.companyId);
+
+  // Idempotency check first after authorization - a retried
   // submission (e.g. after a network timeout where the caller isn't sure
   // whether the first attempt landed) must return the exact same answer
   // both times, never process a second import. vendor_import_batches'

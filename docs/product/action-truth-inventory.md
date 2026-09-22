@@ -1,8 +1,11 @@
 # Action Truth Inventory
 
-**Scope:** visible, user-initiated dashboard and auth actions in `src/`, audited against
-`origin/main` at `d5f91c6` on 2026-09-15. This is a static code audit, not evidence that a
-hosted environment, email provider, or Supabase migration is deployed.
+**Scope:** visible, user-initiated dashboard and auth actions in `src/`, re-audited on
+2026-09-22 against `main` at `d5f8897` plus the pilot-blockers branch
+(`pilot-blockers-reports-import-legal`: Reports + CSV export, CSV import, reviewer editing,
+`/terms` + `/privacy`). Rows marked _(branch)_ are not on `main` until that branch merges.
+This is a code audit. For what is deployed and what is still blocking a pilot, see
+`docs/operations/go-live-checklist.md`.
 
 ## Classification rules
 
@@ -22,6 +25,7 @@ hosted environment, email provider, or Supabase migration is deployed.
 | Demo console | Browse the sample roster | `demo-preview` | Rendered from the in-memory demo repository, labelled as sample data, with no add/upload/request control to click. |
 | Demo console | Enter an activation code | `live` | The screen calls `redeem_activation_code()`; that function and the `activation_codes` table are applied to the hosted database via `supabase/migrations/20260918000200_activation_codes.sql` and verified with a live seeded redemption. |
 | Password reset | Send reset link | `live` | Supabase password-reset API is called when configured. |
+| Auth screens, vendor portal, console sidebar | Terms / Privacy links → `/terms`, `/privacy` _(branch)_ | `live` | Public, signed-out routes. Factual descriptions only; every section that would carry a legal commitment reads "Pending legal/product approval". |
 | App navigation | Sidebar, mobile navigation, back links, vendor/detail links | `live` | Client-side routing only; does not claim a data mutation. |
 | Staff/customer selector | Change visible console | `demo-preview` | A view toggle only; it is explicitly not an authorization boundary. |
 | Session | Sign out | `live` | Supabase sign-out is called outside preview mode. |
@@ -32,22 +36,26 @@ hosted environment, email provider, or Supabase migration is deployed.
 | --- | --- | --- |
 | Vendor roster | Search and compliance filters | `live` | Local filtering of repository results; no mutation claim. |
 | Vendor roster | Add vendor | `live` | `supabaseRepository.createVendor()` inserts a vendor and re-reads seeded compliance rows. Preview calls the in-memory repository and says so. |
+| Vendor roster → Import CSV (`/dashboard/vendors/import`) _(branch)_ | Upload, preview, validate, confirm, import; download template / rejected rows | `live` | Parses in the browser, validates with `validateVendorImportRows()` (row/column/reason; create vs. match for project, vendor and assignment; optional upload request), requires an explicit confirmation checkbox, then `executeVendorImport()`: idempotent key per validated file, invalid rows never written, `can_write_company` checked first. Results show processed / created / matched / skipped / rejected / request-send failures. Read-only members and sample-data mode get an explanation instead of the upload control. |
+| Projects | Create / edit project, assign vendor, change or terminate assignment, view resolved requirements | `live` | `saveProject()` and direct RLS-checked writes on `projects` / `project_vendor_assignments`; `resolve_assignment_requirements()` for provenance. Archive-guard triggers refuse an archived profile. (#53/#54) |
+| Requirement profiles | Create, rename, edit rules, archive, set company default | `live` | RLS-checked writes on `requirement_profiles`; the default swap goes through `set_company_default_requirement_profile()`; the current default can't be archived. |
 | Vendor detail → Contacts | Add contact, edit, link existing, unlink, change role (operational / broker / secondary) | `live` | `src/workflows/vendorContacts.ts` on the request-scoped client; RLS (`can_write_company`) and the cross-company triggers decide. Adding a known email links the existing contact instead of duplicating it (`contacts_company_email_unique`). Read-only roles see no controls. Audited by `record_contact_audit()`. (2026-09-22) |
 | Vendor detail → Contacts | Mark do-not-email / clear suppression | `live` | Inserts/deletes `suppressed_recipients` (reason `manual`); bounce/complaint suppressions are shown as "Hard bounce" / "Spam complaint". Clearing asks for confirmation. Audited. |
 | Vendor detail | Request documents | `live` | `sendRequest()` → `prepare_contact_request()`. The composer lists exactly who will be emailed and who is excluded before sending; suppressed contacts cannot be ticked, and the server re-derives recipients, rejects ids not linked to this vendor/company, excludes suppressed addresses, and mints a fresh token. Replaces the old single-recipient "Request updated certificate" (`createUploadRequest()`, deleted). |
 | Vendor detail | Resend request | `live` | Reopens the composer with that request's recipients, editable; sends a new request with a new token and cancels the old link if unused. |
 | Vendor detail → Compliance cases | View deficiencies (required vs submitted values, status, first detected, latest evaluation, escalation level) | `live` | Reads `compliance_cases` / deficiencies / evaluation runs through the request-scoped client; no success claim beyond what the rows say. (2026-09-22) |
 | Vendor detail / project detail | Request correction on a deficiency | `live` | Opens the suppression-safe composer on `sendRequest(purpose: "correction")`: explicit recipients, suppressed contacts untickable, server re-derives recipients and records the correction purpose; calls `request_deficiency_correction()` to start the 3/7/14-day clock. No send is claimed without per-recipient outcomes. (2026-09-22) |
-| Vendor detail / project detail | Approve exception (owner / risk manager only) | `live` | Calls `approve_compliance_exception()` with an explicit remaining-risk acknowledgement; the button is refused until the acknowledgement is ticked and dates are valid. The internal note is **not** persisted separately (no column) — see Known compromises in `supabase/README.md`. (2026-09-22) |
+| Vendor detail / project detail | Approve exception (owner / risk manager only) | `live` | Calls `approve_compliance_exception()` with an explicit remaining-risk acknowledgement; the button is refused until the acknowledgement is ticked and dates are valid. There is no internal-note field: `compliance_exceptions` has no column for one (Known compromises in `supabase/README.md`). |
 | Vendor detail / project detail | "Mark compliant" shortcut | intentionally absent | Compliance changes only through sufficient evidence (`apply_evaluation_result()`) or an approved exception; the UI offers no generic override. (2026-09-22) |
 | Vendor detail | Communication history | `live` | Per request: date, type, recipient, role, sent / delivered / bounced / complained / failed, excluded-suppressed, upload received. |
 | Upload request | Copy upload link | `live` | Copies the generated link; the visible link remains selectable if clipboard access is denied. |
 | Upload request | Cancel open request ("Cancel link" in history) | `live` | Calls the cancellation workflow and refreshes the history. |
 | Overview | Request documents | `live` | Links to the vendor record's request composer (recipients are confirmed there); no longer sends directly. |
 | Vendor upload portal | Submit package | `live` | Validates the token, loads the persisted request checklist, attaches PDF/JPEG/PNG evidence to an open submission package, finalizes it, and queues processing. No VendorClr account is required; receipt confirms receipt, not compliance. |
-| Reports | View project rollup | `live` | Reads `company_report_rows` from the configured backend. |
-| Reports | Export CSV | `disabled` | No download/export implementation exists. Live UI says “CSV export is not available”; preview says no file was generated. |
-| Settings | Change requirement defaults, limits, reminder recipient | `unfinished` | No settings persistence model or server operation exists. Live controls are disabled and say settings are not available; preview keeps its explicit non-persistence notice. |
+| Reports _(branch)_ | Choose one of 13 reports and view rows | `live` | `getReportRows()` checks active company membership, then calls the existing `reportRepository.ts` read for that report (compliance by project / trade, expiring 30/60/90, missing evidence, open deficiencies, active exceptions, unresponsive vendors, bounced communications, time to compliance, resubmissions, reviewer turnaround). The report is kept in the URL (`?report=`). |
+| Reports _(branch)_ | Export CSV | `live` | `exportReport()` on the server: membership check, CSV built from the same columns as the table, sanitized filename, `report_exported` audit row; the browser downloads the returned file. Disabled (not faked) when the session has no company. Sample-data mode keeps "Export CSV (demo)", which says nothing was generated. PDF is not offered. |
+| Reports (on `main` before the branch) | Export CSV | `disabled` | Live UI read "CSV export is not available". Superseded by the row above once the branch merges. |
+| Settings | Change company default requirements | `live` | `saveRequirementSettings()` persists the company default profile's rules; the page shows the change history from `loadRequirementAuditHistory()`. A session with no company is told so, with no save control. |
 | Tasks | Change visible priority filter | `live` | Local presentation filter only. |
 | Help | Expand FAQ answers | `live` | Local disclosure action only. |
 | Team | View team, change role, remove, transfer ownership | `live` | Reads/writes `company_members` via owner-checked security-definer RPCs (`change_company_member_role`, `remove_company_member`, `transfer_company_ownership`); a statement-level trigger blocks leaving a company with no active owner. |
@@ -59,9 +67,12 @@ hosted environment, email provider, or Supabase migration is deployed.
 | Surface | Action | Status | Evidence / truthful behavior |
 | --- | --- | --- |
 | Admin queue | Open a linked document review | `live` | Available only for a backend-backed queue item with a document ID. |
-| Document review | Open original document, reprocess, approve, reject | `live` | Calls the document-review/upload workflows; approval has an explicit confirmation step. |
+| Document review | Open original document, reprocess, approve selected coverage lines | `live` | Calls the document-review/upload workflows; approval has an explicit confirmation step and applies the current extraction revision. |
+| Document review _(branch)_ | Edit extracted fields → save reviewer revision | `live` | `saveExtractionEdit()` → `record_document_extraction(source 'reviewer_edit')`: a new revision attributed to the reviewer. The model's row is never modified, and migration `20260922140000` rejects any UPDATE on `document_extractions`. The page lists every revision, marks the current one, and shows field-level reviewer changes against the model. |
+| Document review _(branch)_ | Reject | `live` | Needs a rejection reason: the button is disabled until one is entered, and the server schema rejects an empty note. |
+| Document review _(branch)_ | Internal note, requirement shortfalls, review history | `live` | Internal note is stored in the resolution and audit entry, never sent to the vendor. Shortfalls are the vendor's open deficiencies. History comes from `audit_log` rows for the document and queue item. |
 | Admin queue | Review an item without a linked document | `disabled` | The UI explains that no document is available to review. |
-| Activation codes | Create, list and withdraw a code | `unfinished` | The admin screen and its security-definer functions are written and covered by `supabase/tests/activation-codes.test.ts`, but the table they use is the pending migration above; until it is applied the hosted database has no `activation_codes`. |
+| Activation codes | Create, list and withdraw a code | `live` | `create_activation_code()` / `revoke_activation_code()`; migration `20260918073244_activation_codes` is applied on production and staging (verified with `list_migrations` 2026-09-22). |
 | Access management | View access grants | `live` | Reads company memberships and profiles from the configured backend. The legacy disabled "Invite teammate" control on this screen was removed; invitations now live on the company's own Team page (see Customer operations above). |
 | Companies, leads, overview | Open data and local review detail | `live` | Read paths use the configured repository; review becomes a live route only when a document is linked. |
 
@@ -77,13 +88,16 @@ hosted environment, email provider, or Supabase migration is deployed.
 ## Engineer B regression guard
 
 `src/tests/production-action-truth.test.tsx` renders the affected surfaces as a live session and
-asserts that Settings, Reports, Access management, vendor creation, and report errors do not show
-demo language. It also requires unavailable production actions to be disabled with explicit labels.
+asserts that Settings, Reports, Access management and vendor creation show no demo language, and
+that Reports' real "Export CSV" stays disabled while the session has no company. The live
+Reports, Import and Review flows have their own tests: `src/tests/reports-page.test.tsx`,
+`src/tests/vendor-import-page.test.tsx`, `src/tests/document-review-editing.test.tsx`.
 
 ## Handoff / remaining work
 
-- Add Playwright and the `e2e/smoke.spec.ts` / `e2e/role-flows.spec.ts` browser harness in the
-  dependency-owner lane. The package is not currently installed, so adding it here would create an
-  avoidable lockfile conflict with Engineer A's dependency ownership.
-- Replace the three `disabled`/`unfinished` capabilities with real, scoped backend workflows before
-  a broad go-live. Until then, they must remain explicit rather than success-looking no-ops.
+- Playwright is installed and runs in CI, but every signed-in journey skips because no `E2E_*`
+  accounts are configured. The Reports, Import and reviewer-editing specs (`e2e/reports.spec.ts`,
+  `e2e/vendor-import.spec.ts`, `e2e/reviewer-editing.spec.ts`) have never run against a real
+  database.
+- No `disabled` or `unfinished` customer action remains once the pilot-blockers branch merges. The
+  only intentionally absent action is "Mark compliant".
