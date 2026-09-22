@@ -1382,13 +1382,17 @@ src/data/db-types.ts` followed by `git diff --exit-code src/data/db-types.ts`.
   Functions) checks `is_email_suppressed()` first - see [Vendor contacts and
   suppression-safe request
   delivery](#vendor-contacts-and-suppression-safe-request-delivery).
-- **Edge Function suppression gate needs a redeploy to be live.** The code
-  for `send-renewal-reminders`, `process-document-jobs` and
-  `compliance-housekeeping` checks suppression as of 20260922120000, but a
-  merged PR does not redeploy an Edge Function: until each is redeployed (and
-  the migration, which creates `is_email_suppressed()`, is applied first),
-  the previously deployed versions are what run. Deploy order: migration →
-  the three functions.
+- ~~Edge Function suppression gate needs a redeploy to be live.~~
+  **Deployed 2026-09-22** to staging (`ukbgjriqszthtgwxyirr`, after bringing
+  it up to date with the four migrations it was missing) and production
+  (`fzrcowwonezflydicpbd`): migration applied, then `send-renewal-reminders`,
+  `process-document-jobs` and `compliance-housekeeping` redeployed with
+  unchanged `verify_jwt` settings. Identical bundle hashes on both projects;
+  each boots and refuses a non-service caller (403). A rolled-back SQL smoke
+  test as a signed-in owner confirmed suppression exclusion, unrelated-contact
+  rejection, all-suppressed refusal, resend cancellation and audit rows on
+  both. Deployed via the MCP connector (no CLI token), so the function source
+  was transcribed rather than uploaded from disk.
 - **Renewal reminders and document-received notices still address
   `vendors.contact_email`** (now always also the vendor's operational
   contact), not the full contact list; they do not yet go to brokers.

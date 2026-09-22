@@ -21,7 +21,7 @@
 | P0-4 Teammate access UI | 🔴 Open (backend complete) |
 | P0-5 `/accept-invite/$token` | 🔴 Open |
 | P0-6 Contacts / broker UI | ✅ Done 2026-09-22 — Contacts panel + communication history on vendor detail |
-| P0-7 Retire legacy request path | ✅ Done 2026-09-22 — legacy path deleted; every send path checks suppression. 🟡 Live only after the migration is applied and the 3 mail-sending Edge Functions are redeployed |
+| P0-7 Retire legacy request path | ✅ Done 2026-09-22 — legacy path deleted; every send path checks suppression. Migration + 3 Edge Functions deployed to staging and production |
 | P0-8 Package upload portal | 🔴 Open (backend complete) |
 | P0-9 Turnstile client UI | 🔴 Open; keys are ⚪ external |
 | P0-10 Deficiency UI | 🔴 Open (backend complete) |

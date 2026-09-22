@@ -38,8 +38,8 @@
       (Node and the three mail-sending Edge Functions) checks
       `is_email_suppressed()`. Migration
       `20260922120000_vendor_contacts_request_delivery.sql`.
-      **Deploy:** apply the migration, then redeploy `send-renewal-reminders`,
-      `process-document-jobs` and `compliance-housekeeping`.
+      **Deployed 2026-09-22** to staging and production (migration, then the
+      three Edge Functions), smoke-tested on both.
 - [ ] Stage 4 — Vendor upload portal rebuilt on submission packages
 - [ ] Stage 5 — Deficiency + exception UI
 - [ ] Stage 6 — Review editing, CSV import UI, reports/CSV export, `/terms` + `/privacy`
