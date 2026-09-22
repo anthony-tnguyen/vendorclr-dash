@@ -24,7 +24,7 @@ import { logOperational, newRequestId } from "./operationalLog.ts";
  *      10's docblock).
  *   2. For each due policy, creates a fresh vendor_upload_requests row and
  *      magic-link token, the same shape sendRequest() in
- *      src/workflows/vendorUploadRequests.ts creates for a manually-triggered
+ *      src/workflows/communications.ts creates for a manually-triggered
  *      request.
  *   3. Emails the vendor via Resend, or logs a stub result if RESEND_API_KEY
  *      is not set - never throws for a missing provider, matching
