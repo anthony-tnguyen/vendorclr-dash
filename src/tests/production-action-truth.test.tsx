@@ -94,7 +94,7 @@ describe("production action truthfulness", () => {
     renderWithQueryClient(<AccessPage />);
 
     expect(await main().findByText("No access grants")).toBeInTheDocument();
-    expect(main().queryByRole("button", { name: /invite/i })).not.toBeInTheDocument();
+    expect(main().queryByRole("button", { name: /invit/i })).not.toBeInTheDocument();
     expect(main().queryByText(/demo/i)).not.toBeInTheDocument();
   });
 
