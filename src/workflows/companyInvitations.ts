@@ -684,3 +684,18 @@ export async function previewCompanyInvitationByToken(token: string): Promise<{
     } as CompanyInvitationRow),
   };
 }
+
+const previewCompanyInvitationSchema = z.object({ token: z.string().min(1) });
+
+/**
+ * Client-safe entry point for previewCompanyInvitationByToken() above: that
+ * function uses the service-role client directly, so it must never execute
+ * in the browser. Every other exported function in this file is safe for a
+ * React component to call because createServerFn keeps the handler body
+ * server-only; this is the same protection, just wrapped around the
+ * existing function instead of duplicating its logic. AcceptInvitePage
+ * calls this export, never previewCompanyInvitationByToken directly.
+ */
+export const previewCompanyInvitation = createServerFn({ method: "GET" })
+  .validator(previewCompanyInvitationSchema)
+  .handler(({ data }) => previewCompanyInvitationByToken(data.token));
