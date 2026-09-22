@@ -45,6 +45,8 @@ const config: Parameters<typeof defineConfig>[0] = {
   projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
 };
 
+console.log("[pw-config] executable =", process.env["PLAYWRIGHT_CHROMIUM_EXECUTABLE"] ?? "(unset)");
+
 if (!externalBaseURL) {
   config.webServer = {
     // The build moved to dist/ (nitro cloudflare-module preset); the
