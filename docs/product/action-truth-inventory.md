@@ -46,6 +46,9 @@ hosted environment, email provider, or Supabase migration is deployed.
 | Settings | Change requirement defaults, limits, reminder recipient | `unfinished` | No settings persistence model or server operation exists. Live controls are disabled and say settings are not available; preview keeps its explicit non-persistence notice. |
 | Tasks | Change visible priority filter | `live` | Local presentation filter only. |
 | Help | Expand FAQ answers | `live` | Local disclosure action only. |
+| Team | View team, change role, remove, transfer ownership | `live` | Reads/writes `company_members` via owner-checked security-definer RPCs (`change_company_member_role`, `remove_company_member`, `transfer_company_ownership`); a statement-level trigger blocks leaving a company with no active owner. |
+| Team | Invite, view, resend and revoke invitations | `live` | Owner-only. `inviteCompanyMember`/`listCompanyInvitations`/`resendCompanyInvitation`/`revokeCompanyInvitation` call `company_invitations` and its security-definer RPCs; only genuinely pending invitations show resend/revoke. |
+| Team | Accept an invitation (`/accept-invite/$token`) | `live` | Public route previews the invitation without a session (generic copy for an invalid/unknown token), then requires the signed-in account's email to match the invitation before calling `accept_company_invitation`. |
 
 ## Platform administration
 
@@ -55,8 +58,7 @@ hosted environment, email provider, or Supabase migration is deployed.
 | Document review | Open original document, reprocess, approve, reject | `live` | Calls the document-review/upload workflows; approval has an explicit confirmation step. |
 | Admin queue | Review an item without a linked document | `disabled` | The UI explains that no document is available to review. |
 | Activation codes | Create, list and withdraw a code | `unfinished` | The admin screen and its security-definer functions are written and covered by `supabase/tests/activation-codes.test.ts`, but the table they use is the pending migration above; until it is applied the hosted database has no `activation_codes`. |
-| Access management | View access grants | `live` | Reads company memberships and profiles from the configured backend. |
-| Access management | Invite teammate | `disabled` | No membership invitation backend workflow exists. Live UI says teammate invitations are not available; preview says no invitation was created or emailed. |
+| Access management | View access grants | `live` | Reads company memberships and profiles from the configured backend. The legacy disabled "Invite teammate" control on this screen was removed; invitations now live on the company's own Team page (see Customer operations above). |
 | Companies, leads, overview | Open data and local review detail | `live` | Read paths use the configured repository; review becomes a live route only when a document is linked. |
 
 ## Cross-cutting states
