@@ -79,6 +79,24 @@ export interface PackageChecklistItemView {
   satisfied: boolean;
 }
 
+export type PackageDocumentDisplayStatus =
+  "required" | "uploaded" | "processing" | "complete" | "needs replacement";
+
+/** Presentation-only state for the anonymous portal. This deliberately does
+ * not use the word "compliant": a document's extraction result is not an
+ * evaluation of the vendor's full requirement set. */
+export function packageDocumentStatus(input: {
+  packageStatus: string;
+  processingStatus: string;
+}): PackageDocumentDisplayStatus {
+  if (input.processingStatus === "needs_review" || input.processingStatus === "failed") {
+    return "needs replacement";
+  }
+  if (input.processingStatus === "processed") return "complete";
+  if (input.packageStatus === "finalized") return "processing";
+  return "uploaded";
+}
+
 interface PackageRow {
   id: string;
   version: number;
@@ -176,7 +194,10 @@ async function openOrGetCurrentPackage(
 // createPackage
 // ---------------------------------------------------------------------------
 
-const tokenOnlySchema = z.object({ token: z.string().min(1) });
+const tokenOnlySchema = z.object({
+  token: z.string().min(1),
+  captchaToken: z.string().min(1).optional(),
+});
 
 export interface CreatePackageResult {
   packageId: string;
@@ -188,8 +209,9 @@ export interface CreatePackageResult {
 export async function createPackageHandler(
   token: string,
   ipAddress: string,
+  captchaToken?: string,
 ): Promise<CreatePackageResult> {
-  const request = await resolveActiveUploadRequestByToken(token, ipAddress);
+  const request = await resolveActiveUploadRequestByToken(token, ipAddress, captchaToken);
   const supabase = await getServiceRoleClient();
   const pkg = await openOrGetCurrentPackage(supabase, request);
   const checklist = await fetchChecklistView(supabase, request.id, pkg.id);
@@ -200,8 +222,118 @@ export const createPackage = createServerFn({ method: "POST" })
   .validator(tokenOnlySchema)
   .handler(async ({ data }): Promise<CreatePackageResult> => {
     const ipAddress = await currentClientIp();
-    return createPackageHandler(data.token, ipAddress);
+    return createPackageHandler(data.token, ipAddress, data.captchaToken);
   });
+
+export interface PackagePortalDocument {
+  id: string;
+  fileName: string;
+  documentKind: DocumentKind;
+  processingStatus: string;
+  status: PackageDocumentDisplayStatus;
+}
+
+export interface PackagePortalView extends CreatePackageResult {
+  documents: PackagePortalDocument[];
+}
+
+/** Reads the package currently addressable by this token. Like every public
+ * package handler, this resolves the token before using the service role. */
+export async function loadPackagePortalHandler(
+  token: string,
+  ipAddress: string,
+  captchaToken?: string,
+): Promise<PackagePortalView> {
+  const request = await resolveActiveUploadRequestByToken(token, ipAddress, captchaToken);
+  const supabase = await getServiceRoleClient();
+  const pkg = await openOrGetCurrentPackage(supabase, request);
+  const [checklist, { data: links }] = await Promise.all([
+    fetchChecklistView(supabase, request.id, pkg.id),
+    supabase
+      .from("package_documents")
+      .select("document_id, document_kind, vendor_documents(file_name, processing_status)")
+      .eq("package_id", pkg.id),
+  ]);
+
+  const documents = (
+    (links ?? []) as unknown as Array<{
+      document_id: string;
+      document_kind: DocumentKind;
+      vendor_documents: Array<{ file_name: string; processing_status: string }> | null;
+    }>
+  ).map((link) => ({
+    id: link.document_id,
+    fileName: link.vendor_documents?.[0]?.file_name ?? "Uploaded document",
+    documentKind: link.document_kind,
+    processingStatus: link.vendor_documents?.[0]?.processing_status ?? "uploaded",
+    status: packageDocumentStatus({
+      packageStatus: pkg.status,
+      processingStatus: link.vendor_documents?.[0]?.processing_status ?? "uploaded",
+    }),
+  }));
+
+  return {
+    packageId: pkg.id,
+    version: pkg.version,
+    status: pkg.status,
+    checklist,
+    documents,
+  };
+}
+
+export const loadPackagePortal = createServerFn({ method: "POST" })
+  .validator(tokenOnlySchema)
+  .handler(async ({ data }): Promise<PackagePortalView> => {
+    const ipAddress = await currentClientIp();
+    return loadPackagePortalHandler(data.token, ipAddress, data.captchaToken);
+  });
+
+const removePackageDocumentSchema = z.object({
+  token: z.string().min(1),
+  packageId: z.string().uuid(),
+  documentId: z.string().uuid(),
+  captchaToken: z.string().min(1).optional(),
+});
+
+export async function removePackageDocumentHandler(
+  input: z.infer<typeof removePackageDocumentSchema>,
+  ipAddress: string,
+): Promise<{ packageId: string; checklist: PackageChecklistItemView[] }> {
+  const request = await resolveActiveUploadRequestByToken(
+    input.token,
+    ipAddress,
+    input.captchaToken,
+  );
+  const supabase = await getServiceRoleClient();
+  const { data: pkg } = await supabase
+    .from("submission_packages")
+    .select("id, status, upload_request_id")
+    .eq("id", input.packageId)
+    .maybeSingle();
+
+  if (!pkg || pkg.upload_request_id !== request.id || pkg.status !== "open") {
+    throw new Error("This submission can no longer accept files.");
+  }
+
+  const { data: deleted, error } = await supabase
+    .from("package_documents")
+    .delete()
+    .eq("package_id", input.packageId)
+    .eq("document_id", input.documentId)
+    .select("id");
+  if (error || !deleted || deleted.length !== 1) {
+    throw new Error("This document is no longer part of your submission.");
+  }
+
+  return {
+    packageId: input.packageId,
+    checklist: await fetchChecklistView(supabase, request.id, input.packageId),
+  };
+}
+
+export const removePackageDocument = createServerFn({ method: "POST" })
+  .validator(removePackageDocumentSchema)
+  .handler(async ({ data }) => removePackageDocumentHandler(data, await currentClientIp()));
 
 // ---------------------------------------------------------------------------
 // addPackageDocument - stores + scans a file synchronously, but never
@@ -234,7 +366,12 @@ export async function addPackageDocumentHandler(
   }
   const documentKind = documentKindResult.data;
 
-  const request = await resolveActiveUploadRequestByToken(token as string, ipAddress);
+  const captchaToken = formData.get("captchaToken");
+  const request = await resolveActiveUploadRequestByToken(
+    token as string,
+    ipAddress,
+    typeof captchaToken === "string" ? captchaToken : undefined,
+  );
   const supabase = await getServiceRoleClient();
 
   const { data: pkg } = await supabase
@@ -360,7 +497,11 @@ export const addPackageDocument = createServerFn({ method: "POST" })
 // finalizePackage
 // ---------------------------------------------------------------------------
 
-const finalizePackageSchema = z.object({ token: z.string().min(1), packageId: z.string().uuid() });
+const finalizePackageSchema = z.object({
+  token: z.string().min(1),
+  packageId: z.string().uuid(),
+  captchaToken: z.string().min(1).optional(),
+});
 
 export interface FinalizePackageResult {
   packageId: string;
@@ -392,8 +533,9 @@ export async function finalizePackageHandler(
   token: string,
   packageId: string,
   ipAddress: string,
+  captchaToken?: string,
 ): Promise<FinalizePackageResult> {
-  const request = await resolveActiveUploadRequestByToken(token, ipAddress);
+  const request = await resolveActiveUploadRequestByToken(token, ipAddress, captchaToken);
   const supabase = await getServiceRoleClient();
 
   const { data: pkg } = await supabase
@@ -479,7 +621,7 @@ export const finalizePackage = createServerFn({ method: "POST" })
   .validator(finalizePackageSchema)
   .handler(async ({ data }): Promise<FinalizePackageResult> => {
     const ipAddress = await currentClientIp();
-    return finalizePackageHandler(data.token, data.packageId, ipAddress);
+    return finalizePackageHandler(data.token, data.packageId, ipAddress, data.captchaToken);
   });
 
 // ---------------------------------------------------------------------------
@@ -526,7 +668,12 @@ export async function replaceDeficientDocumentHandler(
     await rejectInvalidToken(ipAddress);
   }
 
-  const request = await resolveActiveUploadRequestByToken(token as string, ipAddress);
+  const captchaToken = formData.get("captchaToken");
+  const request = await resolveActiveUploadRequestByToken(
+    token as string,
+    ipAddress,
+    typeof captchaToken === "string" ? captchaToken : undefined,
+  );
   const supabase = await getServiceRoleClient();
 
   const { data: latest } = await supabase

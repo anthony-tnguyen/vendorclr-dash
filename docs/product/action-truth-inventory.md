@@ -44,7 +44,7 @@ hosted environment, email provider, or Supabase migration is deployed.
 | Upload request | Copy upload link | `live` | Copies the generated link; the visible link remains selectable if clipboard access is denied. |
 | Upload request | Cancel open request ("Cancel link" in history) | `live` | Calls the cancellation workflow and refreshes the history. |
 | Overview | Request documents | `live` | Links to the vendor record's request composer (recipients are confirmed there); no longer sends directly. |
-| Vendor upload portal | Upload document | `live` | Validates the token and invokes the upload workflow. |
+| Vendor upload portal | Submit package | `live` | Validates the token, loads the persisted request checklist, attaches PDF/JPEG/PNG evidence to an open submission package, finalizes it, and queues processing. No VendorClr account is required; receipt confirms receipt, not compliance. |
 | Reports | View project rollup | `live` | Reads `company_report_rows` from the configured backend. |
 | Reports | Export CSV | `disabled` | No download/export implementation exists. Live UI says “CSV export is not available”; preview says no file was generated. |
 | Settings | Change requirement defaults, limits, reminder recipient | `unfinished` | No settings persistence model or server operation exists. Live controls are disabled and say settings are not available; preview keeps its explicit non-persistence notice. |

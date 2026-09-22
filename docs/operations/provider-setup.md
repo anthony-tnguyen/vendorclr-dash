@@ -167,16 +167,15 @@ this codebase yet, per `.env.example`'s own note on `TURNSTILE_SECRET_KEY`
    environment-matrix.md's "App origin" row).
 3. Configure the results, per environment:
    - Node side: `TURNSTILE_SECRET_KEY` (server-only) as a GitHub
-     Environment secret; a matching `VITE_TURNSTILE_SITE_KEY` (not yet
-     named/wired anywhere in this codebase - `uploadAbuse.server.ts`'s own
-     docblock flags this as required "for the widget itself" once this is
-     actually built) as a GitHub Environment variable.
+     Environment secret; a matching `VITE_TURNSTILE_SITE_KEY` as a GitHub
+     Environment variable. The vendor portal renders the widget only after
+     the server returns its challenge-required state. Do not set only the
+     secret: that blocks challenged vendors without a public widget key.
    - Deno side: not applicable - Turnstile verification happens in
      `uploadAbuse.server.ts` (Node), not in an Edge Function.
-4. This also needs actual browser-side widget code added to the vendor
-   upload form, which does not exist yet - out of scope for this task
-   (a schema/infra dispatch), tracked as future work alongside the rest of
-   `uploadAbuse.server.ts`'s own "Non-goals" section.
+4. The browser widget and server-side verification are implemented. No keys
+   are configured in this repository; the dashboard/account setup above is
+   still required before a real challenge can appear.
 
 ## Summary: what's still manual after this task
 

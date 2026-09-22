@@ -1,5 +1,19 @@
 # Backend: auth, tenancy, the vendor/policy model, and the renewal loop
 
+## Anonymous vendor submission packages
+
+`/vendor-upload/:token` is an account-free, token-authorized submission-package
+flow. The server validates the token before service-role access, stores
+validated documents privately, and queues extraction only after package
+finalization. A receipt confirms receipt and queued processing, never
+compliance. Open-package attachments may be detached before finalization;
+deficient replacements preserve prior evidence through
+`vendor_documents.replaces_document_id`.
+
+Cloudflare Turnstile is optional and not configured in this repository. When
+configured, use both `TURNSTILE_SECRET_KEY` server-side and the matching
+`VITE_TURNSTILE_SITE_KEY` client-side; existing rate limits remain enforced.
+
 Four phases so far:
 
 - **Phase 0** — auth, tenancy, and a real vendor/policy model. Before this, the app

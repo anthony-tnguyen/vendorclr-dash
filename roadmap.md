@@ -50,7 +50,10 @@
       `20260922120000_vendor_contacts_request_delivery.sql`.
       **Deployed 2026-09-22** to staging and production (migration, then the
       three Edge Functions), smoke-tested on both.
-- [ ] Stage 4 — Vendor upload portal rebuilt on submission packages
+- [x] Stage 4 — Vendor upload portal rebuilt on submission packages: anonymous
+      token links load actual package checklists, support multi-file review and
+      finalization, and show queued-processing receipt states. Turnstile code is
+      ready but external site/secret keys remain a deployment configuration task.
 - [x] Stage 5 — Deficiency + exception UI (done 2026-09-22: case/deficiency
       read view, correction request via `sendRequest(purpose: "correction")` +
       `request_deficiency_correction()`, exception approval via
