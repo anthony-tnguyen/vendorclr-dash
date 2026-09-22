@@ -135,14 +135,26 @@ jobs:
       # shell's arbitrary OS environment into the Worker's process.env the
       # way a plain Node server would - only vars explicitly configured via
       # wrangler.json's `vars`, --var, or a .dev.vars file next to the
-      # config reach the Worker. Setting UPLOAD_ABUSE_IP_HMAC_SECRET as a
-      # step-level `env:` alone (as this workflow previously tried) is
-      # silently ignored by workerd, so it has to land here instead,
+      # config reach the Worker. Setting these as a step-level `env:` alone
+      # (as this workflow previously tried for UPLOAD_ABUSE_IP_HMAC_SECRET)
+      # is silently ignored by workerd, so they have to land here instead,
       # confirmed empirically: with a .dev.vars file present, wrangler dev
-      # picks it up and the upload-abuse code sees the value; without one,
-      # it does not, regardless of the parent shell's environment.
+      # picks it up; without one, it does not, regardless of the parent
+      # shell's environment.
+      #
+      # VENDORCLEAR_SUPABASE_URL/VENDORCLEAR_SERVICE_ROLE_KEY point at the
+      # vendorclr-staging Supabase project (ukbgjriqszthtgwxyirr) - the
+      # service-role client resolveActiveUploadRequestByToken() uses to look
+      # up a vendor-upload token, invalid or not, before this build's own
+      # RLS-scoped credentials would ever come into play. Deliberately the
+      # staging project, not production, since this job runs on every push.
       - name: Write .dev.vars for the local Worker runtime
-        run: echo "UPLOAD_ABUSE_IP_HMAC_SECRET=${{ secrets.UPLOAD_ABUSE_IP_HMAC_SECRET }}" > .output/server/.dev.vars
+        run: |
+          cat <<VARS > .output/server/.dev.vars
+          UPLOAD_ABUSE_IP_HMAC_SECRET=${{ secrets.UPLOAD_ABUSE_IP_HMAC_SECRET }}
+          VENDORCLEAR_SUPABASE_URL=${{ secrets.VENDORCLEAR_SUPABASE_URL }}
+          VENDORCLEAR_SERVICE_ROLE_KEY=${{ secrets.VENDORCLEAR_SERVICE_ROLE_KEY }}
+          VARS
 
       - name: Cache Playwright browsers
         id: playwright-cache
