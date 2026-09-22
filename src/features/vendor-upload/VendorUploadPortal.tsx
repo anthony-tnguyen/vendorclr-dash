@@ -8,6 +8,7 @@ import {
   finalizePackage,
   loadPackagePortal,
   removePackageDocument,
+  vendorRequestPurposeMessage,
   type PackagePortalView,
 } from "@/workflows/submissionPackages";
 import { resolveUploadToken } from "@/workflows/vendorUploadRequests";
@@ -329,9 +330,7 @@ export function VendorUploadPortal({ token }: { token: string }) {
             >
               <h1 className="text-lg font-bold">{request.data.vendorName}</h1>
               <p className="mt-1 text-sm text-muted-foreground">{request.data.companyName}</p>
-              <p className="mt-3 text-sm">
-                {request.data.purpose || "Please provide the requested insurance documents."}
-              </p>
+              <p className="mt-3 text-sm">{vendorRequestPurposeMessage(request.data.purpose)}</p>
               <p className="mt-3 text-xs text-muted-foreground">
                 Secure-link expiry: {new Date(request.data.expiresAt).toLocaleDateString()}
               </p>

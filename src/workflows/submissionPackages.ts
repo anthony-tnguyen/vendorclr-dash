@@ -97,6 +97,53 @@ export function packageDocumentStatus(input: {
   return "uploaded";
 }
 
+/** Vendor-facing sentence for vendor_upload_requests.purpose (a CHECK-constrained code, never shown raw). */
+export function vendorRequestPurposeMessage(purpose: string | null | undefined): string {
+  switch (purpose) {
+    case "initial":
+      return "Please provide your certificate of insurance and any required endorsements.";
+    case "renewal":
+      return "Your insurance on file is up for renewal. Please provide your updated certificate of insurance.";
+    case "correction":
+      return "Some of the documents you sent need to be corrected. Please provide updated documents.";
+    default:
+      return "Please provide the requested insurance documents.";
+  }
+}
+
+export interface PackageDocumentLinkRow {
+  document_id: string;
+  document_kind: DocumentKind;
+  vendor_documents:
+    | { file_name: string; processing_status: string }
+    | Array<{ file_name: string; processing_status: string }>
+    | null;
+}
+
+/**
+ * package_documents.document_id is a many-to-one FK to vendor_documents, so
+ * PostgREST returns the embedded vendor_documents as a single object (or
+ * null), not an array. The array branch is defensive only.
+ */
+export function toPortalDocuments(
+  links: PackageDocumentLinkRow[],
+  packageStatus: string,
+): PackagePortalDocument[] {
+  return links.map((link) => {
+    const doc = Array.isArray(link.vendor_documents)
+      ? link.vendor_documents[0]
+      : link.vendor_documents;
+    const processingStatus = doc?.processing_status ?? "uploaded";
+    return {
+      id: link.document_id,
+      fileName: doc?.file_name ?? "Uploaded document",
+      documentKind: link.document_kind,
+      processingStatus,
+      status: packageDocumentStatus({ packageStatus, processingStatus }),
+    };
+  });
+}
+
 interface PackageRow {
   id: string;
   version: number;
@@ -255,22 +302,10 @@ export async function loadPackagePortalHandler(
       .eq("package_id", pkg.id),
   ]);
 
-  const documents = (
-    (links ?? []) as unknown as Array<{
-      document_id: string;
-      document_kind: DocumentKind;
-      vendor_documents: Array<{ file_name: string; processing_status: string }> | null;
-    }>
-  ).map((link) => ({
-    id: link.document_id,
-    fileName: link.vendor_documents?.[0]?.file_name ?? "Uploaded document",
-    documentKind: link.document_kind,
-    processingStatus: link.vendor_documents?.[0]?.processing_status ?? "uploaded",
-    status: packageDocumentStatus({
-      packageStatus: pkg.status,
-      processingStatus: link.vendor_documents?.[0]?.processing_status ?? "uploaded",
-    }),
-  }));
+  const documents = toPortalDocuments(
+    (links ?? []) as unknown as PackageDocumentLinkRow[],
+    pkg.status,
+  );
 
   return {
     packageId: pkg.id,
@@ -315,6 +350,9 @@ export async function removePackageDocumentHandler(
     throw new Error("This submission can no longer accept files.");
   }
 
+  // Detaches the LINK only. The vendor_documents row and stored file stay,
+  // same retention rule as addPackageDocumentHandler()'s slot replacement:
+  // uploaded evidence is never deleted, only no longer part of this package.
   const { data: deleted, error } = await supabase
     .from("package_documents")
     .delete()
