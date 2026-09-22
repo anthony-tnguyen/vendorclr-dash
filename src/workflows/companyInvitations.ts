@@ -16,7 +16,7 @@ async function getServiceRoleClient() {
   return mod.getServiceRoleClient();
 }
 
-import { getEmailSender } from "./emailSender";
+import { outboxStatusFor, sendUnlessSuppressed } from "./suppression";
 import {
   companyInvitationHtml,
   companyInvitationSubject,
@@ -94,7 +94,7 @@ function acceptInvitationUrl(token: string): string {
  * existing Phase 4 email_outbox/email_delivery_events tables, keyed by
  * `to_email` + `template = 'company_invitation'` (this file's
  * inviteCompanyMember()/resendCompanyInvitation() both insert an
- * email_outbox row exactly like createUploadRequest() does) - a future UI
+ * email_outbox row, like every other send path) - a future UI
  * wanting to show "bounced" should join against those tables by email
  * rather than this function growing a redundant status. This function does
  * not do that join itself since nothing here needs it yet; flagging it so
@@ -191,7 +191,7 @@ const inviteCompanyMemberSchema = z.object({
 export interface InviteCompanyMemberResult {
   invitation: CompanyInvitation;
   acceptUrl: string;
-  email: { status: "sent" | "failed" | "not_configured"; to: string };
+  email: { status: "sent" | "failed" | "not_configured" | "suppressed"; to: string };
 }
 
 /**
@@ -206,7 +206,7 @@ export interface InviteCompanyMemberResult {
  * node:crypto/Buffer) and sends only the hash to the database; the plaintext
  * exists only long enough to build the email/acceptUrl.
  *
- * Matches createUploadRequest()'s graceful-degradation shape exactly: if
+ * Matches sendRequest()'s graceful-degradation shape: if
  * RESEND_API_KEY is unset, the invitation is still created and `acceptUrl`
  * is still returned to the calling owner, who can copy/paste it manually.
  */
@@ -241,7 +241,9 @@ export const inviteCompanyMember = createServerFn({ method: "POST" })
       .eq("id", data.companyId)
       .maybeSingle();
 
-    const sendResult = await getEmailSender().send({
+    // Invitees are checked against the same suppression list as vendor
+    // mail: an address that hard-bounced or complained is not re-mailed.
+    const sendResult = await sendUnlessSuppressed(supabase, invitationRow.company_id, {
       to: invitationRow.email,
       subject: companyInvitationSubject({
         companyName: company?.name ?? "your company",
@@ -267,12 +269,7 @@ export const inviteCompanyMember = createServerFn({ method: "POST" })
       company_id: data.companyId,
       template: "company_invitation",
       to_email: invitationRow.email,
-      status:
-        sendResult.status === "sent"
-          ? "sent"
-          : sendResult.status === "failed"
-            ? "failed"
-            : "queued",
+      status: outboxStatusFor(sendResult),
       provider_message_id: sendResult.providerMessageId,
       error: sendResult.error,
       sent_at: sendResult.status === "sent" ? new Date().toISOString() : null,
@@ -333,7 +330,7 @@ const resendCompanyInvitationSchema = z.object({ invitationId: z.string().uuid()
 export interface ResendCompanyInvitationResult {
   invitation: CompanyInvitation;
   acceptUrl: string;
-  email: { status: "sent" | "failed" | "not_configured"; to: string };
+  email: { status: "sent" | "failed" | "not_configured" | "suppressed"; to: string };
 }
 
 /**
@@ -374,7 +371,9 @@ export const resendCompanyInvitation = createServerFn({ method: "POST" })
       .eq("id", invitationRow.company_id)
       .maybeSingle();
 
-    const sendResult = await getEmailSender().send({
+    // Invitees are checked against the same suppression list as vendor
+    // mail: an address that hard-bounced or complained is not re-mailed.
+    const sendResult = await sendUnlessSuppressed(supabase, invitationRow.company_id, {
       to: invitationRow.email,
       subject: companyInvitationSubject({
         companyName: company?.name ?? "your company",
@@ -400,12 +399,7 @@ export const resendCompanyInvitation = createServerFn({ method: "POST" })
       company_id: invitationRow.company_id,
       template: "company_invitation",
       to_email: invitationRow.email,
-      status:
-        sendResult.status === "sent"
-          ? "sent"
-          : sendResult.status === "failed"
-            ? "failed"
-            : "queued",
+      status: outboxStatusFor(sendResult),
       provider_message_id: sendResult.providerMessageId,
       error: sendResult.error,
       sent_at: sendResult.status === "sent" ? new Date().toISOString() : null,

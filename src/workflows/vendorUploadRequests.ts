@@ -40,8 +40,8 @@ import {
   getDocumentExtractor,
   type ExtractDocumentResult,
 } from "./documentExtraction";
-import { getEmailSender } from "./emailSender";
 import { getMalwareScanner } from "./malwareScanner";
+import { outboxStatusFor, sendUnlessSuppressed } from "./suppression";
 import {
   adminReviewNeededHtml,
   adminReviewNeededSubject,
@@ -49,9 +49,6 @@ import {
   documentReceivedHtml,
   documentReceivedSubject,
   documentReceivedText,
-  renewalRequestHtml,
-  renewalRequestSubject,
-  renewalRequestText,
 } from "./emailTemplates";
 import { EXTRACTION_SCHEMA_VERSION } from "./insuranceExtractionSchema";
 import type { ExtractedPolicy } from "./insuranceExtractionSchema";
@@ -60,20 +57,19 @@ import {
   canCancelRequest,
   canOpenRequest,
   canUploadToRequest,
-  generateUploadToken,
   hashFileBytes,
   hashToken,
   isExpired,
   MAX_UPLOAD_BYTES,
-  newExpiryDate,
 } from "./uploadTokens";
 
 /**
- * The two server-function halves of the outbound vendor request system:
+ * The vendor-facing half of the outbound request system. Requests are
+ * created and emailed by sendRequest() (communications.ts) - the
+ * multi-recipient, suppression-enforcing path; the old single-recipient
+ * createUploadRequest() that lived here was removed once every caller had
+ * moved to it.
  *
- *   createUploadRequest   - called by a signed-in company member (the admin
- *                            dashboard). Runs as that user; RLS decides
- *                            whether they may act on this vendor.
  *   resolveUploadToken /
  *   uploadDocumentForToken - called by the anonymous vendor from the magic
  *                            link. No session exists to run these as, so they
@@ -144,173 +140,10 @@ export async function assertPlatformAdmin(): Promise<string> {
   return userId;
 }
 
-function bareVendorUploadUrl(): string {
-  // VITE_APP_URL is optional; local dev and same-origin deploys both work
-  // without it since the link only needs to be correct once it's actually
-  // sent, and getRequestUrl() would over-couple this to the calling request's
-  // own host, which isn't necessarily the public one behind a proxy/CDN.
-  const configured = import.meta.env["VITE_APP_URL"]?.trim();
-  return (configured || "http://localhost:3000").replace(/\/+$/, "");
-}
-
-// ---------------------------------------------------------------------------
-// createUploadRequest - authenticated, runs via RLS as the calling admin
-// ---------------------------------------------------------------------------
-
-const createUploadRequestSchema = z.object({
-  vendorId: z.string().uuid(),
-  purpose: z.enum(["renewal", "initial", "correction"]).default("renewal"),
-});
-
-export interface CreateUploadRequestResult {
-  requestId: string;
-  uploadUrl: string;
-  email: {
-    status: "sent" | "failed" | "not_configured";
-    to: string;
-  };
-}
-
-export const createUploadRequest = createServerFn({ method: "POST" })
-  .validator(createUploadRequestSchema)
-  .handler(async ({ data }): Promise<CreateUploadRequestResult> => {
-    const supabase = await getRequestScopedClient();
-
-    const { data: vendor, error: vendorError } = await supabase
-      .from("vendors")
-      .select(
-        "id, name, company_id, contact_name, contact_email, companies ( name ), " +
-          "vendor_policies ( policy_type, carrier_name, policy_number, expiration_date, status )",
-      )
-      .eq("id", data.vendorId)
-      .maybeSingle();
-
-    // Any RLS failure and a genuine "no such vendor" collapse to the same
-    // message: distinguishing them would let a caller probe for vendor ids
-    // that exist in companies they don't belong to.
-    if (vendorError || !vendor) {
-      throw new Error("Vendor not found.");
-    }
-    const vendorRow = vendor as unknown as {
-      id: string;
-      name: string;
-      company_id: string;
-      contact_name: string;
-      contact_email: string;
-      companies: { name: string } | null;
-      vendor_policies: Array<{
-        policy_type: string;
-        carrier_name: string;
-        policy_number: string;
-        expiration_date: string | null;
-        status: string;
-      }>;
-    };
-
-    if (!vendorRow.contact_email) {
-      throw new Error("This vendor has no contact email on file.");
-    }
-
-    // NOTE: unlike sendRequest() (communications.ts, Task 7), this path does
-    // not check suppressed_recipients - a bounced/complained address can
-    // still receive mail here. See supabase/README.md's Known compromises.
-
-    const token = generateUploadToken();
-    const tokenHash = await hashToken(token);
-    const expiresAt = newExpiryDate();
-
-    // The INSERT is subject to vendor_upload_requests' RLS policy
-    // (can_write_company), so a read-only member gets refused here, by the
-    // database, not by a check written in this file.
-    const { data: request, error: insertError } = await supabase
-      .from("vendor_upload_requests")
-      .insert({
-        company_id: vendorRow.company_id,
-        vendor_id: vendorRow.id,
-        token_hash: tokenHash,
-        purpose: data.purpose,
-        expires_at: expiresAt.toISOString(),
-      })
-      .select("id")
-      .single();
-
-    if (insertError || !request) {
-      throw new Error(insertError?.message ?? "Could not create the upload request.");
-    }
-
-    const uploadUrl = `${bareVendorUploadUrl()}/vendor-upload/${token}`;
-
-    const emailInput = {
-      vendorContactName: vendorRow.contact_name,
-      vendorName: vendorRow.name,
-      companyName: vendorRow.companies?.name ?? "Your client",
-      uploadUrl,
-      currentPolicies: vendorRow.vendor_policies
-        .filter((p) => p.status === "active")
-        .map((p) => ({
-          policyType: p.policy_type,
-          carrierName: p.carrier_name,
-          policyNumber: p.policy_number,
-          expirationDate: p.expiration_date,
-        })),
-    };
-
-    const sendResult = await getEmailSender().send({
-      to: vendorRow.contact_email,
-      subject: renewalRequestSubject(emailInput),
-      html: renewalRequestHtml(emailInput),
-      text: renewalRequestText(emailInput),
-    });
-
-    await supabase.from("email_outbox").insert({
-      company_id: vendorRow.company_id,
-      vendor_id: vendorRow.id,
-      upload_request_id: request.id,
-      template: "renewal_request",
-      to_email: vendorRow.contact_email,
-      status:
-        sendResult.status === "sent"
-          ? "sent"
-          : sendResult.status === "failed"
-            ? "failed"
-            : "queued",
-      provider_message_id: sendResult.providerMessageId,
-      error: sendResult.error,
-      sent_at: sendResult.status === "sent" ? new Date().toISOString() : null,
-    });
-
-    if (sendResult.status === "sent") {
-      await supabase
-        .from("vendor_upload_requests")
-        .update({ status: "email_sent" })
-        .eq("id", request.id);
-    }
-
-    // actor_id is left unset - it defaults to auth.uid() (migration 14),
-    // correct here because this insert runs on the request-scoped client:
-    // the caller IS the actor, a genuine company member, not staff acting on
-    // someone else's behalf the way resolveReviewItem()/reprocessDocument()
-    // do on the service role.
-    await supabase.from("audit_log").insert({
-      company_id: vendorRow.company_id,
-      action: "upload_request_created",
-      target_type: "vendor",
-      target_id: vendorRow.id,
-      detail: { requestId: request.id, purpose: data.purpose, emailStatus: sendResult.status },
-    });
-
-    return {
-      requestId: request.id,
-      uploadUrl,
-      email: { status: sendResult.status, to: vendorRow.contact_email },
-    };
-  });
-
 // ---------------------------------------------------------------------------
 // listUploadRequestsForVendor / cancelUploadRequest - authenticated, RLS as
 // the calling admin. No service role anywhere here: vendor_upload_requests_
-// update already grants can_write_company() the UPDATE cancellation needs,
-// the same policy createUploadRequest()'s INSERT above already relies on.
+// update already grants can_write_company() the UPDATE cancellation needs.
 // ---------------------------------------------------------------------------
 
 export interface UploadRequestSummary {
@@ -1211,8 +1044,8 @@ export async function fetchOwnerEmails(
  * (only when a human needs to act). Never throws - a bad send must not undo
  * the extraction/compliance-engine work that already committed, the same
  * principle runExtractionSafely() applies one layer up. Every attempt is
- * still recorded in email_outbox, including a failed one, matching
- * createUploadRequest()'s pattern exactly.
+ * still recorded in email_outbox, including a failed one or one withheld
+ * because the address is suppressed (sendUnlessSuppressed()).
  */
 async function notifyDocumentOutcome(
   supabase: SupabaseClient,
@@ -1240,14 +1073,13 @@ async function notifyDocumentOutcome(
     } | null;
 
     if (vendor?.contact_email) {
-      const sender = getEmailSender();
       const emailInput = {
         vendorContactName: vendor.contact_name ?? "",
         vendorName: vendor.name,
         companyName: vendor.companies?.name ?? "your client",
         outcome: params.finalStatus,
       };
-      const sendResult = await sender.send({
+      const sendResult = await sendUnlessSuppressed(supabase, params.companyId, {
         to: vendor.contact_email,
         subject: documentReceivedSubject(emailInput),
         html: documentReceivedHtml(emailInput),
@@ -1258,12 +1090,7 @@ async function notifyDocumentOutcome(
         vendor_id: params.vendorId,
         template: "document_received",
         to_email: vendor.contact_email,
-        status:
-          sendResult.status === "sent"
-            ? "sent"
-            : sendResult.status === "failed"
-              ? "failed"
-              : "queued",
+        status: outboxStatusFor(sendResult),
         provider_message_id: sendResult.providerMessageId,
         error: sendResult.error,
         sent_at: sendResult.status === "sent" ? new Date().toISOString() : null,
@@ -1282,7 +1109,6 @@ async function notifyDocumentOutcome(
       const ownerEmails = await fetchOwnerEmails(supabase, params.companyId);
 
       if (ownerEmails.length > 0) {
-        const sender = getEmailSender();
         const emailInput = {
           vendorName: vendor?.name ?? "A vendor",
           documentFileName: params.documentFileName,
@@ -1290,7 +1116,7 @@ async function notifyDocumentOutcome(
           reason: params.reviewReason ?? params.processingError,
         };
         for (const to of ownerEmails) {
-          const sendResult = await sender.send({
+          const sendResult = await sendUnlessSuppressed(supabase, params.companyId, {
             to,
             subject: adminReviewNeededSubject(emailInput),
             html: adminReviewNeededHtml(emailInput),
@@ -1301,12 +1127,7 @@ async function notifyDocumentOutcome(
             vendor_id: params.vendorId,
             template: "admin_review_needed",
             to_email: to,
-            status:
-              sendResult.status === "sent"
-                ? "sent"
-                : sendResult.status === "failed"
-                  ? "failed"
-                  : "queued",
+            status: outboxStatusFor(sendResult),
             provider_message_id: sendResult.providerMessageId,
             error: sendResult.error,
             sent_at: sendResult.status === "sent" ? new Date().toISOString() : null,

@@ -32,9 +32,14 @@ hosted environment, email provider, or Supabase migration is deployed.
 | --- | --- | --- |
 | Vendor roster | Search and compliance filters | `live` | Local filtering of repository results; no mutation claim. |
 | Vendor roster | Add vendor | `live` | `supabaseRepository.createVendor()` inserts a vendor and re-reads seeded compliance rows. Preview calls the in-memory repository and says so. |
-| Vendor detail | Request updated certificate | `live` | Creates a tokenized upload request when the backend is configured. |
+| Vendor detail → Contacts | Add contact, edit, link existing, unlink, change role (operational / broker / secondary) | `live` | `src/workflows/vendorContacts.ts` on the request-scoped client; RLS (`can_write_company`) and the cross-company triggers decide. Adding a known email links the existing contact instead of duplicating it (`contacts_company_email_unique`). Read-only roles see no controls. Audited by `record_contact_audit()`. (2026-09-22) |
+| Vendor detail → Contacts | Mark do-not-email / clear suppression | `live` | Inserts/deletes `suppressed_recipients` (reason `manual`); bounce/complaint suppressions are shown as "Hard bounce" / "Spam complaint". Clearing asks for confirmation. Audited. |
+| Vendor detail | Request documents | `live` | `sendRequest()` → `prepare_contact_request()`. The composer lists exactly who will be emailed and who is excluded before sending; suppressed contacts cannot be ticked, and the server re-derives recipients, rejects ids not linked to this vendor/company, excludes suppressed addresses, and mints a fresh token. Replaces the old single-recipient "Request updated certificate" (`createUploadRequest()`, deleted). |
+| Vendor detail | Resend request | `live` | Reopens the composer with that request's recipients, editable; sends a new request with a new token and cancels the old link if unused. |
+| Vendor detail | Communication history | `live` | Per request: date, type, recipient, role, sent / delivered / bounced / complained / failed, excluded-suppressed, upload received. |
 | Upload request | Copy upload link | `live` | Copies the generated link; the visible link remains selectable if clipboard access is denied. |
-| Upload request | Cancel open request | `live` | Calls the cancellation workflow and refreshes the list. |
+| Upload request | Cancel open request ("Cancel link" in history) | `live` | Calls the cancellation workflow and refreshes the history. |
+| Overview | Request documents | `live` | Links to the vendor record's request composer (recipients are confirmed there); no longer sends directly. |
 | Vendor upload portal | Upload document | `live` | Validates the token and invokes the upload workflow. |
 | Reports | View project rollup | `live` | Reads `company_report_rows` from the configured backend. |
 | Reports | Export CSV | `disabled` | No download/export implementation exists. Live UI says “CSV export is not available”; preview says no file was generated. |

@@ -12,7 +12,6 @@ import {
   type Vendor,
 } from "@/data/contracts";
 import { getRepository, isBackendConfigured } from "@/data/repository";
-import { RequestDocumentsAction } from "@/features/vendors/RequestDocumentsAction";
 
 const statusRank: Record<ComplianceStatus, number> = {
   expired: 5,
@@ -259,7 +258,16 @@ export function OverviewPage() {
                     Open vendor record
                   </Link>
                   {isBackendConfigured() ? (
-                    <RequestDocumentsAction vendorId={selectedVendor.id} />
+                    // Requests are sent from the vendor record, where the
+                    // sender sees and confirms exactly who receives them.
+                    <Link
+                      to="/dashboard/vendors/$vendorId"
+                      params={{ vendorId: selectedVendor.id }}
+                      hash="communications-heading"
+                      className="focusable mt-3 inline-flex rounded-sm bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground"
+                    >
+                      Request documents
+                    </Link>
                   ) : null}
                 </aside>
               ) : null}

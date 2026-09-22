@@ -29,7 +29,17 @@
 ## Carried from the earlier approved plan
 
 - [ ] Stage 2 — Teammate access UI + `/accept-invite/$token`
-- [ ] Stage 3 — Vendor/broker contacts + multi-recipient document requests
+- [x] Stage 3 — Vendor/broker contacts + multi-recipient document requests
+      (2026-09-22). Contacts panel on vendor detail (name, agency, email,
+      phone, role, suppression state; add / edit / link / unlink / change role
+      / do-not-email), request composer on `sendRequest()` with an explicit
+      recipient preview and suppressed recipients excluded, communication
+      history with resend. `createUploadRequest()` deleted; every send path
+      (Node and the three mail-sending Edge Functions) checks
+      `is_email_suppressed()`. Migration
+      `20260922120000_vendor_contacts_request_delivery.sql`.
+      **Deploy:** apply the migration, then redeploy `send-renewal-reminders`,
+      `process-document-jobs` and `compliance-housekeeping`.
 - [ ] Stage 4 — Vendor upload portal rebuilt on submission packages
 - [ ] Stage 5 — Deficiency + exception UI
 - [ ] Stage 6 — Review editing, CSV import UI, reports/CSV export, `/terms` + `/privacy`

@@ -5,7 +5,7 @@
 - `bun run format:check` fails on **13 files only**: 12 injected skill docs under `.workspace/skills/` and one archived plan file. No application source is misformatted.
 - Customer screens that exist: overview, vendors, vendor detail, tasks, reports, settings, help, demo. **No projects, requirement-profile, contacts, accept-invite, CSV-import, terms or privacy screens exist.**
 - Backends that already exist and must be reused, not rebuilt: project, requirement, contact, submission, compliance-case and report repositories; communications, submission-package, vendor-import, report-export, invitation, upload-abuse workflows.
-- Both request paths are still present: legacy `createUploadRequest()` and multi-recipient `sendRequest()`; the vendor-facing action still uses the legacy one.
+- ~~Both request paths are still present: legacy `createUploadRequest()` and multi-recipient `sendRequest()`; the vendor-facing action still uses the legacy one.~~ **2026-09-22:** `createUploadRequest()` is deleted; vendor detail, resend and CSV-import dispatch all use `sendRequest()`.
 - Reports page (89 lines) and Access page (92 lines) are both still the small "not available" placeholders.
 - Vendor upload portal is still the single-file experience (239 lines).
 - Document review page is substantial (455 lines) — needs auditing, not rebuilding.
@@ -20,8 +20,8 @@
 | P0-3 Requirement profiles UI | 🔴 Open (backend complete) |
 | P0-4 Teammate access UI | 🔴 Open (backend complete) |
 | P0-5 `/accept-invite/$token` | 🔴 Open |
-| P0-6 Contacts / broker UI | 🔴 Open (backend complete) |
-| P0-7 Retire legacy request path | 🔴 Open — suppression bypass is real |
+| P0-6 Contacts / broker UI | ✅ Done 2026-09-22 — Contacts panel + communication history on vendor detail |
+| P0-7 Retire legacy request path | ✅ Done 2026-09-22 — legacy path deleted; every send path checks suppression. 🟡 Live only after the migration is applied and the 3 mail-sending Edge Functions are redeployed |
 | P0-8 Package upload portal | 🔴 Open (backend complete) |
 | P0-9 Turnstile client UI | 🔴 Open; keys are ⚪ external |
 | P0-10 Deficiency UI | 🔴 Open (backend complete) |

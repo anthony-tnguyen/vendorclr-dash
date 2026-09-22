@@ -832,6 +832,7 @@ export type Database = {
           id: string;
           name: string;
           notes: string;
+          organization: string;
           phone: string;
           updated_at: string;
         };
@@ -842,6 +843,7 @@ export type Database = {
           id?: string;
           name: string;
           notes?: string;
+          organization?: string;
           phone?: string;
           updated_at?: string;
         };
@@ -852,6 +854,7 @@ export type Database = {
           id?: string;
           name?: string;
           notes?: string;
+          organization?: string;
           phone?: string;
           updated_at?: string;
         };
@@ -1114,10 +1117,12 @@ export type Database = {
       email_outbox: {
         Row: {
           company_id: string;
+          contact_id: string | null;
           created_at: string;
           error: string | null;
           id: string;
           provider_message_id: string | null;
+          recipient_role: string | null;
           sent_at: string | null;
           status: string;
           template: string;
@@ -1127,10 +1132,12 @@ export type Database = {
         };
         Insert: {
           company_id: string;
+          contact_id?: string | null;
           created_at?: string;
           error?: string | null;
           id?: string;
           provider_message_id?: string | null;
+          recipient_role?: string | null;
           sent_at?: string | null;
           status?: string;
           template: string;
@@ -1140,10 +1147,12 @@ export type Database = {
         };
         Update: {
           company_id?: string;
+          contact_id?: string | null;
           created_at?: string;
           error?: string | null;
           id?: string;
           provider_message_id?: string | null;
+          recipient_role?: string | null;
           sent_at?: string | null;
           status?: string;
           template?: string;
@@ -1152,6 +1161,13 @@ export type Database = {
           vendor_id?: string;
         };
         Relationships: [
+          {
+            foreignKeyName: "email_outbox_contact_id_fkey";
+            columns: ["contact_id"];
+            isOneToOne: false;
+            referencedRelation: "contacts";
+            referencedColumns: ["id"];
+          },
           {
             foreignKeyName: "email_outbox_company_id_fkey";
             columns: ["company_id"];
@@ -2534,6 +2550,7 @@ export type Database = {
           id: string;
           opened_at: string | null;
           purpose: string;
+          resend_of_request_id: string | null;
           status: string;
           token_hash: string;
           updated_at: string;
@@ -2549,6 +2566,7 @@ export type Database = {
           id?: string;
           opened_at?: string | null;
           purpose?: string;
+          resend_of_request_id?: string | null;
           status?: string;
           token_hash: string;
           updated_at?: string;
@@ -2564,6 +2582,7 @@ export type Database = {
           id?: string;
           opened_at?: string | null;
           purpose?: string;
+          resend_of_request_id?: string | null;
           status?: string;
           token_hash?: string;
           updated_at?: string;
@@ -2571,6 +2590,13 @@ export type Database = {
           vendor_id?: string;
         };
         Relationships: [
+          {
+            foreignKeyName: "vendor_upload_requests_resend_of_request_id_fkey";
+            columns: ["resend_of_request_id"];
+            isOneToOne: false;
+            referencedRelation: "vendor_upload_requests";
+            referencedColumns: ["id"];
+          },
           {
             foreignKeyName: "vendor_upload_requests_company_id_fkey";
             columns: ["company_id"];
@@ -3215,10 +3241,25 @@ export type Database = {
         Args: { p_bucket_key: string; p_window_start: string };
         Returns: number;
       };
+      is_email_suppressed: {
+        Args: { p_company_id: string; p_email: string };
+        Returns: boolean;
+      };
       is_platform_admin: { Args: never; Returns: boolean };
       mark_deficiency_escalated: {
         Args: { p_deficiency_id: string; p_new_level: number };
         Returns: undefined;
+      };
+      prepare_contact_request: {
+        Args: {
+          p_contact_ids: string[];
+          p_expires_at: string;
+          p_purpose: string;
+          p_resend_of_request_id?: string | null;
+          p_token_hash: string;
+          p_vendor_id: string;
+        };
+        Returns: Record<string, unknown>;
       };
       record_document_extraction: {
         Args: {
