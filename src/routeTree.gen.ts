@@ -17,6 +17,7 @@ import { Route as SignupRouteImport } from './routes/signup'
 import { Route as DashboardIndexRouteImport } from './routes/dashboard.index'
 import { Route as DashboardHelpRouteImport } from './routes/dashboard.help'
 import { Route as DashboardReportsRouteImport } from './routes/dashboard.reports'
+import { Route as DashboardRequirementProfilesRouteImport } from './routes/dashboard.requirement-profiles'
 import { Route as DashboardSettingsRouteImport } from './routes/dashboard.settings'
 import { Route as DashboardTasksRouteImport } from './routes/dashboard.tasks'
 import { Route as DashboardTeamRouteImport } from './routes/dashboard.team'
@@ -30,6 +31,7 @@ import { Route as DashboardAdminCompaniesRouteImport } from './routes/dashboard.
 import { Route as DashboardAdminComplianceRouteImport } from './routes/dashboard.admin.compliance'
 import { Route as DashboardAdminLeadsRouteImport } from './routes/dashboard.admin.leads'
 import { Route as DashboardAdminOperationsRouteImport } from './routes/dashboard.admin.operations'
+import { Route as DashboardProjectsIndexRouteImport } from './routes/dashboard.projects.index'
 import { Route as DashboardVendorsIndexRouteImport } from './routes/dashboard.vendors.index'
 import { Route as DashboardVendorsVendorIdRouteImport } from './routes/dashboard.vendors.$vendorId'
 import { Route as DashboardAdminComplianceQueueItemIdRouteImport } from './routes/dashboard.admin.compliance.$queueItemId'
@@ -74,6 +76,12 @@ const DashboardReportsRoute = DashboardReportsRouteImport.update({
   path: '/dashboard/reports',
   getParentRoute: () => rootRouteImport,
 } as any)
+const DashboardRequirementProfilesRoute =
+  DashboardRequirementProfilesRouteImport.update({
+    id: '/dashboard/requirement-profiles',
+    path: '/dashboard/requirement-profiles',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const DashboardSettingsRoute = DashboardSettingsRouteImport.update({
   id: '/dashboard/settings',
   path: '/dashboard/settings',
@@ -142,6 +150,11 @@ const DashboardAdminOperationsRoute =
     path: '/dashboard/admin/operations',
     getParentRoute: () => rootRouteImport,
   } as any)
+const DashboardProjectsIndexRoute = DashboardProjectsIndexRouteImport.update({
+  id: '/dashboard/projects/',
+  path: '/dashboard/projects/',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const DashboardVendorsIndexRoute = DashboardVendorsIndexRouteImport.update({
   id: '/dashboard/vendors/',
   path: '/dashboard/vendors/',
@@ -168,6 +181,7 @@ export interface FileRoutesByFullPath {
   '/signup': typeof SignupRoute
   '/dashboard/help': typeof DashboardHelpRoute
   '/dashboard/reports': typeof DashboardReportsRoute
+  '/dashboard/requirement-profiles': typeof DashboardRequirementProfilesRoute
   '/dashboard/settings': typeof DashboardSettingsRoute
   '/dashboard/tasks': typeof DashboardTasksRoute
   '/dashboard/team': typeof DashboardTeamRoute
@@ -183,6 +197,7 @@ export interface FileRoutesByFullPath {
   '/dashboard/admin/operations': typeof DashboardAdminOperationsRoute
   '/dashboard/vendors/$vendorId': typeof DashboardVendorsVendorIdRoute
   '/dashboard/admin/': typeof DashboardAdminIndexRoute
+  '/dashboard/projects/': typeof DashboardProjectsIndexRoute
   '/dashboard/vendors/': typeof DashboardVendorsIndexRoute
   '/dashboard/admin/compliance/$queueItemId': typeof DashboardAdminComplianceQueueItemIdRoute
 }
@@ -194,6 +209,7 @@ export interface FileRoutesByTo {
   '/signup': typeof SignupRoute
   '/dashboard/help': typeof DashboardHelpRoute
   '/dashboard/reports': typeof DashboardReportsRoute
+  '/dashboard/requirement-profiles': typeof DashboardRequirementProfilesRoute
   '/dashboard/settings': typeof DashboardSettingsRoute
   '/dashboard/tasks': typeof DashboardTasksRoute
   '/dashboard/team': typeof DashboardTeamRoute
@@ -209,6 +225,7 @@ export interface FileRoutesByTo {
   '/dashboard/admin/operations': typeof DashboardAdminOperationsRoute
   '/dashboard/vendors/$vendorId': typeof DashboardVendorsVendorIdRoute
   '/dashboard/admin': typeof DashboardAdminIndexRoute
+  '/dashboard/projects': typeof DashboardProjectsIndexRoute
   '/dashboard/vendors': typeof DashboardVendorsIndexRoute
   '/dashboard/admin/compliance/$queueItemId': typeof DashboardAdminComplianceQueueItemIdRoute
 }
@@ -221,6 +238,7 @@ export interface FileRoutesById {
   '/signup': typeof SignupRoute
   '/dashboard/help': typeof DashboardHelpRoute
   '/dashboard/reports': typeof DashboardReportsRoute
+  '/dashboard/requirement-profiles': typeof DashboardRequirementProfilesRoute
   '/dashboard/settings': typeof DashboardSettingsRoute
   '/dashboard/tasks': typeof DashboardTasksRoute
   '/dashboard/team': typeof DashboardTeamRoute
@@ -236,6 +254,7 @@ export interface FileRoutesById {
   '/dashboard/admin/operations': typeof DashboardAdminOperationsRoute
   '/dashboard/vendors/$vendorId': typeof DashboardVendorsVendorIdRoute
   '/dashboard/admin/': typeof DashboardAdminIndexRoute
+  '/dashboard/projects/': typeof DashboardProjectsIndexRoute
   '/dashboard/vendors/': typeof DashboardVendorsIndexRoute
   '/dashboard/admin/compliance/$queueItemId': typeof DashboardAdminComplianceQueueItemIdRoute
 }
@@ -249,6 +268,7 @@ export interface FileRouteTypes {
     | '/signup'
     | '/dashboard/help'
     | '/dashboard/reports'
+    | '/dashboard/requirement-profiles'
     | '/dashboard/settings'
     | '/dashboard/tasks'
     | '/dashboard/team'
@@ -264,6 +284,7 @@ export interface FileRouteTypes {
     | '/dashboard/admin/operations'
     | '/dashboard/vendors/$vendorId'
     | '/dashboard/admin/'
+    | '/dashboard/projects/'
     | '/dashboard/vendors/'
     | '/dashboard/admin/compliance/$queueItemId'
   fileRoutesByTo: FileRoutesByTo
@@ -275,6 +296,7 @@ export interface FileRouteTypes {
     | '/signup'
     | '/dashboard/help'
     | '/dashboard/reports'
+    | '/dashboard/requirement-profiles'
     | '/dashboard/settings'
     | '/dashboard/tasks'
     | '/dashboard/team'
@@ -290,6 +312,7 @@ export interface FileRouteTypes {
     | '/dashboard/admin/operations'
     | '/dashboard/vendors/$vendorId'
     | '/dashboard/admin'
+    | '/dashboard/projects'
     | '/dashboard/vendors'
     | '/dashboard/admin/compliance/$queueItemId'
   id:
@@ -301,6 +324,7 @@ export interface FileRouteTypes {
     | '/signup'
     | '/dashboard/help'
     | '/dashboard/reports'
+    | '/dashboard/requirement-profiles'
     | '/dashboard/settings'
     | '/dashboard/tasks'
     | '/dashboard/team'
@@ -316,6 +340,7 @@ export interface FileRouteTypes {
     | '/dashboard/admin/operations'
     | '/dashboard/vendors/$vendorId'
     | '/dashboard/admin/'
+    | '/dashboard/projects/'
     | '/dashboard/vendors/'
     | '/dashboard/admin/compliance/$queueItemId'
   fileRoutesById: FileRoutesById
@@ -328,6 +353,7 @@ export interface RootRouteChildren {
   SignupRoute: typeof SignupRoute
   DashboardHelpRoute: typeof DashboardHelpRoute
   DashboardReportsRoute: typeof DashboardReportsRoute
+  DashboardRequirementProfilesRoute: typeof DashboardRequirementProfilesRoute
   DashboardSettingsRoute: typeof DashboardSettingsRoute
   DashboardTasksRoute: typeof DashboardTasksRoute
   DashboardTeamRoute: typeof DashboardTeamRoute
@@ -343,6 +369,7 @@ export interface RootRouteChildren {
   DashboardAdminOperationsRoute: typeof DashboardAdminOperationsRoute
   DashboardVendorsVendorIdRoute: typeof DashboardVendorsVendorIdRoute
   DashboardAdminIndexRoute: typeof DashboardAdminIndexRoute
+  DashboardProjectsIndexRoute: typeof DashboardProjectsIndexRoute
   DashboardVendorsIndexRoute: typeof DashboardVendorsIndexRoute
 }
 
@@ -402,6 +429,13 @@ declare module '@tanstack/react-router' {
       path: '/dashboard/reports'
       fullPath: '/dashboard/reports'
       preLoaderRoute: typeof DashboardReportsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/dashboard/requirement-profiles': {
+      id: '/dashboard/requirement-profiles'
+      path: '/dashboard/requirement-profiles'
+      fullPath: '/dashboard/requirement-profiles'
+      preLoaderRoute: typeof DashboardRequirementProfilesRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/dashboard/settings': {
@@ -495,6 +529,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DashboardAdminOperationsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/dashboard/projects/': {
+      id: '/dashboard/projects/'
+      path: '/dashboard/projects'
+      fullPath: '/dashboard/projects/'
+      preLoaderRoute: typeof DashboardProjectsIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/dashboard/vendors/': {
       id: '/dashboard/vendors/'
       path: '/dashboard/vendors'
@@ -542,6 +583,7 @@ const rootRouteChildren: RootRouteChildren = {
   SignupRoute: SignupRoute,
   DashboardHelpRoute: DashboardHelpRoute,
   DashboardReportsRoute: DashboardReportsRoute,
+  DashboardRequirementProfilesRoute: DashboardRequirementProfilesRoute,
   DashboardSettingsRoute: DashboardSettingsRoute,
   DashboardTasksRoute: DashboardTasksRoute,
   DashboardTeamRoute: DashboardTeamRoute,
@@ -557,6 +599,7 @@ const rootRouteChildren: RootRouteChildren = {
   DashboardAdminOperationsRoute: DashboardAdminOperationsRoute,
   DashboardVendorsVendorIdRoute: DashboardVendorsVendorIdRoute,
   DashboardAdminIndexRoute: DashboardAdminIndexRoute,
+  DashboardProjectsIndexRoute: DashboardProjectsIndexRoute,
   DashboardVendorsIndexRoute: DashboardVendorsIndexRoute,
 }
 export const routeTree = rootRouteImport
