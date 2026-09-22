@@ -135,8 +135,8 @@ export function AcceptInvitePage({ token }: { token: string }) {
           Join {invite.companyName} on VendorClr
         </h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Sign in with <span className="font-medium text-foreground">{invite.email}</span> to
-          accept this invitation as {roleLabel(invite.role)}.
+          Sign in with <span className="font-medium text-foreground">{invite.email}</span> to accept
+          this invitation as {roleLabel(invite.role)}.
         </p>
         <div className="mt-4 flex flex-wrap gap-3 text-sm">
           <Link
@@ -168,8 +168,8 @@ export function AcceptInvitePage({ token }: { token: string }) {
           This invitation isn't for this account
         </h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          This invitation was sent to a different email address. Sign out and sign back in with
-          the address it was sent to, then open the link again.
+          This invitation was sent to a different email address. Sign out and sign back in with the
+          address it was sent to, then open the link again.
         </p>
         <button
           type="button"
