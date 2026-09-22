@@ -1267,6 +1267,20 @@ update` on the invite row before checking and marking it used, so two
   test of the lock itself — the guarantee rests on documented Postgres
   row-locking semantics, verified by manual review, the same category of
   gap as the pg_net/pg_cron skip list and the GoTrue-stub caveat above.
+- **`compliance_exceptions` has no persisted internal note.** The exception
+  approval UI collects an internal note, but the table only stores `reason`
+  (which the UI marks as vendor-visible when `vendor_visible` is true),
+  `remaining_risk_acknowledged`, dates and the optional supporting document.
+  The UI therefore shows the note as part of the same record without
+  claiming it is kept separately from anything the vendor can see; a real
+  internal-only note field is a schema change for a later migration, not
+  something to fake in the UI.
+- **Deficiency reopen on exception expiry relies on the housekeeping sweep**
+  (`compliance-housekeeping`, fixed schedule). The expired waiver is shown
+  as "Expired — deficiency reopens on the next sweep" until that run
+  executes; the UI does not pretend the deficiency is already open, and
+  `compliance-case-escalation.test.ts` proves the sweep's reopen is
+  idempotent.
 - **Whether GoTrue forwards `handle_new_user()`'s exact rejection text
   end-to-end is untested.** The trigger raises a specific message (e.g.
   `'Invalid or expired invite code.'`) on an invalid or already-used invite

@@ -131,7 +131,7 @@ export type AdminCompanyStatsView = Omit<NonNullableRow<ViewRow<"admin_company_s
 /** email_outbox.status - Phase 1 send-time value, widened by migration 19 (email_bounce_handling) to also carry the latest delivery outcome, and by 20260922120000 with 'suppressed' (a recipient deliberately not emailed). */
 export type EmailOutboxStatus =
   "queued" | "sent" | "failed" | "delivered" | "bounced" | "complained" | "suppressed";
-/** email_outbox.template - kept in sync with email_outbox_template_check (latest: 20260917001300_compliance_case_escalation.sql). */
+/** email_outbox.template - kept in sync with email_outbox_template_check (latest: 20260922130000_email_outbox_company_invitations.sql). vendor_id is null for 'company_invitation'. */
 export type EmailOutboxTemplate =
   | "vendor_onboarding"
   | "renewal_request"
@@ -139,7 +139,8 @@ export type EmailOutboxTemplate =
   | "admin_review_needed"
   | "renewal_reminder"
   | "compliance_deficiency_escalated"
-  | "compliance_exception_expired";
+  | "compliance_exception_expired"
+  | "company_invitation";
 export type EmailOutboxRow = Omit<Row<"email_outbox">, "status" | "template" | "recipient_role"> & {
   status: EmailOutboxStatus;
   template: EmailOutboxTemplate;

@@ -5,6 +5,7 @@ import { AppShell } from "@/components/shell/AppShell";
 import { ComplianceRail } from "@/components/compliance/ComplianceRail";
 import { EmptyState, ErrorState, LoadingState } from "@/components/states/AsyncState";
 import { getRepository, isBackendConfigured } from "@/data/repository";
+import { ComplianceCasesSection } from "@/features/compliance/ComplianceCasesSection";
 import { VendorCommunicationsSection } from "./VendorCommunicationsSection";
 import { VendorContactsPanel } from "./VendorContactsPanel";
 
@@ -35,6 +36,8 @@ export function VendorDetailPage({ vendorId }: { vendorId: string }) {
   // Presentation only - RLS (can_write_company) is the real boundary.
   const canWrite =
     mode === "live" && ["owner", "risk_manager", "project_engineer"].includes(companyRole ?? "");
+  // Exception approval is owner/risk_manager only - mirrors approve_compliance_exception().
+  const canApprove = mode === "live" && ["owner", "risk_manager"].includes(companyRole ?? "");
   const vendor = useQuery({
     queryKey: ["vendor", vendorId],
     queryFn: () => repo.getVendor(vendorId),
@@ -206,6 +209,18 @@ export function VendorDetailPage({ vendorId }: { vendorId: string }) {
 
           {isBackendConfigured() ? (
             <>
+              <section aria-labelledby="cases-heading">
+                <h2 id="cases-heading" className="text-sm font-semibold text-foreground">
+                  Compliance cases
+                </h2>
+                <div className="mt-3">
+                  <ComplianceCasesSection
+                    vendorId={data.id}
+                    canWrite={canWrite}
+                    canApprove={canApprove}
+                  />
+                </div>
+              </section>
               <VendorContactsPanel vendorId={data.id} canWrite={canWrite} />
               <VendorCommunicationsSection vendorId={data.id} canWrite={canWrite} />
             </>

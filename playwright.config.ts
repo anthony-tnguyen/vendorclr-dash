@@ -39,7 +39,7 @@ const config: Parameters<typeof defineConfig>[0] = {
     // Chromium can point at a working one, e.g. PLAYWRIGHT_CHROMIUM_EXECUTABLE
     // from a nix-built chromium. CI uses the bundled browser.
     ...(process.env["PLAYWRIGHT_CHROMIUM_EXECUTABLE"]
-      ? { executablePath: process.env["PLAYWRIGHT_CHROMIUM_EXECUTABLE"] }
+      ? { launchOptions: { executablePath: process.env["PLAYWRIGHT_CHROMIUM_EXECUTABLE"] } }
       : {}),
   },
   projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
@@ -47,7 +47,9 @@ const config: Parameters<typeof defineConfig>[0] = {
 
 if (!externalBaseURL) {
   config.webServer = {
-    command: "bunx wrangler dev --config .output/server/wrangler.json --port 8788",
+    // The build moved to dist/ (nitro cloudflare-module preset); the
+    // deploy config under .wrangler/deploy points at dist/server/wrangler.json.
+    command: "bunx wrangler dev --config dist/server/wrangler.json --port 8788",
     url: "http://localhost:8788",
     reuseExistingServer: !isCI,
     timeout: 60_000,
