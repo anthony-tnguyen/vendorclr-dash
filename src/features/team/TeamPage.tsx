@@ -13,6 +13,9 @@ import {
   type CompanyMemberRole,
   type CompanyMemberSummary,
 } from "@/workflows/companyInvitations";
+// import { InviteMemberForm } from "./InviteMemberForm";
+// import { PendingInvitationsTable } from "./PendingInvitationsTable";
+import { ROLE_OPTIONS, roleLabel } from "./roleOptions";
 
 /**
  * Who is on this company's workspace, and what each person may do.
@@ -22,25 +25,6 @@ import {
  * a company with no active owner - so hiding the controls from non-owners below
  * is presentation, not the security boundary.
  */
-
-const ROLE_OPTIONS: Array<{ value: CompanyMemberRole; label: string; blurb: string }> = [
-  { value: "owner", label: "Owner", blurb: "Full control, including who has access." },
-  {
-    value: "risk_manager",
-    label: "Risk manager",
-    blurb: "Sets insurance requirements and reviews compliance.",
-  },
-  {
-    value: "project_engineer",
-    label: "Project engineer",
-    blurb: "Works vendors and documents on projects.",
-  },
-  { value: "read_only", label: "Read only", blurb: "Can view, cannot change anything." },
-];
-
-function roleLabel(role: CompanyMemberRole): string {
-  return ROLE_OPTIONS.find((option) => option.value === role)?.label ?? role;
-}
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : "Something went wrong. Try again.";
