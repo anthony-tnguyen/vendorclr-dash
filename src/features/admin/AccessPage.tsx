@@ -1,5 +1,4 @@
 import { useQuery } from "@tanstack/react-query";
-import { useState } from "react";
 import { AdminGuard } from "./AdminGuard";
 import { AppShell } from "@/components/shell/AppShell";
 import { EmptyState, ErrorState, LoadingState } from "@/components/states/AsyncState";
@@ -7,7 +6,6 @@ import { getRepository, isBackendConfigured } from "@/data/repository";
 
 export function AccessPage() {
   const repo = getRepository();
-  const [notice, setNotice] = useState<string | null>(null);
   const isDemo = !isBackendConfigured();
   const grants = useQuery({ queryKey: ["access"], queryFn: () => repo.listAccessGrants() });
 
@@ -17,27 +15,11 @@ export function AccessPage() {
       subtitle={
         isDemo
           ? "Roles and project scopes. Demo mode — changes are not persisted."
-          : "Roles and project scopes. Teammate invitations are not available yet."
-      }
-      actions={
-        <button
-          type="button"
-          disabled={!isDemo}
-          onClick={() => setNotice("Demo mode: no invitation was created or emailed.")}
-          className="focusable rounded-sm bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground disabled:cursor-not-allowed disabled:opacity-60"
-        >
-          {isDemo ? "Invite teammate (demo)" : "Teammate invitations are not available"}
-        </button>
+          : "Roles and project scopes. Invite teammates from a company's own Team page."
       }
     >
       <AdminGuard>
         <div className="space-y-4">
-          {notice ? (
-            <p role="status" className="rounded-sm border border-border bg-muted px-3 py-2 text-xs">
-              {notice}
-            </p>
-          ) : null}
-
           {grants.isLoading ? (
             <LoadingState label="Loading access grants" rows={4} />
           ) : grants.isError ? (
@@ -46,7 +28,7 @@ export function AccessPage() {
               onRetry={() => void grants.refetch()}
             />
           ) : (grants.data ?? []).length === 0 ? (
-            <EmptyState title="No access grants" description="Invite a teammate to get started." />
+            <EmptyState title="No access grants" description="No one has access recorded yet." />
           ) : (
             <div className="overflow-x-auto rounded-md border border-border bg-card">
               <table className="w-full min-w-[640px] text-left text-sm">

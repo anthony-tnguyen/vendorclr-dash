@@ -14,6 +14,7 @@ import { Route as DemoRouteImport } from './routes/demo'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as SignupRouteImport } from './routes/signup'
+import { Route as AcceptInviteTokenRouteImport } from './routes/accept-invite.$token'
 import { Route as DashboardIndexRouteImport } from './routes/dashboard.index'
 import { Route as DashboardHelpRouteImport } from './routes/dashboard.help'
 import { Route as DashboardReportsRouteImport } from './routes/dashboard.reports'
@@ -60,6 +61,11 @@ const ResetPasswordRoute = ResetPasswordRouteImport.update({
 const SignupRoute = SignupRouteImport.update({
   id: '/signup',
   path: '/signup',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AcceptInviteTokenRoute = AcceptInviteTokenRouteImport.update({
+  id: '/accept-invite/$token',
+  path: '/accept-invite/$token',
   getParentRoute: () => rootRouteImport,
 } as any)
 const DashboardIndexRoute = DashboardIndexRouteImport.update({
@@ -186,6 +192,7 @@ export interface FileRoutesByFullPath {
   '/login': typeof LoginRoute
   '/reset-password': typeof ResetPasswordRoute
   '/signup': typeof SignupRoute
+  '/accept-invite/$token': typeof AcceptInviteTokenRoute
   '/dashboard/help': typeof DashboardHelpRoute
   '/dashboard/reports': typeof DashboardReportsRoute
   '/dashboard/requirement-profiles': typeof DashboardRequirementProfilesRoute
@@ -215,6 +222,7 @@ export interface FileRoutesByTo {
   '/login': typeof LoginRoute
   '/reset-password': typeof ResetPasswordRoute
   '/signup': typeof SignupRoute
+  '/accept-invite/$token': typeof AcceptInviteTokenRoute
   '/dashboard/help': typeof DashboardHelpRoute
   '/dashboard/reports': typeof DashboardReportsRoute
   '/dashboard/requirement-profiles': typeof DashboardRequirementProfilesRoute
@@ -245,6 +253,7 @@ export interface FileRoutesById {
   '/login': typeof LoginRoute
   '/reset-password': typeof ResetPasswordRoute
   '/signup': typeof SignupRoute
+  '/accept-invite/$token': typeof AcceptInviteTokenRoute
   '/dashboard/help': typeof DashboardHelpRoute
   '/dashboard/reports': typeof DashboardReportsRoute
   '/dashboard/requirement-profiles': typeof DashboardRequirementProfilesRoute
@@ -276,6 +285,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/reset-password'
     | '/signup'
+    | '/accept-invite/$token'
     | '/dashboard/help'
     | '/dashboard/reports'
     | '/dashboard/requirement-profiles'
@@ -305,6 +315,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/reset-password'
     | '/signup'
+    | '/accept-invite/$token'
     | '/dashboard/help'
     | '/dashboard/reports'
     | '/dashboard/requirement-profiles'
@@ -334,6 +345,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/reset-password'
     | '/signup'
+    | '/accept-invite/$token'
     | '/dashboard/help'
     | '/dashboard/reports'
     | '/dashboard/requirement-profiles'
@@ -364,6 +376,7 @@ export interface RootRouteChildren {
   LoginRoute: typeof LoginRoute
   ResetPasswordRoute: typeof ResetPasswordRoute
   SignupRoute: typeof SignupRoute
+  AcceptInviteTokenRoute: typeof AcceptInviteTokenRoute
   DashboardHelpRoute: typeof DashboardHelpRoute
   DashboardReportsRoute: typeof DashboardReportsRoute
   DashboardRequirementProfilesRoute: typeof DashboardRequirementProfilesRoute
@@ -422,6 +435,13 @@ declare module '@tanstack/react-router' {
       path: '/signup'
       fullPath: '/signup'
       preLoaderRoute: typeof SignupRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/accept-invite/$token': {
+      id: '/accept-invite/$token'
+      path: '/accept-invite/$token'
+      fullPath: '/accept-invite/$token'
+      preLoaderRoute: typeof AcceptInviteTokenRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/dashboard/': {
@@ -602,6 +622,7 @@ const rootRouteChildren: RootRouteChildren = {
   LoginRoute: LoginRoute,
   ResetPasswordRoute: ResetPasswordRoute,
   SignupRoute: SignupRoute,
+  AcceptInviteTokenRoute: AcceptInviteTokenRoute,
   DashboardHelpRoute: DashboardHelpRoute,
   DashboardReportsRoute: DashboardReportsRoute,
   DashboardRequirementProfilesRoute: DashboardRequirementProfilesRoute,
