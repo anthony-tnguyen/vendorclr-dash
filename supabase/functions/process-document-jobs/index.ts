@@ -420,6 +420,49 @@ async function sendViaResend(
   }
 }
 
+/**
+ * The suppression gate - the Deno twin of sendUnlessSuppressed() in
+ * src/workflows/suppression.ts (this runtime cannot import that module).
+ * Never hands Resend an address public.is_email_suppressed() reports as
+ * suppressed for the company (hard bounce, spam complaint, manual
+ * do-not-email). Fails closed: if the check itself errors, nothing is sent.
+ */
+async function sendUnlessSuppressed(
+  // deno-lint-ignore no-explicit-any
+  supabase: any,
+  resendApiKey: string | undefined,
+  companyId: string,
+  input: { to: string; subject: string; html: string; text: string },
+): Promise<{
+  status: "sent" | "failed" | "not_configured" | "suppressed";
+  providerMessageId: string | null;
+  error: string | null;
+}> {
+  const { data: suppressed, error } = await supabase.rpc("is_email_suppressed", {
+    p_company_id: companyId,
+    p_email: input.to,
+  });
+  if (error) {
+    return {
+      status: "failed",
+      providerMessageId: null,
+      error: `Not sent: could not verify suppression status (${error.message}).`,
+    };
+  }
+  if (suppressed === true) {
+    return {
+      status: "suppressed",
+      providerMessageId: null,
+      error: "Not sent: address is suppressed (bounced, complained or marked do-not-email).",
+    };
+  }
+  return sendViaResend(resendApiKey, input);
+}
+
+function outboxStatusFor(status: "sent" | "failed" | "not_configured" | "suppressed"): string {
+  return status === "not_configured" ? "queued" : status;
+}
+
 /** Never throws - a notification failure must not undo work this job already committed. */
 async function notifyDocumentOutcome(
   // deno-lint-ignore no-explicit-any
@@ -455,7 +498,7 @@ async function notifyDocumentOutcome(
         companyName: vendor.companies?.name ?? "your client",
         outcome: params.finalStatus,
       };
-      const sendResult = await sendViaResend(resendApiKey, {
+      const sendResult = await sendUnlessSuppressed(supabase, resendApiKey, params.companyId, {
         to: vendor.contact_email,
         subject: documentReceivedSubject(emailInput),
         html: documentReceivedHtml(emailInput),
@@ -466,12 +509,7 @@ async function notifyDocumentOutcome(
         vendor_id: params.vendorId,
         template: "document_received",
         to_email: vendor.contact_email,
-        status:
-          sendResult.status === "sent"
-            ? "sent"
-            : sendResult.status === "failed"
-              ? "failed"
-              : "queued",
+        status: outboxStatusFor(sendResult.status),
         provider_message_id: sendResult.providerMessageId,
         error: sendResult.error,
         sent_at: sendResult.status === "sent" ? new Date().toISOString() : null,
@@ -488,7 +526,7 @@ async function notifyDocumentOutcome(
           reason: params.reviewReason ?? params.processingError,
         };
         for (const to of ownerEmails) {
-          const sendResult = await sendViaResend(resendApiKey, {
+          const sendResult = await sendUnlessSuppressed(supabase, resendApiKey, params.companyId, {
             to,
             subject: adminReviewNeededSubject(emailInput),
             html: adminReviewNeededHtml(emailInput),
@@ -499,12 +537,7 @@ async function notifyDocumentOutcome(
             vendor_id: params.vendorId,
             template: "admin_review_needed",
             to_email: to,
-            status:
-              sendResult.status === "sent"
-                ? "sent"
-                : sendResult.status === "failed"
-                  ? "failed"
-                  : "queued",
+            status: outboxStatusFor(sendResult.status),
             provider_message_id: sendResult.providerMessageId,
             error: sendResult.error,
             sent_at: sendResult.status === "sent" ? new Date().toISOString() : null,

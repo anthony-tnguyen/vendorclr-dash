@@ -14,7 +14,7 @@ async function getRequestScopedClient() {
   return mod.getRequestScopedClient();
 }
 
-import { createUploadRequest } from "./vendorUploadRequests";
+import { sendRequestHandler } from "./communications";
 
 /**
  * Task 11a - the bulk CSV vendor/project import pipeline (the import half of
@@ -572,22 +572,44 @@ export type DispatchUploadRequestFn = (vendorId: string) => Promise<RowDispatchR
  * "a downstream notification failure doesn't undo an already-committed core
  * write" pattern as notifyDocumentOutcome() (communications.ts, Task 8b/9a).
  *
- * Calls createUploadRequest() the same way any other same-process caller in
- * this codebase invokes a createServerFn export - createServerFn's returned
- * function is directly callable server-side with the same `fn({ data })`
- * shape client code uses (see RequestDocumentsAction.tsx's own call); there
- * is no separate "internal" entry point to createUploadRequest() to prefer
- * over its public one.
+ * Sends through the same sendRequestHandler() the vendor detail page uses
+ * (communications.ts), addressed to the vendor's operational contact(s) -
+ * for a freshly imported vendor that is the row's contact_email, linked by
+ * the vendors_ensure_operational_contact trigger. So an imported vendor's
+ * first request gets the same recipient validation, suppression exclusion,
+ * outbox and audit trail as any other; there is no second send path.
  */
+function summarizeDispatch(outcomes: string[]): RowDispatchResult["status"] {
+  if (outcomes.includes("sent")) return "sent";
+  if (outcomes.includes("failed")) return "failed";
+  if (outcomes.includes("not_configured")) return "not_configured";
+  return "skipped_suppressed";
+}
+
 const defaultDispatchUploadRequestSafely: DispatchUploadRequestFn = async (vendorId) => {
   try {
-    const result = await createUploadRequest({ data: { vendorId, purpose: "initial" } });
-    return { status: result.email.status };
+    const supabase = (await getRequestScopedClient()) as unknown as SupabaseClient;
+    const { data: links, error } = await supabase
+      .from("vendor_contacts")
+      .select("contact_id")
+      .eq("vendor_id", vendorId)
+      .eq("role", "operational");
+    if (error) throw new Error(error.message);
+    const recipientIds = [
+      ...new Set(((links ?? []) as Array<{ contact_id: string }>).map((l) => l.contact_id)),
+    ];
+    if (recipientIds.length === 0) {
+      return { status: "error", error: "This vendor has no operational contact to send to." };
+    }
+    const result = await sendRequestHandler(supabase, {
+      vendorId,
+      purpose: "initial",
+      confirmedRecipientIds: recipientIds,
+    });
+    return { status: summarizeDispatch(result.recipients.map((r) => r.outcome)) };
   } catch (error) {
-    return {
-      status: "error",
-      error: error instanceof Error ? error.message : "Could not send the upload request.",
-    };
+    const message = error instanceof Error ? error.message : "Could not send the upload request.";
+    return { status: /suppressed/i.test(message) ? "skipped_suppressed" : "error", error: message };
   }
 };
 
@@ -606,7 +628,7 @@ export interface ExecuteVendorImportParams {
  * "Start context" a plain test environment does not establish, so the
  * testable core lives in a bare function and the createServerFn wrapper
  * below is a thin pass-through. dispatchFn defaults to the real
- * createUploadRequest()-backed implementation; tests substitute a fake to
+ * sendRequestHandler()-backed implementation; tests substitute a fake to
  * exercise the "one row's dispatch failure doesn't affect its own recorded
  * success, nor any other row" property without a real email provider.
  */

@@ -73,8 +73,9 @@ the Lovable preview run, and it is why every change here is additive.
 
 For the Phase 1 vendor portal you additionally need `SUPABASE_SERVICE_ROLE_KEY`
 (server-only, no `VITE_` prefix — `supabase start` prints it). Optionally
-`RESEND_API_KEY` to send real email; without it, "Request updated certificate"
-still works and returns the magic link directly to the admin to copy and share.
+`RESEND_API_KEY` to send real email; without it, "Request documents" on the
+vendor detail page still creates the request and returns the magic link
+directly to the admin to copy and share.
 For Phase 2, optionally `ANTHROPIC_API_KEY`; without it a document is still
 stored but not extracted (`processing_status` ends up `'failed'`, with
 `processing_error` saying so) until `reprocessDocument()` is called after the
@@ -83,12 +84,16 @@ key is set. See `.env.example`.
 ## The renewal loop (Phase 1)
 
 ```
-Admin clicks "Request updated certificate" on the vendor detail page
-        │  createUploadRequest() — runs AS the admin, via their session cookie
+Admin clicks "Request documents" on the vendor detail page, ticks recipients
+(operational / broker / secondary contacts) and sees exactly who will receive it
+        │  sendRequest() — runs AS the admin, via their session cookie
+        │  prepare_contact_request() re-derives the recipients server-side,
+        │  excludes suppressed addresses, inserts the request (fresh token hash)
         ▼
 vendor_upload_requests row created, token generated, hashed, magic link built
-        │  getEmailSender() — Resend if RESEND_API_KEY is set, otherwise a
-        │  logged no-op; the link is returned to the caller either way
+        │  sendUnlessSuppressed() — re-checks suppression, then Resend if
+        │  RESEND_API_KEY is set, otherwise a logged no-op; the link is
+        │  returned to the caller either way
         ▼
 Vendor opens /vendor-upload/:token — no account, no login
         │  resolveUploadToken() — service-role client, after independently
@@ -110,7 +115,7 @@ file is not evidence of compliance. That's Phase 2 (extraction) and Phase 3
 
 - **`getRequestScopedClient()`** — runs every query as the signed-in caller, via
   their session cookie (`@supabase/ssr`, reading/writing cookies through
-  `@tanstack/react-start/server`). `createUploadRequest()` uses this: whether an
+  `@tanstack/react-start/server`). `sendRequest()` uses this: whether an
   admin may act on a given vendor is decided once, by the `can_write_company()`
   RLS policy, never re-implemented in application code.
 - **`getServiceRoleClient()`** — bypasses RLS entirely. Used only by
@@ -127,7 +132,7 @@ client-bundled code. `serverClient.server.ts` is meant to trip that on purpose �
 it is only ever imported from inside `createServerFn().handler()` bodies in
 `src/workflows/vendorUploadRequests.ts`, which itself lives in `src/workflows/`
 (not `src/server/`) specifically so its exported RPC stubs _can_ be imported by
-`VendorUploadPortal.tsx` and `RequestDocumentsAction.tsx`. Verified at
+`VendorUploadPortal.tsx` and the vendor detail page. Verified at
 `bun run build` time by grepping `.output/public` for the service-role path —
 see the PR for that check.
 
@@ -574,8 +579,8 @@ request.
 
 `cancelUploadRequest()` (`vendorUploadRequests.ts`) is that missing write.
 No new table, no new RLS policy: `vendor_upload_requests_update` already
-grants `can_write_company()` the UPDATE this needs, the same policy
-`createUploadRequest()`'s INSERT already relies on - this runs entirely on
+grants `can_write_company()` the UPDATE this needs, the same policy the
+request INSERT already relies on - this runs entirely on
 the request-scoped client, no service role anywhere. Only valid from a
 status the vendor hasn't acted on at all yet
 (`canCancelRequest()` in `uploadTokens.ts` - `pending`/`email_sent`/`opened`,
@@ -587,10 +592,9 @@ the status could move between the page loading and the click landing.
 Logged to `audit_log` as `upload_request_cancelled` /
 `vendor_upload_request` (migration 15 widens both CHECK constraints for it).
 
-`listUploadRequestsForVendor()` is the other half - without seeing what's
-outstanding, there is nothing to cancel. Returns the vendor's 10 most recent
-requests; `RequestDocumentsAction.tsx` (the vendor detail page) renders a
-Cancel button next to whichever ones `canCancelRequest()` says qualify.
+The vendor detail page's communication history shows every request with a
+"Cancel link" button next to whichever ones `canCancelRequest()` says
+qualify. (`listUploadRequestsForVendor()` still exists as a plain read.)
 
 ### Malware scanning
 
@@ -769,17 +773,15 @@ the live Edge Function - the same database-layer-over-application-code
 preference already established for `assert_company_matches_vendor()` and
 friends.
 
-**`sendRequest()`** (`src/workflows/communications.ts`) generalizes
-`createUploadRequest()`'s single-recipient send (`vendors.contact_email`,
-always exactly one address) to any set of a vendor's linked contacts -
-send-to-vendor, send-to-broker, send-to-both. It does not modify
-`createUploadRequest()` at all: that function's behavior, signature and
-file are untouched, and the small token-generation-and-insert sequence
-both functions need is duplicated rather than factored into a shared
-helper, since extracting one would have meant editing
-`vendorUploadRequests.ts` for a handful of lines unlikely to drift (see
-`sendRequest()`'s own docblock for the full reasoning). Two contracts worth
-calling out explicitly:
+**`sendRequest()`** (`src/workflows/communications.ts`) sends a request to
+any set of a vendor's linked contacts - send-to-vendor, send-to-broker,
+send-to-both. Since 20260922120000 it is the **only** request path: the
+old single-recipient `createUploadRequest()` (which mailed
+`vendors.contact_email` with no suppression check) has been deleted, and
+its two callers (vendor detail, bulk-import dispatch) moved onto
+`sendRequest()`. See [Vendor contacts and suppression-safe request
+delivery](#vendor-contacts-and-suppression-safe-request-delivery) for the
+current design. Contracts worth calling out explicitly:
 
 - **Every resend is a brand-new `vendor_upload_requests` row and a brand-new
   token** - `sendRequest()` never extends or reuses an existing request,
@@ -793,15 +795,16 @@ calling out explicitly:
   or resend alike; a future UI's resend action should re-show the previous
   recipients for a human to confirm or edit, not read them off the old
   request and pass them through silently.
-- **Suppressed recipients are skipped, not erred** - immediately before
-  each recipient's send, `sendRequest()` checks `suppressed_recipients` for
-  that (normalized) address and, if suppressed, records the skip via
-  `logOperational()` (`src/lib/observability/logger.server.ts`, Task 2) and
-  moves on rather than writing an `email_outbox` row for it. Every other
-  recipient in the same call still gets attempted.
+- **Suppressed recipients are excluded and recorded** - a suppressed
+  recipient gets an `email_outbox` row with status `suppressed` (so
+  communication history shows who was deliberately not emailed) and no
+  send; every other recipient in the same call still gets attempted. A
+  selection where _every_ recipient is suppressed is refused outright and
+  creates no request at all.
 
-`src/data/repositories/contactRepository.ts` is the read/write layer a
-future `ContactsPanel.tsx`/`CommunicationHistory.tsx` would consume:
+`src/data/repositories/contactRepository.ts` is the read/write layer the
+vendor detail page's Contacts panel and communication history consume
+(through `src/workflows/vendorContacts.ts`):
 listing/creating contacts and vendor links, checking/listing suppressions,
 and `listCommunicationHistoryForVendor()` - `email_outbox` joined with its
 full `email_delivery_events` history per send, the source for
@@ -812,14 +815,76 @@ project's history.
 
 **`audit_log`** gains one more action, `contact_request_sent`, widening the
 same `action` CHECK constraint migrations 14/15/21 already widened -
-`sendRequest()` writes one audit row per call (not per recipient), the same
-granularity `createUploadRequest()` already uses.
+`sendRequest()` writes one audit row per call (not per recipient), with
+each recipient's role, outcome and outbox id in `detail`.
 
-None of this ships UI - `ContactsPanel.tsx`, `CommunicationHistory.tsx`, and
-wiring `RequestDocumentsAction.tsx` onto `sendRequest()` are a later task's
-work. `sendRequest()`/`contactRepository.ts` are built to return everything
-that UI will need (per-recipient outcome, role, the full delivery-event
-join) without guessing at its exact shape.
+### Vendor contacts and suppression-safe request delivery
+
+Migration `20260922120000_vendor_contacts_request_delivery.sql` plus the
+vendor detail page's **Contacts** panel (`VendorContactsPanel.tsx`) and
+**Document requests & communication history** section
+(`VendorCommunicationsSection.tsx`).
+
+**Contacts.** Each vendor lists its contacts with name, agency/company
+(`contacts.organization`, new), email, phone, role (`operational` /
+`broker` / `secondary` - the exact `vendor_contacts.role` values) and any
+active suppression, shown in words ("Hard bounce", "Spam complaint", "Do not
+email"). Writers can add, edit, link an existing contact, unlink, change
+role, and mark/clear do-not-email; read-only members see everything but get
+no controls, and RLS refuses the writes regardless. **One contact per
+address per company**: `contacts_company_email_unique` on
+`(company_id, lower(btrim(email)))` (existing duplicates are merged into the
+oldest row first), and "Add contact" links the existing contact when the
+address is already known - a broker covering ten vendors is one row linked
+ten times, and editing it shows "shared with N vendors". Every vendor's
+Phase 0 `contact_email` becomes its `operational` contact (backfilled once,
+and by the `vendors_ensure_operational_contact` trigger on every new vendor
+
+- including CSV imports). Contact/link/role/suppression changes are written
+  to `audit_log` by `record_contact_audit()`.
+
+**Sending.** `sendRequest()` = `prepare_contact_request()` (SQL, SECURITY
+INVOKER, so the caller's own RLS applies) + `sendRequestHandler()` (Node).
+The database half: vendor must be visible (else "Vendor not found."), caller
+must pass `can_write_company()`, **every** requested contact id must be a
+contact of the same company linked to this vendor (one bad id - another
+vendor's contact, another company's contact, a made-up uuid - rejects the
+whole call and creates nothing), suppressed recipients are excluded and
+recorded, an all-suppressed selection is refused, and a resend cancels the
+request it replaces (only if the vendor hasn't acted on it). The Node half
+generates a **fresh token for every call** (never reused, including resend),
+re-checks suppression immediately before each send, writes one
+`email_outbox` row per recipient carrying `contact_id` + `recipient_role` +
+`upload_request_id`, and one `audit_log` row. The UI shows the exact
+"Will be emailed to" / "Excluded" lists before the Send button, and
+suppressed contacts cannot be ticked.
+
+**Communication history** groups `email_outbox` rows by request: date,
+request type, recipient, role, sent / delivered / bounced / complained /
+failed flags (from `email_outbox.status` + `email_delivery_events`, a direct
+FK), "Excluded — suppressed", and upload received (the request's
+`uploaded_at`/status). **Resend** reopens the composer with that request's
+recipients pre-ticked and editable and sends a new request
+(`vendor_upload_requests.resend_of_request_id` links the chain).
+
+**Suppression is enforced on every production send path** - every one asks
+`public.is_email_suppressed(company_id, email)` before handing an address to
+Resend, and fails closed (does not send) if that check errors:
+
+| Send path                                                    | Recipient               | Gate                                                     |
+| ------------------------------------------------------------ | ----------------------- | -------------------------------------------------------- |
+| `sendRequest()` (vendor detail, resend, CSV-import dispatch) | chosen vendor contacts  | `prepare_contact_request()` + `sendUnlessSuppressed()`   |
+| `notifyDocumentOutcome()` (`vendorUploadRequests.ts`)        | vendor contact + owners | `sendUnlessSuppressed()`                                 |
+| `inviteCompanyMember()` / `resendCompanyInvitation()`        | invitee                 | `sendUnlessSuppressed()`                                 |
+| `send-renewal-reminders` Edge Function                       | vendor contact          | inline `is_email_suppressed` before creating the request |
+| `process-document-jobs` Edge Function                        | vendor contact + owners | Deno `sendUnlessSuppressed()`                            |
+| `compliance-housekeeping` Edge Function                      | compliance contacts     | Deno `sendUnlessSuppressed()`                            |
+
+`src/tests/suppression-coverage.test.ts` fails the build if any Node file
+calls the email sender outside `sendUnlessSuppressed()`, if
+`createUploadRequest()` reappears, or if an Edge Function calls Resend
+without the gate. **The three Edge Functions must be redeployed** for the
+Deno half of this to be live - see Known compromises.
 
 ### Deployment verification
 
@@ -1300,25 +1365,42 @@ src/data/db-types.ts` followed by `git diff --exit-code src/data/db-types.ts`.
   `retry_count`/`next_retry_at`, or which documents have exhausted their 5
   automated attempts and are now waiting on a person via
   `reprocessDocument()`.
-- **No admin visibility into email delivery/bounce status.** `email_delivery_events`
-  and the widened `email_outbox.status` are written correctly, and Task 7's
-  `contactRepository.ts` now exposes the full history a screen would need
-  (`listCommunicationHistoryForVendor()`), but no screen actually reads it
-  yet - an admin still cannot see "this renewal request bounced" without
-  querying the database directly or waiting for the future
-  `CommunicationHistory.tsx` task.
+- ~~No admin visibility into email delivery/bounce status.~~ **Resolved by 20260922120000.** Vendor detail now shows per-vendor communication history
+  (sent/delivered/bounced/complained/failed/suppressed, upload received) and
+  each contact's suppression state.
 - ~~A bounce/complaint does not trigger any follow-up action.~~ **Resolved
   by Task 7.** `handle_bounce_suppression()` (a trigger on
   `email_delivery_events`, see [Contacts, suppression and communication
   recovery](#contacts-suppression-and-communication-recovery)) now writes an
   active `suppressed_recipients` row and opens a high-priority `tasks` row
   on every bounce/complaint, and `sendRequest()` skips a suppressed
-  recipient rather than emailing them again. `createUploadRequest()`'s own
-  single-recipient path does **not** check suppression - it was out of
-  scope to modify this task and still sends unconditionally to
-  `vendors.contact_email`; closing that gap needs either migrating
-  `RequestDocumentsAction.tsx` onto `sendRequest()` (the future UI task) or
-  a separate, deliberate change to `createUploadRequest()` itself.
+  recipient rather than emailing them again. ~~`createUploadRequest()`'s
+  single-recipient path does not check suppression.~~ **Resolved by
+  20260922120000:** `createUploadRequest()` is deleted, the customer-facing
+  request UI and the import dispatch use `sendRequest()`, and every other
+  send path (document-outcome, invitations, and the three mail-sending Edge
+  Functions) checks `is_email_suppressed()` first - see [Vendor contacts and
+  suppression-safe request
+  delivery](#vendor-contacts-and-suppression-safe-request-delivery).
+- ~~Edge Function suppression gate needs a redeploy to be live.~~
+  **Deployed 2026-09-22** to staging (`ukbgjriqszthtgwxyirr`, after bringing
+  it up to date with the four migrations it was missing) and production
+  (`fzrcowwonezflydicpbd`): migration applied, then `send-renewal-reminders`,
+  `process-document-jobs` and `compliance-housekeeping` redeployed with
+  unchanged `verify_jwt` settings. Identical bundle hashes on both projects;
+  each boots and refuses a non-service caller (403). A rolled-back SQL smoke
+  test as a signed-in owner confirmed suppression exclusion, unrelated-contact
+  rejection, all-suppressed refusal, resend cancellation and audit rows on
+  both. Deployed via the MCP connector (no CLI token), so the function source
+  was transcribed rather than uploaded from disk.
+- **Renewal reminders and document-received notices still address
+  `vendors.contact_email`** (now always also the vendor's operational
+  contact), not the full contact list; they do not yet go to brokers.
+  Suppression is enforced on them either way.
+- **Company invitations' `email_outbox` insert has no `vendor_id`** (the
+  column is `not null`) and a template the CHECK constraint doesn't list, so
+  that insert has always failed silently - pre-existing, not changed here;
+  invitation sends are still suppression-gated.
 - **`RESEND_WEBHOOK_SECRET` is now set as a live Edge Function secret** -
   confirmed during Task 7: the deployed function now refuses an unsigned
   call with `401 {"error":"Missing signature headers"}` rather than the

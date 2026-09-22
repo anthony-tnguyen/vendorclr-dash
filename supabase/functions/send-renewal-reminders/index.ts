@@ -23,8 +23,8 @@ import { logOperational, newRequestId } from "./operationalLog.ts";
  *      anything already logged for its current threshold - see migration
  *      10's docblock).
  *   2. For each due policy, creates a fresh vendor_upload_requests row and
- *      magic-link token, the same shape createUploadRequest() in
- *      src/workflows/vendorUploadRequests.ts creates for a manually-triggered
+ *      magic-link token, the same shape sendRequest() in
+ *      src/workflows/communications.ts creates for a manually-triggered
  *      request.
  *   3. Emails the vendor via Resend, or logs a stub result if RESEND_API_KEY
  *      is not set - never throws for a missing provider, matching
@@ -176,6 +176,39 @@ Deno.serve(async (req: Request) => {
       const policy = policyById.get(row.policy_id);
 
       if (!vendor || !policy || !vendor.contact_email) {
+        skipped++;
+        continue;
+      }
+
+      // Suppression gate (same predicate as the Node app's
+      // sendUnlessSuppressed()): a hard-bounced, complained or
+      // do-not-email address gets no reminder and no new upload link.
+      // Recorded once per threshold - the email_outbox row is the visible
+      // trace, and the reminder log entry stops tomorrow's run from
+      // re-deciding the same thing. Fails closed if the check errors.
+      const { data: isSuppressed, error: suppressionError } = await supabase.rpc(
+        "is_email_suppressed",
+        { p_company_id: row.company_id, p_email: vendor.contact_email },
+      );
+      if (suppressionError) {
+        failed++;
+        continue;
+      }
+      if (isSuppressed === true) {
+        await supabase.from("email_outbox").insert({
+          company_id: row.company_id,
+          vendor_id: row.vendor_id,
+          template: "renewal_reminder",
+          to_email: vendor.contact_email,
+          status: "suppressed",
+          error: "Not sent: address is suppressed (bounced, complained or marked do-not-email).",
+        });
+        await supabase.from("policy_reminder_log").insert({
+          company_id: row.company_id,
+          vendor_id: row.vendor_id,
+          policy_id: row.policy_id,
+          days_threshold: row.days_threshold,
+        });
         skipped++;
         continue;
       }

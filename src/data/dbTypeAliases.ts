@@ -128,13 +128,22 @@ export type AdminCompanyStatsView = Omit<NonNullableRow<ViewRow<"admin_company_s
   plan: CompanyPlan;
 };
 
-/** email_outbox.status - Phase 1 send-time value, widened by migration 19 (email_bounce_handling) to also carry the latest delivery outcome. */
+/** email_outbox.status - Phase 1 send-time value, widened by migration 19 (email_bounce_handling) to also carry the latest delivery outcome, and by 20260922120000 with 'suppressed' (a recipient deliberately not emailed). */
 export type EmailOutboxStatus =
-  "queued" | "sent" | "failed" | "delivered" | "bounced" | "complained";
-export type EmailOutboxTemplate = "vendor_onboarding" | "renewal_request";
-export type EmailOutboxRow = Omit<Row<"email_outbox">, "status" | "template"> & {
+  "queued" | "sent" | "failed" | "delivered" | "bounced" | "complained" | "suppressed";
+/** email_outbox.template - kept in sync with email_outbox_template_check (latest: 20260917001300_compliance_case_escalation.sql). */
+export type EmailOutboxTemplate =
+  | "vendor_onboarding"
+  | "renewal_request"
+  | "document_received"
+  | "admin_review_needed"
+  | "renewal_reminder"
+  | "compliance_deficiency_escalated"
+  | "compliance_exception_expired";
+export type EmailOutboxRow = Omit<Row<"email_outbox">, "status" | "template" | "recipient_role"> & {
   status: EmailOutboxStatus;
   template: EmailOutboxTemplate;
+  recipient_role: VendorContactRole | null;
 };
 
 /** email_delivery_events.event_type - migration 19. Append-only post-send history; see that migration's own docblock for why this is separate from EmailOutboxStatus above. */

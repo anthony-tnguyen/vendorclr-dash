@@ -56,6 +56,7 @@ export interface CreateContactInput {
   name: string;
   email: string;
   phone?: string;
+  organization?: string;
   notes?: string;
 }
 
@@ -77,8 +78,50 @@ export async function createContact(input: CreateContactInput): Promise<ContactR
       name: input.name,
       email: input.email,
       phone: input.phone ?? "",
+      organization: input.organization ?? "",
       notes: input.notes ?? "",
     })
+    .select("*")
+    .single()) as unknown as { data: ContactRow | null; error: { message: string } | null };
+  return unwrap(result);
+}
+
+/**
+ * The company's existing contact for an address, if any - matched the same
+ * way contacts_company_email_unique is (trim + case-insensitive), so a
+ * broker added from a second vendor is found and reused rather than
+ * duplicated. Filters client-side after a company-scoped read rather than
+ * via ilike, whose _ and % wildcards would need escaping.
+ */
+export async function findContactByEmail(
+  companyId: string,
+  email: string,
+): Promise<ContactRow | null> {
+  const normalized = email.trim().toLowerCase();
+  const rows = await listContactsForCompany(companyId);
+  return rows.find((row) => row.email.trim().toLowerCase() === normalized) ?? null;
+}
+
+export interface UpdateContactInput {
+  contactId: string;
+  name: string;
+  email: string;
+  phone: string;
+  organization: string;
+}
+
+/** Edits the shared contact row - every vendor it is linked to sees the change. */
+export async function updateContact(input: UpdateContactInput): Promise<ContactRow> {
+  const supabase = await getRequestScopedClient();
+  const result = (await supabase
+    .from("contacts")
+    .update({
+      name: input.name,
+      email: input.email,
+      phone: input.phone,
+      organization: input.organization,
+    })
+    .eq("id", input.contactId)
     .select("*")
     .single()) as unknown as { data: ContactRow | null; error: { message: string } | null };
   return unwrap(result);
@@ -95,6 +138,7 @@ export interface VendorContactWithDetail {
   name: string;
   email: string;
   phone: string;
+  organization: string;
   role: VendorContactRole;
 }
 
@@ -110,12 +154,18 @@ export async function listVendorContacts(vendorId: string): Promise<VendorContac
   const supabase = await getRequestScopedClient();
   const result = (await supabase
     .from("vendor_contacts")
-    .select("id, role, contacts ( id, name, email, phone )")
+    .select("id, role, contacts ( id, name, email, phone, organization )")
     .eq("vendor_id", vendorId)) as unknown as {
     data: Array<{
       id: string;
       role: VendorContactRole;
-      contacts: { id: string; name: string; email: string; phone: string } | null;
+      contacts: {
+        id: string;
+        name: string;
+        email: string;
+        phone: string;
+        organization: string;
+      } | null;
     }> | null;
     error: { message: string } | null;
   };
@@ -135,6 +185,7 @@ export async function listVendorContacts(vendorId: string): Promise<VendorContac
       name: row.contacts.name,
       email: row.contacts.email,
       phone: row.contacts.phone,
+      organization: row.contacts.organization,
       role: row.role,
     }));
 }
@@ -158,6 +209,46 @@ export async function linkContactToVendor(input: {
     .select("*")
     .single()) as unknown as { data: VendorContactRow | null; error: { message: string } | null };
   return unwrap(result);
+}
+
+/** Changes the role a contact holds on one vendor. The (vendor, contact, role) unique constraint refuses a role the contact already holds there. */
+export async function changeVendorContactRole(
+  vendorContactId: string,
+  role: VendorContactRole,
+): Promise<VendorContactRow> {
+  const supabase = await getRequestScopedClient();
+  const result = (await supabase
+    .from("vendor_contacts")
+    .update({ role })
+    .eq("id", vendorContactId)
+    .select("*")
+    .single()) as unknown as { data: VendorContactRow | null; error: { message: string } | null };
+  return unwrap(result);
+}
+
+/** How many distinct vendors each contact is linked to - lets the UI say "shared with 3 vendors" before someone edits a broker's details. */
+export async function countVendorLinksByContact(
+  contactIds: string[],
+): Promise<Map<string, number>> {
+  const counts = new Map<string, number>();
+  if (contactIds.length === 0) return counts;
+  const supabase = await getRequestScopedClient();
+  const result = (await supabase
+    .from("vendor_contacts")
+    .select("contact_id, vendor_id")
+    .in("contact_id", contactIds)) as unknown as {
+    data: Array<{ contact_id: string; vendor_id: string }> | null;
+    error: { message: string } | null;
+  };
+  const rows = unwrap({ data: result.data ?? [], error: result.error });
+  const seen = new Set<string>();
+  for (const row of rows) {
+    const key = `${row.contact_id}:${row.vendor_id}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    counts.set(row.contact_id, (counts.get(row.contact_id) ?? 0) + 1);
+  }
+  return counts;
 }
 
 export async function unlinkContactFromVendor(vendorContactId: string): Promise<void> {
@@ -208,9 +299,22 @@ export async function listSuppressedRecipients(
 // Communication history - email_outbox + email_delivery_events
 // ---------------------------------------------------------------------------
 
+export interface CommunicationHistoryRequest {
+  id: string;
+  purpose: string;
+  status: string;
+  created_at: string;
+  uploaded_at: string | null;
+  resend_of_request_id: string | null;
+}
+
 export interface CommunicationHistoryEntry {
   outbox: EmailOutboxRow;
   events: EmailDeliveryEventRow[];
+  /** The upload request this email carried a link for, when it carried one. */
+  request: CommunicationHistoryRequest | null;
+  /** Current name of the contact it went to, when it went to a contact. */
+  contactName: string | null;
 }
 
 /**
@@ -228,21 +332,34 @@ export async function listCommunicationHistoryForVendor(
   const supabase = await getRequestScopedClient();
   const result = (await supabase
     .from("email_outbox")
-    .select("*, email_delivery_events ( * )")
+    .select(
+      "*, email_delivery_events ( * ), " +
+        "vendor_upload_requests ( id, purpose, status, created_at, uploaded_at, resend_of_request_id ), " +
+        "contacts ( name )",
+    )
     .eq("vendor_id", vendorId)
-    .order("created_at", { ascending: false })) as unknown as {
-    data: Array<EmailOutboxRow & { email_delivery_events: EmailDeliveryEventRow[] }> | null;
+    .order("created_at", { ascending: false })
+    .limit(200)) as unknown as {
+    data: Array<
+      EmailOutboxRow & {
+        email_delivery_events: EmailDeliveryEventRow[];
+        vendor_upload_requests: CommunicationHistoryRequest | null;
+        contacts: { name: string } | null;
+      }
+    > | null;
     error: { message: string } | null;
   };
   const rows = unwrap({ data: result.data ?? [], error: result.error });
 
   return rows.map((row) => {
-    const { email_delivery_events, ...outbox } = row;
+    const { email_delivery_events, vendor_upload_requests, contacts, ...outbox } = row;
     return {
       outbox: outbox as EmailOutboxRow,
       events: [...email_delivery_events].sort(
         (a, b) => new Date(a.occurred_at).getTime() - new Date(b.occurred_at).getTime(),
       ),
+      request: vendor_upload_requests,
+      contactName: contacts?.name ?? null,
     };
   });
 }

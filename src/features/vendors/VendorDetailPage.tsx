@@ -5,7 +5,8 @@ import { AppShell } from "@/components/shell/AppShell";
 import { ComplianceRail } from "@/components/compliance/ComplianceRail";
 import { EmptyState, ErrorState, LoadingState } from "@/components/states/AsyncState";
 import { getRepository, isBackendConfigured } from "@/data/repository";
-import { RequestDocumentsAction } from "./RequestDocumentsAction";
+import { VendorCommunicationsSection } from "./VendorCommunicationsSection";
+import { VendorContactsPanel } from "./VendorContactsPanel";
 
 const currency = new Intl.NumberFormat("en-US", {
   style: "currency",
@@ -30,7 +31,10 @@ function looksLikeMismatch(certificateHolderName: string, companyName: string): 
 
 export function VendorDetailPage({ vendorId }: { vendorId: string }) {
   const repo = getRepository();
-  const { companyName } = useSession();
+  const { companyName, companyRole, mode } = useSession();
+  // Presentation only - RLS (can_write_company) is the real boundary.
+  const canWrite =
+    mode === "live" && ["owner", "risk_manager", "project_engineer"].includes(companyRole ?? "");
   const vendor = useQuery({
     queryKey: ["vendor", vendorId],
     queryFn: () => repo.getVendor(vendorId),
@@ -191,9 +195,7 @@ export function VendorDetailPage({ vendorId }: { vendorId: string }) {
                   </dd>
                 </div>
               </dl>
-              {isBackendConfigured() ? (
-                <RequestDocumentsAction vendorId={data.id} />
-              ) : (
+              {isBackendConfigured() ? null : (
                 <p className="mt-4 rounded-sm border border-border bg-muted px-3 py-2 text-xs">
                   Demo-only: document requests, uploads and reviews are simulated. Nothing is sent
                   or stored.
@@ -201,6 +203,13 @@ export function VendorDetailPage({ vendorId }: { vendorId: string }) {
               )}
             </section>
           </div>
+
+          {isBackendConfigured() ? (
+            <>
+              <VendorContactsPanel vendorId={data.id} canWrite={canWrite} />
+              <VendorCommunicationsSection vendorId={data.id} canWrite={canWrite} />
+            </>
+          ) : null}
         </div>
       )}
     </AppShell>
