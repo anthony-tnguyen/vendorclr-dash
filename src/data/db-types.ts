@@ -3351,6 +3351,10 @@ export type Database = {
           isSetofReturn: false;
         };
       };
+      set_company_default_requirement_profile: {
+        Args: { profile_id: string };
+        Returns: undefined;
+      };
       shares_company_with: { Args: { target_user: string }; Returns: boolean };
       transfer_company_ownership: {
         Args: {
