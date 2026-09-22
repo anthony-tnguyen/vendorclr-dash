@@ -131,6 +131,19 @@ jobs:
           name: production-bundle
           path: .output
 
+      # wrangler dev's local workerd runtime does not forward the launching
+      # shell's arbitrary OS environment into the Worker's process.env the
+      # way a plain Node server would - only vars explicitly configured via
+      # wrangler.json's `vars`, --var, or a .dev.vars file next to the
+      # config reach the Worker. Setting UPLOAD_ABUSE_IP_HMAC_SECRET as a
+      # step-level `env:` alone (as this workflow previously tried) is
+      # silently ignored by workerd, so it has to land here instead,
+      # confirmed empirically: with a .dev.vars file present, wrangler dev
+      # picks it up and the upload-abuse code sees the value; without one,
+      # it does not, regardless of the parent shell's environment.
+      - name: Write .dev.vars for the local Worker runtime
+        run: echo "UPLOAD_ABUSE_IP_HMAC_SECRET=${{ secrets.UPLOAD_ABUSE_IP_HMAC_SECRET }}" > .output/server/.dev.vars
+
       - name: Cache Playwright browsers
         id: playwright-cache
         uses: actions/cache@v4
@@ -150,14 +163,6 @@ jobs:
         run: bunx playwright install-deps chromium
 
       - name: Run production-bundle browser flows
-        # The built worker reads this at runtime (uploadAbuse.server.ts) to
-        # HMAC-hash the caller's IP for abuse rate-limiting on the anonymous
-        # vendor-upload/package portals, and fails closed without it - see
-        # docs/operations/environment-matrix.md. Any value works here; it
-        # only needs to be present and stable within a run, not a real
-        # production secret.
-        env:
-          UPLOAD_ABUSE_IP_HMAC_SECRET: ${{ secrets.UPLOAD_ABUSE_IP_HMAC_SECRET }}
         run: bun run e2e
 
       - name: Upload Playwright report
