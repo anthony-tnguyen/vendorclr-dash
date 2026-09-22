@@ -47,7 +47,9 @@ const config: Parameters<typeof defineConfig>[0] = {
 
 if (!externalBaseURL) {
   config.webServer = {
-    command: "bunx wrangler dev --config .output/server/wrangler.json --port 8788",
+    // The build moved to dist/ (nitro cloudflare-module preset); the
+    // deploy config under .wrangler/deploy points at dist/server/wrangler.json.
+    command: "bunx wrangler dev --config dist/server/wrangler.json --port 8788",
     url: "http://localhost:8788",
     reuseExistingServer: !isCI,
     timeout: 60_000,
