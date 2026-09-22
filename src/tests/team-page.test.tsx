@@ -33,12 +33,36 @@ const members = [
 const changeCompanyMemberRole = vi.fn(async () => ({}));
 const removeCompanyMember = vi.fn(async () => ({ status: "removed" }));
 const transferCompanyOwnership = vi.fn(async () => ({ status: "transferred" }));
+const inviteCompanyMember = vi.fn(async () => ({
+  invitation: {
+    id: "inv-1",
+    companyId: "c-1",
+    email: "new@acme.test",
+    role: "read_only",
+    status: "pending",
+    invitedByEmail: "owner@acme.test",
+    resendCount: 0,
+    createdAt: "2026-09-20T00:00:00Z",
+    expiresAt: "2026-09-27T00:00:00Z",
+    acceptedAt: null,
+    revokedAt: null,
+  },
+  acceptUrl: "https://app.vendorclr.test/accept-invite/tok-abc",
+  email: { status: "sent", to: "new@acme.test" },
+}));
+const listCompanyInvitations = vi.fn(async () => [] as unknown[]);
+const resendCompanyInvitation = vi.fn(async () => ({}));
+const revokeCompanyInvitation = vi.fn(async () => ({ status: "revoked" }));
 
 vi.mock("@/workflows/companyInvitations", () => ({
   listCompanyMembers: vi.fn(async () => members),
   changeCompanyMemberRole: (...args: unknown[]) => changeCompanyMemberRole(...(args as [])),
   removeCompanyMember: (...args: unknown[]) => removeCompanyMember(...(args as [])),
   transferCompanyOwnership: (...args: unknown[]) => transferCompanyOwnership(...(args as [])),
+  inviteCompanyMember: (...args: unknown[]) => inviteCompanyMember(...(args as [])),
+  listCompanyInvitations: (...args: unknown[]) => listCompanyInvitations(...(args as [])),
+  resendCompanyInvitation: (...args: unknown[]) => resendCompanyInvitation(...(args as [])),
+  revokeCompanyInvitation: (...args: unknown[]) => revokeCompanyInvitation(...(args as [])),
 }));
 
 let membership = { company_id: "c-1", role: "owner" };
@@ -121,6 +145,33 @@ describe("team page", () => {
     expect(await screen.findByRole("status")).toHaveTextContent(
       "eng@acme.test is now Risk manager",
     );
+  });
+
+  it("lets an owner invite a teammate and shows the invitation link", async () => {
+    await renderTeam();
+    const user = userEvent.setup();
+
+    await user.type(await screen.findByLabelText("Email"), "new@acme.test");
+    await user.selectOptions(screen.getByLabelText("Role"), "read_only");
+    await user.click(screen.getByRole("button", { name: "Send invitation" }));
+
+    await waitFor(() => {
+      expect(inviteCompanyMember).toHaveBeenCalledWith({
+        data: { companyId: "c-1", email: "new@acme.test", role: "read_only" },
+      });
+    });
+    expect(await screen.findByText("Invitation emailed to new@acme.test.")).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: "https://app.vendorclr.test/accept-invite/tok-abc" }),
+    ).toBeInTheDocument();
+  });
+
+  it("hides the invite form from a non-owner", async () => {
+    membership = { company_id: "c-1", role: "read_only" };
+    await renderTeam();
+
+    await screen.findByText("eng@acme.test");
+    expect(screen.queryByLabelText("Email")).not.toBeInTheDocument();
   });
 
   it("gives a non-owner the roster with no controls", async () => {

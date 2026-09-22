@@ -13,7 +13,7 @@ import {
   type CompanyMemberRole,
   type CompanyMemberSummary,
 } from "@/workflows/companyInvitations";
-// import { InviteMemberForm } from "./InviteMemberForm";
+import { InviteMemberForm } from "./InviteMemberForm";
 // import { PendingInvitationsTable } from "./PendingInvitationsTable";
 import { ROLE_OPTIONS, roleLabel } from "./roleOptions";
 
@@ -121,6 +121,14 @@ export function TeamPage() {
               <p role="note" className="rounded-sm border border-border bg-muted px-3 py-2 text-xs">
                 Only an owner can change roles or remove people. You can see who is on the team.
               </p>
+            ) : null}
+            {isOwner ? (
+              <InviteMemberForm
+                companyId={companyId as string}
+                onInvited={() =>
+                  void queryClient.invalidateQueries({ queryKey: ["team-invitations", companyId] })
+                }
+              />
             ) : null}
             {error ? (
               <p
