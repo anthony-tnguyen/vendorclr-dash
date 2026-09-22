@@ -282,6 +282,54 @@ export async function loadRequirementSettings(companyId: string): Promise<Requir
   };
 }
 
+/** Loads the same catalog-backed editable shape for a non-default profile. */
+export async function loadRequirementProfileSettings(
+  companyId: string,
+  profileId: string,
+): Promise<RequirementSettings> {
+  const supabase = getSupabaseClient();
+  const profileResult = await supabase
+    .from("requirement_profiles")
+    .select("id, name")
+    .eq("company_id", companyId)
+    .eq("id", profileId)
+    .maybeSingle();
+  if (profileResult.error) throw new Error(profileResult.error.message);
+  if (!profileResult.data) throw new Error("Requirement profile is unavailable.");
+
+  const rulesResult = await supabase
+    .from("requirement_profile_rules")
+    .select("rule_key, policy_type, rule_kind, required, amount")
+    .eq("profile_id", profileId);
+  if (rulesResult.error) throw new Error(rulesResult.error.message);
+
+  const values = emptyValues();
+  const customRules: CustomRequirementRule[] = [];
+  const known = new Set(REQUIREMENT_CATALOG.map((spec) => spec.key));
+  for (const row of rulesResult.data ?? []) {
+    if (known.has(row.rule_key)) {
+      values[row.rule_key] = {
+        enabled: row.required === true,
+        amount: row.amount === null ? null : Number(row.amount),
+      };
+    } else {
+      customRules.push({
+        key: row.rule_key,
+        policyType: row.policy_type,
+        kind: row.rule_kind,
+        required: row.required === true,
+        amount: row.amount === null ? null : Number(row.amount),
+      });
+    }
+  }
+  return {
+    profileId: profileResult.data.id,
+    profileName: profileResult.data.name,
+    values,
+    customRules,
+  };
+}
+
 export function validateRequirementSettings(
   values: Record<string, RequirementSettingValue>,
 ): Record<string, string> {

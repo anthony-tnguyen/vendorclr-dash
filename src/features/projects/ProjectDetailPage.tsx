@@ -33,6 +33,9 @@ export function ProjectDetailPage({ projectId }: { projectId: string }) {
   const [riskClassification, setRiskClassification] = useState("");
   const [projectProfileId, setProjectProfileId] = useState("");
   const [assignmentProfileId, setAssignmentProfileId] = useState("");
+  const [projectNumber, setProjectNumber] = useState("");
+  const [certificateHolderName, setCertificateHolderName] = useState("");
+  const [certificateHolderAddress, setCertificateHolderAddress] = useState("");
 
   const project = useQuery({
     queryKey: ["project", projectId],
@@ -52,6 +55,9 @@ export function ProjectDetailPage({ projectId }: { projectId: string }) {
       setLocation(project.data.location ?? "");
       setStatus(project.data.status as ProjectStatus);
       setProjectProfileId(project.data.default_requirement_profile_id ?? "");
+      setProjectNumber(project.data.project_number ?? "");
+      setCertificateHolderName(project.data.certificate_holder_name ?? "");
+      setCertificateHolderAddress(project.data.certificate_holder_address ?? "");
     }
   }, [project.data]);
 
@@ -126,6 +132,9 @@ export function ProjectDetailPage({ projectId }: { projectId: string }) {
         name,
         location,
         status,
+        projectNumber,
+        certificateHolderName,
+        certificateHolderAddress,
         requirementProfileId: projectProfileId || null,
       }),
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["project", projectId] }),
@@ -222,6 +231,30 @@ export function ProjectDetailPage({ projectId }: { projectId: string }) {
                 <input
                   value={location}
                   onChange={(event) => setLocation(event.target.value)}
+                  className="focusable rounded-sm border border-input bg-background px-3 py-2 text-sm"
+                />
+              </label>
+              <label className="grid gap-1 text-sm font-medium">
+                Project number
+                <input
+                  value={projectNumber}
+                  onChange={(event) => setProjectNumber(event.target.value)}
+                  className="focusable rounded-sm border border-input bg-background px-3 py-2 text-sm"
+                />
+              </label>
+              <label className="grid gap-1 text-sm font-medium">
+                Certificate holder
+                <input
+                  value={certificateHolderName}
+                  onChange={(event) => setCertificateHolderName(event.target.value)}
+                  className="focusable rounded-sm border border-input bg-background px-3 py-2 text-sm"
+                />
+              </label>
+              <label className="grid gap-1 text-sm font-medium">
+                Certificate holder address
+                <input
+                  value={certificateHolderAddress}
+                  onChange={(event) => setCertificateHolderAddress(event.target.value)}
                   className="focusable rounded-sm border border-input bg-background px-3 py-2 text-sm"
                 />
               </label>
