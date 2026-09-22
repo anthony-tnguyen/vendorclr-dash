@@ -24,8 +24,8 @@
 | P0-7 Retire legacy request path | ✅ Done 2026-09-22 — legacy path deleted; every send path checks suppression. Migration + 3 Edge Functions deployed to staging and production |
 | P0-8 Package upload portal | 🔴 Open (backend complete) |
 | P0-9 Turnstile client UI | 🔴 Open; keys are ⚪ external |
-| P0-10 Deficiency UI | 🔴 Open (backend complete) |
-| P0-11 Exception UI | 🔴 Open (backend complete) |
+| P0-10 Deficiency UI | ✅ Done 2026-09-22 — case/deficiency views on vendor + project detail, suppression-safe correction requests on the existing RPCs |
+| P0-11 Exception UI | ✅ Done 2026-09-22 — owner/risk-manager exception approval with explicit remaining-risk acknowledgement; no "Mark compliant" shortcut. Known limit: no persisted internal-note column |
 | P0-12 Reviewer editing | 🟡 Audit + tests, likely complete |
 | P0-13 Reports CSV export UI | 🔴 Open (backend complete) |
 | P1-1 CSV import UI | 🔴 Open (backend complete) |

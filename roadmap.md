@@ -41,7 +41,13 @@
       **Deployed 2026-09-22** to staging and production (migration, then the
       three Edge Functions), smoke-tested on both.
 - [ ] Stage 4 — Vendor upload portal rebuilt on submission packages
-- [ ] Stage 5 — Deficiency + exception UI
+- [x] Stage 5 — Deficiency + exception UI (done 2026-09-22: case/deficiency
+      read view, correction request via `sendRequest(purpose: "correction")` +
+      `request_deficiency_correction()`, exception approval via
+      `approve_compliance_exception()` with required remaining-risk
+      acknowledgement, escalation display from the fixed 3/7/14-day clock).
+      Known backend limitation: no persisted internal note column on
+      `compliance_exceptions` (documented in Known compromises).
 - [ ] Stage 6 — Review editing, CSV import UI, reports/CSV export, `/terms` + `/privacy`
 
 ## Waiting on the user

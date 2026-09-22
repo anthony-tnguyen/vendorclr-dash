@@ -6,6 +6,7 @@ import { AppShell } from "@/components/shell/AppShell";
 import { EmptyState, ErrorState, LoadingState } from "@/components/states/AsyncState";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { requirementSourceLabel, saveProject } from "@/workflows/projects";
+import { ComplianceCasesSection } from "@/features/compliance/ComplianceCasesSection";
 
 type ResolvedRequirement = {
   key: string;
@@ -24,6 +25,8 @@ export function ProjectDetailPage({ projectId }: { projectId: string }) {
     mode === "live" &&
     Boolean(companyId) &&
     ["owner", "risk_manager", "project_engineer"].includes(companyRole ?? "");
+  // Exception approval is owner/risk_manager only - mirrors approve_compliance_exception().
+  const canApprove = mode === "live" && ["owner", "risk_manager"].includes(companyRole ?? "");
   const [name, setName] = useState("");
   const [location, setLocation] = useState("");
   const [status, setStatus] = useState<ProjectStatus>("active");
@@ -485,6 +488,19 @@ export function ProjectDetailPage({ projectId }: { projectId: string }) {
                           ))}
                         </ul>
                       )}
+                    </div>
+                    <div className="mt-3 border-t border-border pt-3">
+                      <p className="text-xs font-semibold text-muted-foreground">
+                        Compliance cases
+                      </p>
+                      <div className="mt-2">
+                        <ComplianceCasesSection
+                          vendorId={assignment.vendor_id}
+                          assignmentId={assignment.id}
+                          canWrite={canWrite}
+                          canApprove={canApprove}
+                        />
+                      </div>
                     </div>
                   </li>
                 ))}

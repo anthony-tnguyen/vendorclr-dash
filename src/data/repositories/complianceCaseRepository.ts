@@ -170,6 +170,20 @@ export async function requestDeficiencyCorrection(deficiencyId: string): Promise
   if (result.error) throw new Error(result.error.message);
 }
 
+/** Every case opened for one vendor across all its assignments, most recently opened first. */
+export async function listCasesForVendor(vendorId: string): Promise<ComplianceCaseRow[]> {
+  const supabase = await getRequestScopedClient();
+  const result = (await supabase
+    .from("compliance_cases")
+    .select("*")
+    .eq("vendor_id", vendorId)
+    .order("opened_at", { ascending: false })) as unknown as {
+    data: ComplianceCaseRow[] | null;
+    error: { message: string } | null;
+  };
+  return unwrap({ data: result.data ?? [], error: result.error });
+}
+
 /** Every case opened for one assignment, most recently opened first. */
 export async function listCasesForAssignment(assignmentId: string): Promise<ComplianceCaseRow[]> {
   const supabase = await getRequestScopedClient();

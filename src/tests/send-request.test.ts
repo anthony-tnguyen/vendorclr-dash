@@ -185,6 +185,42 @@ describe("sendRequestHandler", () => {
     });
   });
 
+  it("records the correction purpose on a correction-request send (broker receives, suppressed contact does not)", async () => {
+    const { client, recorded } = fakeSupabase({
+      recipients: [
+        { contactId: BROKER, email: "bea@broker.example", role: "broker", suppressionReason: null },
+        {
+          contactId: BOUNCED,
+          email: "bo@bounced.example",
+          role: "secondary",
+          suppressionReason: "manual",
+        },
+      ],
+    });
+    const { sender, send } = recordingSender();
+
+    const result = await sendRequestHandler(
+      client,
+      { vendorId: VENDOR, purpose: "correction", confirmedRecipientIds: [BROKER, BOUNCED] },
+      { sender },
+    );
+
+    // The purpose reaches the request row through prepare_contact_request.
+    expect(recorded.rpc[0]).toMatchObject({
+      name: "prepare_contact_request",
+      args: expect.objectContaining({ p_purpose: "correction", p_contact_ids: [BROKER, BOUNCED] }),
+    });
+    expect(send.mock.calls.map(([input]) => input.to)).toEqual(["bea@broker.example"]);
+    expect(result.recipients.map((r) => [r.role, r.outcome])).toEqual([
+      ["broker", "sent"],
+      ["secondary", "skipped_suppressed"],
+    ]);
+    expect(recorded.inserts.find((i) => i.table === "audit_log")?.row).toMatchObject({
+      action: "contact_request_sent",
+      target_id: VENDOR,
+    });
+  });
+
   it("passes the client's recipient ids to the database for re-validation instead of trusting them", async () => {
     const { client, recorded } = fakeSupabase({
       recipients: [
