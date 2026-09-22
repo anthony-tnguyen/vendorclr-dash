@@ -25,11 +25,13 @@
 ### Task 1: Extend existing schema, constraints, and audit history
 
 **Files:**
+
 - Create: generated \`supabase/migrations/<timestamp>_projects_requirement_profiles_customer_workflow.sql\`
 - Modify: \`src/data/db-types.ts\`, \`src/data/dbTypeAliases.ts\`
 - Test: \`supabase/tests/projects-requirement-profiles-workflow.test.ts\`, \`supabase/tests/rls.test.ts\`
 
 **Interfaces:**
+
 - Produces: \`projects.location\`, nullable \`requirement_profiles.archived_at\`, profile archival guards, and audited project/profile/assignment lifecycle events.
 
 - [ ] **Step 1: Write failing database tests.**
@@ -38,10 +40,10 @@
 expect(project.location).toBe("100 Main St, Oakland, CA");
 expect(archivedProfile.archived_at).not.toBeNull();
 expect(await resolver(assignment.id)).toEqual(expect.arrayContaining([
-  expect.objectContaining({ key: "general_liability_each_occurrence_limit", amount: 5_000_000 }),
+expect.objectContaining({ key: "general_liability_each_occurrence_limit", amount: 5_000_000 }),
 ]));
 expect(await activeAssignments(project.id)).not.toContainEqual(
-  expect.objectContaining({ id: terminatedAssignment.id }),
+expect.objectContaining({ id: terminatedAssignment.id }),
 );
 await expect(crossCompanyProjectUpdate()).rejects.toThrow();
 \`\`\`
@@ -72,11 +74,13 @@ git commit -m "feat: audit project requirement workflow"
 ### Task 2: Create typed workflow APIs
 
 **Files:**
+
 - Create: \`src/workflows/projects.ts\`, \`src/workflows/requirementProfiles.ts\`
 - Modify: \`src/data/repositories/projectRepository.ts\`, \`src/data/repositories/requirementRepository.ts\`
 - Test: \`src/tests/projects-workflow.test.ts\`, \`src/tests/requirement-profiles-workflow.test.ts\`
 
 **Interfaces:**
+
 - Produces: \`listProjectSummaries(companyId)\`, \`saveProject(input)\`, \`archiveProject(id)\`, \`saveAssignment(input)\`, \`deactivateAssignment(id)\`, \`listRequirementProfiles(companyId, includeArchived)\`, \`saveRequirementProfile(input)\`, \`archiveRequirementProfile(id)\`, \`setCompanyDefaultProfile(id)\`.
 
 - [ ] **Step 1: Write failing API tests.**
@@ -109,6 +113,7 @@ git commit -m "feat: add project and profile workflows"
 ### Task 3: Add navigation, routes, and live-state handling
 
 **Files:**
+
 - Modify: \`src/app/router.ts\`
 - Create: \`src/routes/dashboard.projects.index.tsx\`, \`src/routes/dashboard.projects.$projectId.tsx\`, \`src/routes/dashboard.requirement-profiles.tsx\`
 - Create: \`src/features/projects/ProjectsPage.tsx\`
@@ -144,6 +149,7 @@ git commit -m "feat: add projects dashboard routes"
 ### Task 4: Build Projects list and validated project form
 
 **Files:**
+
 - Create: \`src/features/projects/ProjectForm.tsx\`, \`src/features/projects/projectFormat.ts\`
 - Modify: \`src/features/projects/ProjectsPage.tsx\`
 - Test: \`src/tests/projects-page.test.tsx\`
@@ -181,6 +187,7 @@ git commit -m "feat: manage customer projects"
 ### Task 5: Build project detail, assignments, and effective requirements
 
 **Files:**
+
 - Create: \`src/features/projects/ProjectDetailPage.tsx\`, \`src/features/projects/AssignmentForm.tsx\`, \`src/features/projects/EffectiveRequirementsPanel.tsx\`
 - Test: \`src/tests/project-detail-page.test.tsx\`
 
@@ -217,6 +224,7 @@ git commit -m "feat: add assignments and effective requirements"
 ### Task 6: Build Requirement Profiles and shared rule editor
 
 **Files:**
+
 - Create: \`src/features/requirement-profiles/RequirementProfilesPage.tsx\`, \`src/features/requirement-profiles/RequirementProfileEditor.tsx\`, \`src/features/requirement-profiles/ProfileRulesEditor.tsx\`
 - Modify: \`src/data/repositories/requirementSettings.ts\`
 - Test: \`src/tests/requirement-profiles-page.test.tsx\`
@@ -254,6 +262,7 @@ git commit -m "feat: manage requirement profiles"
 ### Task 7: E2E, documentation, and full verification
 
 **Files:**
+
 - Create: \`e2e/projects-requirement-profiles.spec.ts\`
 - Modify: \`roadmap.md\`, \`docs/product/action-truth-inventory.md\`, current blocker/status Markdown under \`.lovable/plan/\`
 - Modify: \`README.md\` only if it indexes dashboard routes
@@ -262,17 +271,17 @@ git commit -m "feat: manage requirement profiles"
 
 \`\`\`ts
 test("owner creates a project, assigns a vendor, and inspects effective requirements", async ({ page }) => {
-  await signInAsOwner(page);
-  await page.getByRole("link", { name: "Projects" }).click();
-  await page.getByRole("button", { name: "Create project" }).click();
-  await page.getByLabel("Project name").fill("Harbor Tower");
-  await page.getByLabel("Requirement profile").selectOption({ label: "High-Risk Subcontractor" });
-  await page.getByRole("button", { name: "Save project" }).click();
-  await page.getByRole("button", { name: "Assign vendor" }).click();
-  await page.getByLabel("Trade").selectOption("Electrical");
-  await page.getByLabel("Contract value").fill("250000");
-  await page.getByRole("button", { name: "Save assignment" }).click();
-  await expect(page.getByText("Effective insurance requirements")).toBeVisible();
+await signInAsOwner(page);
+await page.getByRole("link", { name: "Projects" }).click();
+await page.getByRole("button", { name: "Create project" }).click();
+await page.getByLabel("Project name").fill("Harbor Tower");
+await page.getByLabel("Requirement profile").selectOption({ label: "High-Risk Subcontractor" });
+await page.getByRole("button", { name: "Save project" }).click();
+await page.getByRole("button", { name: "Assign vendor" }).click();
+await page.getByLabel("Trade").selectOption("Electrical");
+await page.getByLabel("Contract value").fill("250000");
+await page.getByRole("button", { name: "Save assignment" }).click();
+await expect(page.getByText("Effective insurance requirements")).toBeVisible();
 });
 \`\`\`
 
@@ -305,4 +314,3 @@ git commit -m "docs: record projects workflow status"
 - Spec coverage: Tasks 1–7 cover navigation, project list/form/detail, assignment lifecycle, profile/rule lifecycle, permissions, states, audit/RLS, E2E, documentation, and every requested verification command.
 - Placeholder scan: all tasks identify exact files, named interfaces, failing test behaviors, commands, and completion commits.
 - Type consistency: project status is \`active | on_hold | closed\`; assignment status is \`active | completed | terminated\`; profile archive uses \`archived_at\`; all effective requirements come from the resolver.
-
