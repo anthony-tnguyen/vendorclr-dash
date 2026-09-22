@@ -150,6 +150,14 @@ jobs:
         run: bunx playwright install-deps chromium
 
       - name: Run production-bundle browser flows
+        # The built worker reads this at runtime (uploadAbuse.server.ts) to
+        # HMAC-hash the caller's IP for abuse rate-limiting on the anonymous
+        # vendor-upload/package portals, and fails closed without it - see
+        # docs/operations/environment-matrix.md. Any value works here; it
+        # only needs to be present and stable within a run, not a real
+        # production secret.
+        env:
+          UPLOAD_ABUSE_IP_HMAC_SECRET: ${{ secrets.UPLOAD_ABUSE_IP_HMAC_SECRET }}
         run: bun run e2e
 
       - name: Upload Playwright report

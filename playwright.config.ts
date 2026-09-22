@@ -47,9 +47,17 @@ const config: Parameters<typeof defineConfig>[0] = {
 
 if (!externalBaseURL) {
   config.webServer = {
-    // The build moved to dist/ (nitro cloudflare-module preset); the
-    // deploy config under .wrangler/deploy points at dist/server/wrangler.json.
-    command: "bunx wrangler dev --config dist/server/wrangler.json --port 8788",
+    // `bun run build` (nitro's cloudflare-module preset) outputs to
+    // .output/, matching .github/workflows/ci.yml's build job, which
+    // uploads .output as the `production-bundle` artifact and e2e-smoke
+    // downloads it back into .output. Verified empirically 2026-09-22:
+    // a fresh `bun run build` on this exact dependency set still produces
+    // .output/server/wrangler.json, not dist/ - a prior edit here pointed
+    // at dist/server/wrangler.json based on a mistaken assumption and broke
+    // e2e-smoke on every push (ENOENT on wrangler.json). Keep this in sync
+    // with ci.yml's `path: .output` lines if the build output ever
+    // genuinely moves.
+    command: "bunx wrangler dev --config .output/server/wrangler.json --port 8788",
     url: "http://localhost:8788",
     reuseExistingServer: !isCI,
     timeout: 60_000,
