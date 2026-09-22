@@ -1128,7 +1128,7 @@ export type Database = {
           template: string;
           to_email: string;
           upload_request_id: string | null;
-          vendor_id: string;
+          vendor_id: string | null;
         };
         Insert: {
           company_id: string;
@@ -1143,7 +1143,7 @@ export type Database = {
           template: string;
           to_email: string;
           upload_request_id?: string | null;
-          vendor_id: string;
+          vendor_id?: string | null;
         };
         Update: {
           company_id?: string;
@@ -1158,7 +1158,7 @@ export type Database = {
           template?: string;
           to_email?: string;
           upload_request_id?: string | null;
-          vendor_id?: string;
+          vendor_id?: string | null;
         };
         Relationships: [
           {

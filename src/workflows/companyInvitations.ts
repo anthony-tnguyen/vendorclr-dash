@@ -16,7 +16,7 @@ async function getServiceRoleClient() {
   return mod.getServiceRoleClient();
 }
 
-import { outboxStatusFor, sendUnlessSuppressed } from "./suppression";
+import { type GuardedSendResult, outboxStatusFor, sendUnlessSuppressed } from "./suppression";
 import {
   companyInvitationHtml,
   companyInvitationSubject,
@@ -178,6 +178,37 @@ function toCompanyInvitation(
   };
 }
 
+/**
+ * Records one invitation send attempt in email_outbox, with no vendor_id
+ * because an invitation belongs to a company, not a vendor (see
+ * 20260922130000_email_outbox_company_invitations.sql). A failed insert is
+ * logged, not thrown. By the time this runs the invitation row exists and
+ * the send has already been attempted, so throwing would tell the owner
+ * the invite failed when it actually worked.
+ */
+async function recordInvitationEmail(
+  supabase: Awaited<ReturnType<typeof getRequestScopedClient>>,
+  companyId: string,
+  toEmail: string,
+  sendResult: GuardedSendResult,
+): Promise<void> {
+  const { error } = await supabase.from("email_outbox").insert({
+    company_id: companyId,
+    template: "company_invitation",
+    to_email: toEmail,
+    status: outboxStatusFor(sendResult),
+    provider_message_id: sendResult.providerMessageId,
+    error: sendResult.error,
+    sent_at: sendResult.status === "sent" ? new Date().toISOString() : null,
+  });
+  if (error) {
+    console.error(
+      `[company invitations] could not record email_outbox row for ${toEmail} ` +
+        `(company ${companyId}): ${error.message}`,
+    );
+  }
+}
+
 // ---------------------------------------------------------------------------
 // inviteCompanyMember - authenticated, runs via RLS as the calling owner
 // ---------------------------------------------------------------------------
@@ -265,15 +296,7 @@ export const inviteCompanyMember = createServerFn({ method: "POST" })
       }),
     });
 
-    await supabase.from("email_outbox").insert({
-      company_id: data.companyId,
-      template: "company_invitation",
-      to_email: invitationRow.email,
-      status: outboxStatusFor(sendResult),
-      provider_message_id: sendResult.providerMessageId,
-      error: sendResult.error,
-      sent_at: sendResult.status === "sent" ? new Date().toISOString() : null,
-    });
+    await recordInvitationEmail(supabase, data.companyId, invitationRow.email, sendResult);
 
     return {
       invitation: toCompanyInvitation(
@@ -395,15 +418,12 @@ export const resendCompanyInvitation = createServerFn({ method: "POST" })
       }),
     });
 
-    await supabase.from("email_outbox").insert({
-      company_id: invitationRow.company_id,
-      template: "company_invitation",
-      to_email: invitationRow.email,
-      status: outboxStatusFor(sendResult),
-      provider_message_id: sendResult.providerMessageId,
-      error: sendResult.error,
-      sent_at: sendResult.status === "sent" ? new Date().toISOString() : null,
-    });
+    await recordInvitationEmail(
+      supabase,
+      invitationRow.company_id,
+      invitationRow.email,
+      sendResult,
+    );
 
     return {
       invitation: toCompanyInvitation(invitationRow, new Map()),
