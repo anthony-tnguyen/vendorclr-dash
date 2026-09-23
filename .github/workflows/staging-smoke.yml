@@ -93,19 +93,11 @@ jobs:
   # render" via Playwright; this job covers "does the actual business logic
   # behave correctly against this environment's real database").
   #
-  # KNOWN GAP, documented rather than silently left to fail mysteriously:
-  # VENDORCLEAR_SERVICE_ROLE_KEY does not exist as a GitHub secret on the
-  # `staging` Environment yet (see docs/operations/environment-matrix.md's
-  # Vault-secret gap section for the identical underlying limitation - no
-  # tool in this project's toolchain can fetch a project's own service-role
-  # key value to set it automatically). This job is written correctly and
-  # will start passing as soon as a human adds these two secrets:
-  #   VENDORCLEAR_SUPABASE_URL      (Settings > Environments > staging > secrets)
-  #   VENDORCLEAR_SERVICE_ROLE_KEY  (same, from the staging project's own
-  #                                  Settings > API > service_role key)
-  # Until then, this job fails at the "Run smoke-production script" step
-  # with a clear "must both be set" error from the script itself, not a
-  # cryptic one - see scripts/smoke-production.ts's own main().
+  # VENDORCLEAR_SUPABASE_URL/VENDORCLEAR_SERVICE_ROLE_KEY are repository-level
+  # secrets (Settings > Secrets and variables > Actions), not scoped to the
+  # `staging` Environment - a job tied to an environment still inherits
+  # repository secrets, so `environment: staging` here does not require them
+  # to be re-added at the environment level too.
   smoke-production-script:
     name: smoke-production-script
     runs-on: ubuntu-latest
@@ -152,3 +144,95 @@ jobs:
           name: smoke-production-artifact
           path: smoke-artifacts
           retention-days: 30
+
+  # Runs the FULL role-based browser suite from e2e/** (not just
+  # e2e/smoke.spec.ts) against real staging data - the "signed-in journeys
+  # have never run" gap named in docs/operations/go-live-checklist.md.
+  #
+  # This does NOT need the still-unprovisioned staging Cloudflare deployment
+  # (the "Staging application deployment" row in go-live-checklist.md):
+  # playwright.config.ts boots the built bundle itself via `wrangler dev`
+  # locally whenever PLAYWRIGHT_BASE_URL is unset, so this job builds with
+  # `--mode staging` (using the committed .env.staging, which only carries
+  # public values - see environment-matrix.md) to get a fully staging-
+  # targeted bundle, then lets Playwright run that locally rather than
+  # downloading the `build` job's production-targeted artifact the way
+  # ci.yml's `e2e-smoke` job does.
+  #
+  # The E2E_* accounts (owner/member/staff/invitee/demo) are real Supabase
+  # Auth users on the staging project, provisioned directly via SQL - see
+  # e2e/helpers.ts for the full list of variable names each spec reads.
+  # E2E_VERIFY_* are read-only staging credentials reports.spec.ts uses to
+  # confirm an audit_log row was written after a CSV export.
+  #
+  # This mutates real staging data on every run (vendor-import.spec.ts's own
+  # docblock notes it deliberately does not clean up after itself), so this
+  # stays workflow_dispatch like its sibling jobs above rather than running
+  # on every push.
+  signed-in-e2e:
+    name: signed-in-e2e
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: staging
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - uses: oven-sh/setup-bun@v2
+
+      - name: Install dependencies from the committed Bun lockfile
+        run: bun install --frozen-lockfile
+
+      - name: Build the staging-targeted bundle
+        run: bun run build -- --mode staging
+
+      - name: Write .dev.vars for the local Worker runtime
+        run: |
+          cat <<VARS > .output/server/.dev.vars
+          UPLOAD_ABUSE_IP_HMAC_SECRET=${{ secrets.UPLOAD_ABUSE_IP_HMAC_SECRET }}
+          VENDORCLEAR_SUPABASE_URL=${{ secrets.VENDORCLEAR_SUPABASE_URL }}
+          VENDORCLEAR_SERVICE_ROLE_KEY=${{ secrets.VENDORCLEAR_SERVICE_ROLE_KEY }}
+          VARS
+
+      - name: Cache Playwright browsers
+        id: playwright-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-chromium-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+
+      - name: Install Playwright Chromium
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
+        run: bunx playwright install --with-deps chromium
+
+      - name: Install Playwright OS dependencies
+        if: steps.playwright-cache.outputs.cache-hit == 'true'
+        run: bunx playwright install-deps chromium
+
+      - name: Run the full signed-in suite against staging
+        env:
+          E2E_DEMO_EMAIL: ${{ secrets.E2E_DEMO_EMAIL }}
+          E2E_DEMO_PASSWORD: ${{ secrets.E2E_DEMO_PASSWORD }}
+          E2E_MEMBER_EMAIL: ${{ secrets.E2E_MEMBER_EMAIL }}
+          E2E_MEMBER_PASSWORD: ${{ secrets.E2E_MEMBER_PASSWORD }}
+          E2E_OWNER_EMAIL: ${{ secrets.E2E_OWNER_EMAIL }}
+          E2E_OWNER_PASSWORD: ${{ secrets.E2E_OWNER_PASSWORD }}
+          E2E_STAFF_EMAIL: ${{ secrets.E2E_STAFF_EMAIL }}
+          E2E_STAFF_PASSWORD: ${{ secrets.E2E_STAFF_PASSWORD }}
+          E2E_INVITEE_EMAIL: ${{ secrets.E2E_INVITEE_EMAIL }}
+          E2E_INVITEE_PASSWORD: ${{ secrets.E2E_INVITEE_PASSWORD }}
+          E2E_VERIFY_SUPABASE_URL: ${{ secrets.E2E_VERIFY_SUPABASE_URL }}
+          E2E_VERIFY_SERVICE_ROLE_KEY: ${{ secrets.E2E_VERIFY_SERVICE_ROLE_KEY }}
+        run: bunx playwright test
+
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: signed-in-e2e-report
+          path: playwright-report
+          retention-days: 7
