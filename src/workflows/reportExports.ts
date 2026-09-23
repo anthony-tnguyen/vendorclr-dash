@@ -42,8 +42,22 @@ async function getRequestScopedClient() {
 
 const NEEDS_QUOTING = /[",\r\n]/;
 
+// Spreadsheet software (Excel, Google Sheets, LibreOffice) evaluates a cell as
+// a formula when its text begins with one of these - so an exported cell like
+// `=HYPERLINK(...)`, `+cmd`, `-2+3` or `@SUM(...)` runs on open. These exports
+// (and the rejected-rows import echo) carry user/vendor-entered text such as
+// vendor and contact names, emails and addresses, which is exactly the kind of
+// attacker-influenced data that must not be handed to a formula engine.
+const FORMULA_TRIGGER = /^[=+\-@\t\r]/;
+
 export function csvEscapeField(value: unknown): string {
-  const str = value === null || value === undefined ? "" : String(value);
+  let str = value === null || value === undefined ? "" : String(value);
+  // Only string cells are attacker-controlled; a real number our own code
+  // produces (durations, counts) is never a formula, so neutralizing it would
+  // needlessly corrupt a legitimate negative value in a numeric column.
+  if (typeof value === "string" && FORMULA_TRIGGER.test(str)) {
+    str = `'${str}`;
+  }
   if (!NEEDS_QUOTING.test(str)) return str;
   return `"${str.replace(/"/g, '""')}"`;
 }

@@ -50,6 +50,37 @@ describe("csvEscapeField()", () => {
     expect(csvEscapeField(null)).toBe("");
     expect(csvEscapeField(undefined)).toBe("");
   });
+
+  // CSV formula injection: a spreadsheet (Excel, Sheets, LibreOffice) treats a
+  // cell whose text begins with =, +, -, @, TAB or CR as a formula and
+  // executes it on open. Report exports and the rejected-rows import echo carry
+  // user/vendor-entered text (vendor/contact names, emails, addresses), so a
+  // leading formula character must be neutralized with a leading apostrophe.
+  it("neutralizes a leading formula character in a string value", () => {
+    expect(csvEscapeField("=1+1")).toBe("'=1+1");
+    expect(csvEscapeField("+1")).toBe("'+1");
+    expect(csvEscapeField("-cmd")).toBe("'-cmd");
+    expect(csvEscapeField("@SUM(A1)")).toBe("'@SUM(A1)");
+    expect(csvEscapeField("\tTabbed")).toBe("'\tTabbed");
+  });
+
+  it("neutralizes a formula that also needs RFC 4180 quoting", () => {
+    // =HYPERLINK("http://x",1) contains a comma and quotes, so it must be both
+    // apostrophe-prefixed and quote-wrapped.
+    expect(csvEscapeField('=HYPERLINK("http://x",1)')).toBe('"\'=HYPERLINK(""http://x"",1)"');
+  });
+
+  it("does not touch a formula character that is not leading", () => {
+    expect(csvEscapeField("Smith-Barney")).toBe("Smith-Barney");
+    expect(csvEscapeField("a=b")).toBe("a=b");
+  });
+
+  it("leaves a genuine negative number untouched (numeric columns keep their sign)", () => {
+    // Only string cells are attacker-controlled; a real number our own code
+    // produces is never a formula, so numeric columns are not corrupted.
+    expect(csvEscapeField(-5)).toBe("-5");
+    expect(csvEscapeField(-5.5)).toBe("-5.5");
+  });
 });
 
 describe("rowsToCsv()", () => {
