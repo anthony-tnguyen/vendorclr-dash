@@ -1,0 +1,20 @@
+{
+  // Pin the Cloudflare Worker compatibility date instead of letting nitro's
+  // cloudflare-module preset auto-stamp it. Nitro defaults `compatibilityDate`
+  // to "latest", which the build resolves to a date derived from the build
+  // environment. When that resolved date is newer than the `compatibility_date`
+  // supported by the `workerd` binary bundled with our pinned `wrangler`
+  // (devDependencies), `wrangler dev` refuses to start:
+  //
+  //   "This Worker requires compatibility date "2026-09-23", but the newest
+  //    date supported by this server binary is "2026-09-22"."
+  //
+  // That took down the `e2e-smoke` CI job (playwright's webServer boots the
+  // built worker under `wrangler dev`) with no product change, and would turn
+  // it red on `main` too as the calendar advanced. Nitro merges this file into
+  // the generated `.output/server/wrangler.json` (userConfig wins over its
+  // auto default), so pinning here makes the build deterministic in CI and in
+  // Lovable's deploy. Bump this to any date the installed wrangler/workerd
+  // supports when you next upgrade `wrangler`.
+  "compatibility_date": "2026-09-22",
+}
