@@ -79,11 +79,8 @@ function ContactFields({
   idPrefix: string;
 }) {
   const field = (key: keyof ContactFormValues, label: string, type = "text", required = false) => (
-    <label
-      className="block text-[11px] font-medium text-muted-foreground"
-      htmlFor={`${idPrefix}-${key}`}
-    >
-      {label}
+    <div className="text-[11px] font-medium text-muted-foreground">
+      <label htmlFor={`${idPrefix}-${key}`}>{label}</label>
       <input
         id={`${idPrefix}-${key}`}
         type={type}
@@ -92,7 +89,7 @@ function ContactFields({
         onChange={(e) => onChange({ ...values, [key]: e.target.value })}
         className={`${input} mt-1 text-foreground`}
       />
-    </label>
+    </div>
   );
   return (
     <div className="grid gap-2 sm:grid-cols-2">
@@ -101,11 +98,8 @@ function ContactFields({
       {field("email", "Email", "email", true)}
       {field("phone", "Phone", "tel")}
       {showRole ? (
-        <label
-          className="block text-[11px] font-medium text-muted-foreground"
-          htmlFor={`${idPrefix}-role`}
-        >
-          Role
+        <div className="text-[11px] font-medium text-muted-foreground">
+          <label htmlFor={`${idPrefix}-role`}>Role</label>
           <select
             id={`${idPrefix}-role`}
             value={values.role}
@@ -118,7 +112,7 @@ function ContactFields({
               </option>
             ))}
           </select>
-        </label>
+        </div>
       ) : null}
     </div>
   );
@@ -428,11 +422,8 @@ export function VendorContactsPanel({
             if (linkContactId) link.mutate();
           }}
         >
-          <label
-            className="block text-[11px] font-medium text-muted-foreground"
-            htmlFor="link-contact"
-          >
-            Contact
+          <div className="text-[11px] font-medium text-muted-foreground">
+            <label htmlFor="link-contact">Contact</label>
             <select
               id="link-contact"
               required
@@ -449,12 +440,9 @@ export function VendorContactsPanel({
                 </option>
               ))}
             </select>
-          </label>
-          <label
-            className="block text-[11px] font-medium text-muted-foreground"
-            htmlFor="link-role"
-          >
-            Role
+          </div>
+          <div className="text-[11px] font-medium text-muted-foreground">
+            <label htmlFor="link-role">Role</label>
             <select
               id="link-role"
               value={linkRole}
@@ -467,7 +455,7 @@ export function VendorContactsPanel({
                 </option>
               ))}
             </select>
-          </label>
+          </div>
           <button type="submit" disabled={link.isPending || !linkContactId} className={smallButton}>
             {link.isPending ? "Linking…" : "Link contact"}
           </button>
