@@ -930,8 +930,13 @@ Customer UI over backend that already existed (2026-09-22):
   - `document_extractions` rejects every UPDATE (trigger
     `document_extractions_immutable`); deletes still cascade from
     `vendor_documents`.
-  - **Not yet applied to staging or production** at the time of writing -
-    apply it after merge and confirm with `list_migrations`.
+  - **Applied to staging and production on 2026-09-22** and confirmed with
+    `list_migrations` plus rolled-back live DB checks (a `read_only` member,
+    a cross-company caller and an anonymous caller are all rejected `42501`;
+    every direct UPDATE on `document_extractions` is rejected `55000`; a
+    `reviewer_edit` INSERT still appends and leaves the model row unchanged).
+    Function, trigger and grant fingerprints are byte-identical on both
+    projects, and the security advisor reported no new warning.
 - **Reviewer editing** - see [The review queue screen](#the-review-queue-screen)
   and the Known compromises entry above.
 - **`/terms` and `/privacy`** - factual descriptions only, every commitment
@@ -1385,8 +1390,9 @@ src/data/db-types.ts` followed by `git diff --exit-code src/data/db-types.ts`.
   change (2026-09-22) the review screen has a field editor that saves a new
   `reviewer_edit` revision through `saveExtractionEdit()` →
   `record_document_extraction()`. The model's own `document_extractions` row
-  is never touched; migration `20260922140000` makes that a database rule
-  (any UPDATE on `document_extractions` raises). An approval applies the
+  is never touched; migration `20260922140000` (deployed to staging and
+  production 2026-09-22) makes that a database rule (any UPDATE on
+  `document_extractions` raises). An approval applies the
   current revision (`vendor_documents.parsed_data`, the cache of
   `current_extraction_id`).
 - **The review screen's approve does not block on `compliance_requirements`.**

@@ -1,11 +1,11 @@
 # Action Truth Inventory
 
 **Scope:** visible, user-initiated dashboard and auth actions in `src/`, re-audited on
-2026-09-22 against `main` at `d5f8897` plus the pilot-blockers branch
-(`pilot-blockers-reports-import-legal`: Reports + CSV export, CSV import, reviewer editing,
-`/terms` + `/privacy`). Rows marked _(branch)_ are not on `main` until that branch merges.
-This is a code audit. For what is deployed and what is still blocking a pilot, see
-`docs/operations/go-live-checklist.md`.
+2026-09-22 against `main` at `7193d1f` (PR #63 merged: Reports + CSV export, CSV import,
+reviewer editing, `/terms` + `/privacy`). The supporting migration `20260922140000` is
+applied to staging and production (2026-09-22), so the import write-role and extraction
+immutability rules below are DB-backed. This is a code audit. For what is deployed and what
+is still blocking a pilot, see `docs/operations/go-live-checklist.md`.
 
 ## Classification rules
 
@@ -25,7 +25,7 @@ This is a code audit. For what is deployed and what is still blocking a pilot, s
 | Demo console | Browse the sample roster | `demo-preview` | Rendered from the in-memory demo repository, labelled as sample data, with no add/upload/request control to click. |
 | Demo console | Enter an activation code | `live` | The screen calls `redeem_activation_code()`; that function and the `activation_codes` table are applied to the hosted database via `supabase/migrations/20260918000200_activation_codes.sql` and verified with a live seeded redemption. |
 | Password reset | Send reset link | `live` | Supabase password-reset API is called when configured. |
-| Auth screens, vendor portal, console sidebar | Terms / Privacy links → `/terms`, `/privacy` _(branch)_ | `live` | Public, signed-out routes. Factual descriptions only; every section that would carry a legal commitment reads "Pending legal/product approval". |
+| Auth screens, vendor portal, console sidebar | Terms / Privacy links → `/terms`, `/privacy` | `live` | Public, signed-out routes. Factual descriptions only; every section that would carry a legal commitment reads "Pending legal/product approval". |
 | App navigation | Sidebar, mobile navigation, back links, vendor/detail links | `live` | Client-side routing only; does not claim a data mutation. |
 | Staff/customer selector | Change visible console | `demo-preview` | A view toggle only; it is explicitly not an authorization boundary. |
 | Session | Sign out | `live` | Supabase sign-out is called outside preview mode. |
@@ -36,7 +36,7 @@ This is a code audit. For what is deployed and what is still blocking a pilot, s
 | --- | --- | --- |
 | Vendor roster | Search and compliance filters | `live` | Local filtering of repository results; no mutation claim. |
 | Vendor roster | Add vendor | `live` | `supabaseRepository.createVendor()` inserts a vendor and re-reads seeded compliance rows. Preview calls the in-memory repository and says so. |
-| Vendor roster → Import CSV (`/dashboard/vendors/import`) _(branch)_ | Upload, preview, validate, confirm, import; download template / rejected rows | `live` | Parses in the browser, validates with `validateVendorImportRows()` (row/column/reason; create vs. match for project, vendor and assignment; optional upload request), requires an explicit confirmation checkbox, then `executeVendorImport()`: idempotent key per validated file, invalid rows never written, `can_write_company` checked first. Results show processed / created / matched / skipped / rejected / request-send failures. Read-only members and sample-data mode get an explanation instead of the upload control. |
+| Vendor roster → Import CSV (`/dashboard/vendors/import`) | Upload, preview, validate, confirm, import; download template / rejected rows | `live` | Parses in the browser, validates with `validateVendorImportRows()` (row/column/reason; create vs. match for project, vendor and assignment; optional upload request), requires an explicit confirmation checkbox, then `executeVendorImport()`: idempotent key per validated file, invalid rows never written, `can_write_company` checked first in the app and enforced at the database by migration `20260922140000` (applied to staging + production 2026-09-22, verified live). Results show processed / created / matched / skipped / rejected / request-send failures. Read-only members and sample-data mode get an explanation instead of the upload control. |
 | Projects | Create / edit project, assign vendor, change or terminate assignment, view resolved requirements | `live` | `saveProject()` and direct RLS-checked writes on `projects` / `project_vendor_assignments`; `resolve_assignment_requirements()` for provenance. Archive-guard triggers refuse an archived profile. (#53/#54) |
 | Requirement profiles | Create, rename, edit rules, archive, set company default | `live` | RLS-checked writes on `requirement_profiles`; the default swap goes through `set_company_default_requirement_profile()`; the current default can't be archived. |
 | Vendor detail → Contacts | Add contact, edit, link existing, unlink, change role (operational / broker / secondary) | `live` | `src/workflows/vendorContacts.ts` on the request-scoped client; RLS (`can_write_company`) and the cross-company triggers decide. Adding a known email links the existing contact instead of duplicating it (`contacts_company_email_unique`). Read-only roles see no controls. Audited by `record_contact_audit()`. (2026-09-22) |
@@ -52,9 +52,8 @@ This is a code audit. For what is deployed and what is still blocking a pilot, s
 | Upload request | Cancel open request ("Cancel link" in history) | `live` | Calls the cancellation workflow and refreshes the history. |
 | Overview | Request documents | `live` | Links to the vendor record's request composer (recipients are confirmed there); no longer sends directly. |
 | Vendor upload portal | Submit package | `live` | Validates the token, loads the persisted request checklist, attaches PDF/JPEG/PNG evidence to an open submission package, finalizes it, and queues processing. No VendorClr account is required; receipt confirms receipt, not compliance. |
-| Reports _(branch)_ | Choose one of 13 reports and view rows | `live` | `getReportRows()` checks active company membership, then calls the existing `reportRepository.ts` read for that report (compliance by project / trade, expiring 30/60/90, missing evidence, open deficiencies, active exceptions, unresponsive vendors, bounced communications, time to compliance, resubmissions, reviewer turnaround). The report is kept in the URL (`?report=`). |
-| Reports _(branch)_ | Export CSV | `live` | `exportReport()` on the server: membership check, CSV built from the same columns as the table, sanitized filename, `report_exported` audit row; the browser downloads the returned file. Disabled (not faked) when the session has no company. Sample-data mode keeps "Export CSV (demo)", which says nothing was generated. PDF is not offered. |
-| Reports (on `main` before the branch) | Export CSV | `disabled` | Live UI read "CSV export is not available". Superseded by the row above once the branch merges. |
+| Reports | Choose one of 13 reports and view rows | `live` | `getReportRows()` checks active company membership, then calls the existing `reportRepository.ts` read for that report (compliance by project / trade, expiring 30/60/90, missing evidence, open deficiencies, active exceptions, unresponsive vendors, bounced communications, time to compliance, resubmissions, reviewer turnaround). The report is kept in the URL (`?report=`). |
+| Reports | Export CSV | `live` | `exportReport()` on the server: membership check, CSV built from the same columns as the table, sanitized filename, `report_exported` audit row; the browser downloads the returned file. Disabled (not faked) when the session has no company. Sample-data mode keeps "Export CSV (demo)", which says nothing was generated. PDF is not offered. |
 | Settings | Change company default requirements | `live` | `saveRequirementSettings()` persists the company default profile's rules; the page shows the change history from `loadRequirementAuditHistory()`. A session with no company is told so, with no save control. |
 | Tasks | Change visible priority filter | `live` | Local presentation filter only. |
 | Help | Expand FAQ answers | `live` | Local disclosure action only. |
@@ -68,9 +67,9 @@ This is a code audit. For what is deployed and what is still blocking a pilot, s
 | --- | --- | --- |
 | Admin queue | Open a linked document review | `live` | Available only for a backend-backed queue item with a document ID. |
 | Document review | Open original document, reprocess, approve selected coverage lines | `live` | Calls the document-review/upload workflows; approval has an explicit confirmation step and applies the current extraction revision. |
-| Document review _(branch)_ | Edit extracted fields → save reviewer revision | `live` | `saveExtractionEdit()` → `record_document_extraction(source 'reviewer_edit')`: a new revision attributed to the reviewer. The model's row is never modified, and migration `20260922140000` rejects any UPDATE on `document_extractions`. The page lists every revision, marks the current one, and shows field-level reviewer changes against the model. |
-| Document review _(branch)_ | Reject | `live` | Needs a rejection reason: the button is disabled until one is entered, and the server schema rejects an empty note. |
-| Document review _(branch)_ | Internal note, requirement shortfalls, review history | `live` | Internal note is stored in the resolution and audit entry, never sent to the vendor. Shortfalls are the vendor's open deficiencies. History comes from `audit_log` rows for the document and queue item. |
+| Document review | Edit extracted fields → save reviewer revision | `live` | `saveExtractionEdit()` → `record_document_extraction(source 'reviewer_edit')`: a new revision attributed to the reviewer. The model's row is never modified, and migration `20260922140000` (applied to staging + production 2026-09-22, verified live) rejects any UPDATE on `document_extractions`. The page lists every revision, marks the current one, and shows field-level reviewer changes against the model. |
+| Document review | Reject | `live` | Needs a rejection reason: the button is disabled until one is entered, and the server schema rejects an empty note. |
+| Document review | Internal note, requirement shortfalls, review history | `live` | Internal note is stored in the resolution and audit entry, never sent to the vendor. Shortfalls are the vendor's open deficiencies. History comes from `audit_log` rows for the document and queue item. |
 | Admin queue | Review an item without a linked document | `disabled` | The UI explains that no document is available to review. |
 | Activation codes | Create, list and withdraw a code | `live` | `create_activation_code()` / `revoke_activation_code()`; migration `20260918073244_activation_codes` is applied on production and staging (verified with `list_migrations` 2026-09-22). |
 | Access management | View access grants | `live` | Reads company memberships and profiles from the configured backend. The legacy disabled "Invite teammate" control on this screen was removed; invitations now live on the company's own Team page (see Customer operations above). |
@@ -99,5 +98,5 @@ Reports, Import and Review flows have their own tests: `src/tests/reports-page.t
   accounts are configured. The Reports, Import and reviewer-editing specs (`e2e/reports.spec.ts`,
   `e2e/vendor-import.spec.ts`, `e2e/reviewer-editing.spec.ts`) have never run against a real
   database.
-- No `disabled` or `unfinished` customer action remains once the pilot-blockers branch merges. The
+- No `disabled` or `unfinished` customer action remains on `main` (#63 merged). The
   only intentionally absent action is "Mark compliant".

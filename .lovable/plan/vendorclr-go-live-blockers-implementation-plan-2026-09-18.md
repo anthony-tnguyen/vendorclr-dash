@@ -2,9 +2,10 @@
 
 ## Status (re-verified 2026-09-22)
 
-Checked against `main` at `d5f8897`, the `pilot-blockers-reports-import-legal` branch, CI, and
-`list_migrations` on production and staging. The authoritative, row-by-row version is
-`docs/operations/go-live-checklist.md`. ✅ complete · 🟡 partial · 🔴 open · ⚪ external.
+Checked against `main` at `7193d1f` (PR #63 merged), CI, and `list_migrations` on production
+and staging; migration `20260922140000` applied to both on 2026-09-22. The authoritative,
+row-by-row version is `docs/operations/go-live-checklist.md`. ✅ complete · 🟡 partial ·
+🔴 open · ⚪ external.
 
 | Stage | Status | Notes |
 | --- | --- | --- |
@@ -15,9 +16,9 @@ Checked against `main` at `d5f8897`, the `pilot-blockers-reports-import-legal` b
 | 3 — Contacts and requests | ✅ | #55; deployed to staging + production 2026-09-22. |
 | 4 — Vendor upload portal (packages) | 🟡 | #57/#62 shipped; Turnstile keys ⚪. |
 | 5 — Deficiencies and exceptions | 🟡 | Shipped; exceptions have no internal-note column. |
-| 6 — Document review editing | 🟡 | Built on the pilot-blockers branch (new reviewer revision, never overwrites the model's); not merged; migration `20260922140000` not applied. |
-| 6 — CSV import | 🟡 | Built on the pilot-blockers branch; not merged. |
-| 6 — Reports + CSV export | 🟡 | Built on the pilot-blockers branch (13 reports, server exporter, audit event); not merged. PDF out of scope. |
+| 6 — Document review editing | 🟡 | Merged (#63); a new reviewer revision never overwrites the model's; migration `20260922140000` applied to staging + production 2026-09-22 (UPDATE blocked at the DB, verified live). Signed-in E2E still pending. |
+| 6 — CSV import | 🟡 | Merged (#63); migration `20260922140000` applied to staging + production 2026-09-22 (`read_only` rejected at the DB, verified live). Signed-in E2E still pending. |
+| 6 — Reports + CSV export | 🟡 | Merged (#63): 13 reports, server exporter, audit event. Signed-in E2E still pending. PDF out of scope. |
 | 6 — `/terms`, `/privacy` | 🟡 | Routes + links built; content marked "Pending legal/product approval". Approved text ⚪. |
 | 7 — Verification | 🟡 | Unit, DB, build and signed-out browser tests pass; every signed-in browser journey skips (no `E2E_*` accounts). |
 | Staging deployment + provider keys | ⚪ | Staging Supabase exists (`ukbgjriqszthtgwxyirr`); no staging app deployment; staging provider keys not provisioned. |

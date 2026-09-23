@@ -62,8 +62,8 @@
       Known limitation: `compliance_exceptions` has no internal-note column,
       and the form has no note field (documented in Known compromises).
 - [ ] Stage 6 — Review editing, CSV import UI, reports/CSV export, `/terms` + `/privacy`.
-      **Built on branch `pilot-blockers-reports-import-legal` (2026-09-22), not
-      yet merged:**
+      **Merged to `main` as #63 (2026-09-22); the remaining sub-items are the
+      signed-in E2E run and approved legal text:**
   - [x] Reports page: 13 assignment-based reports on the existing report reads,
         with the real server-side CSV export (membership check, safe filename,
         browser download, `report_exported` audit row). No PDF.
@@ -77,10 +77,11 @@
   - [x] `/terms` + `/privacy`: factual content only, every commitment section
         marked "Pending legal/product approval"; linked from sign-in, sign-up,
         the vendor portal and the console sidebar.
-  - [ ] Merge, then apply migration
+  - [x] Merged (#63) and applied migration
         `20260922140000_import_write_role_and_extraction_immutability.sql` to
-        staging and production (`import_vendor_row()` → `can_write_company()`;
-        `document_extractions` UPDATE blocked). Not applied anywhere yet.
+        staging and production on 2026-09-22 (`import_vendor_row()` →
+        `can_write_company()`; `document_extractions` UPDATE blocked), verified
+        with `list_migrations` and rolled-back live DB checks.
   - [ ] Run `e2e/reports.spec.ts`, `e2e/vendor-import.spec.ts` and
         `e2e/reviewer-editing.spec.ts` with real `E2E_*` accounts. They skip
         today, like every signed-in spec.
