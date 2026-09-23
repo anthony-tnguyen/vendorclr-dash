@@ -51,4 +51,15 @@ export async function signIn(page: Page, account: { email: string; password: str
   await page.getByLabel("Work email").fill(account.email);
   await page.getByLabel("Password").fill(account.password);
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
+  // The submit handler awaits signInWithPassword() (a real network round trip)
+  // before its own client-side navigate() away from /login - clicking only
+  // dispatches the event, it does not wait for that async work. Every caller
+  // that immediately does its own page.goto()/expect() right after signIn()
+  // was racing that in-flight request. Wait for the URL to actually leave
+  // /login (success) or the form to surface an error (failure) so callers see
+  // a settled state either way.
+  await Promise.race([
+    page.waitForURL((url) => !url.pathname.startsWith("/login"), { timeout: 10_000 }),
+    page.getByRole("alert").waitFor({ state: "visible", timeout: 10_000 }),
+  ]);
 }

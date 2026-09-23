@@ -74,6 +74,12 @@ test("an owner imports projects and vendors from CSV", async ({ page }, testInfo
   await page.getByRole("link", { name: "View projects" }).click();
   await expect(page.getByText(project)).toBeVisible();
   await page.getByText(project).click();
-  await expect(page.getByText(vendorA)).toBeVisible();
-  await expect(page.getByText(vendorB)).toBeVisible();
+  // Scoped to the "Assigned vendors" list - the same page also has an
+  // "Assign vendor" <select> with a hidden <option> for each vendor, which
+  // an unscoped getByText(vendorName) also matches.
+  const assignedVendors = page.locator("section", {
+    has: page.getByRole("heading", { name: "Assigned vendors" }),
+  });
+  await expect(assignedVendors.getByText(vendorA)).toBeVisible();
+  await expect(assignedVendors.getByText(vendorB)).toBeVisible();
 });

@@ -70,9 +70,12 @@ function LiveReports({ report }: { report: ReportKind }) {
     >
       <div className="space-y-4">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
-          <label className="flex flex-col gap-1 text-sm font-medium text-foreground">
-            Report
+          <div className="flex flex-col gap-1">
+            <label htmlFor="report-select" className="text-sm font-medium text-foreground">
+              Report
+            </label>
             <select
+              id="report-select"
               value={report}
               onChange={(event) => {
                 setNotice(null);
@@ -90,7 +93,7 @@ function LiveReports({ report }: { report: ReportKind }) {
                 </option>
               ))}
             </select>
-          </label>
+          </div>
           <p className="text-xs text-muted-foreground sm:pb-2">{definition.description}</p>
         </div>
 

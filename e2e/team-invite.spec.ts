@@ -26,9 +26,16 @@ test("owner invites a teammate, who signs in and accepts", async ({ page }) => {
   await page.goto("/dashboard/team", { waitUntil: "domcontentloaded" });
   await expect(page.getByRole("heading", { name: "Team" })).toBeVisible();
 
+  // Scoped to the members table specifically (accessible name from its own
+  // <caption>) - the page also has a separate "Pending and past invitations"
+  // table that legitimately keeps showing the invitee's email as history
+  // after they accept, which would otherwise make an unscoped row lookup
+  // ambiguous once both tables have a matching row.
+  const membersTable = page.getByRole("table", { name: "Team members and their roles" });
+
   // Clean slate: if a previous run left the invitee as a member, remove them
   // first so create_company_invitation() doesn't reject a duplicate invite.
-  const existingRow = page.getByRole("row", { name: new RegExp(invitee!.email) });
+  const existingRow = membersTable.getByRole("row", { name: new RegExp(invitee!.email) });
   if (await existingRow.count()) {
     page.once("dialog", (dialog) => void dialog.accept());
     await existingRow.getByRole("button", { name: "Remove" }).click();
@@ -36,7 +43,9 @@ test("owner invites a teammate, who signs in and accepts", async ({ page }) => {
   }
 
   await page.getByLabel("Email").fill(invitee!.email);
-  await page.getByLabel("Role").selectOption("project_engineer");
+  // Without exact, this also matches the sidebar "Team — Teammate roles and
+  // access" link and each existing member row's own per-row role <select>.
+  await page.getByLabel("Role", { exact: true }).selectOption("project_engineer");
   await page.getByRole("button", { name: "Send invitation" }).click();
 
   const linkLocator = page.getByRole("link", { name: /\/accept-invite\// });
@@ -59,7 +68,7 @@ test("owner invites a teammate, who signs in and accepts", async ({ page }) => {
   await signIn(page, owner!);
   await page.goto("/dashboard/team", { waitUntil: "domcontentloaded" });
 
-  const newRow = page.getByRole("row", { name: new RegExp(invitee!.email) });
+  const newRow = membersTable.getByRole("row", { name: new RegExp(invitee!.email) });
   await expect(newRow).toBeVisible();
 
   // Clean up so the next run starts from the same state.

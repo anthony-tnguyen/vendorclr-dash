@@ -39,9 +39,11 @@ test("a member exports a report as CSV", async ({ page }, testInfo) => {
   await signIn(page, account!);
   await page.goto("/dashboard/reports?report=expiring_90", { waitUntil: "domcontentloaded" });
   await expect(page.getByRole("heading", { name: "Reports" })).toBeVisible();
-  await expect(page.getByLabel("Report")).toHaveValue("expiring_90");
+  // getByLabel("Report") without exact also substring-matches the sidebar's
+  // "Reports — Project level compliance reporting" nav link.
+  await expect(page.getByLabel("Report", { exact: true })).toHaveValue("expiring_90");
 
-  await page.getByLabel("Report").selectOption("compliance_by_project");
+  await page.getByLabel("Report", { exact: true }).selectOption("compliance_by_project");
   const table = page.getByTestId("report-table");
   const empty = page.getByText(/^Nothing in "Compliance by project"$/);
   await expect(table.or(empty)).toBeVisible();
