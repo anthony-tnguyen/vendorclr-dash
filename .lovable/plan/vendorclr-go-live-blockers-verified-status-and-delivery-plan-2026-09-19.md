@@ -12,9 +12,10 @@
 
 ## Status of each blocker (re-verified 2026-09-22)
 
-Checked against `main` at `d5f8897`, the `pilot-blockers-reports-import-legal` branch, CI
-(`gh run list`), and `list_migrations` on production and staging. Nothing is copied forward
-from the 2026-09-19 table. Full evidence: `docs/operations/go-live-checklist.md`.
+Checked against `main` at `7193d1f` (PR #63 merged), CI (`gh run list`), and
+`list_migrations` on production and staging; migration `20260922140000` applied to both on
+2026-09-22. Nothing is copied forward from the 2026-09-19 table. Full evidence:
+`docs/operations/go-live-checklist.md`.
 
 | Item | Status |
 | --- | --- |
@@ -30,10 +31,10 @@ from the 2026-09-19 table. Full evidence: `docs/operations/go-live-checklist.md`
 | P0-9 Turnstile client UI | 🟡 UI ships; keys ⚪ external |
 | P0-10 Deficiency UI | ✅ |
 | P0-11 Exception UI | 🟡 Shipped; no internal-note column (and no note field) |
-| P0-12 Reviewer editing | 🟡 Pilot-blockers branch: editor → new reviewer revision, revision history + diff, shortfalls, required rejection reason, internal note, review history; invariant tested at unit, UI and DB level. Not merged; migration `20260922140000` not applied |
-| P0-13 Reports CSV export UI | 🟡 Pilot-blockers branch: 13 reports + server CSV export with audit event. Not merged; E2E skipped |
-| P1-1 CSV import UI | 🟡 Pilot-blockers branch. Not merged; E2E skipped |
-| P0-14 Terms / Privacy routes | 🟡 Pilot-blockers branch: routes + links; content pending legal/product approval (⚪) |
+| P0-12 Reviewer editing | 🟡 Merged (#63): editor → new reviewer revision, revision history + diff, shortfalls, required rejection reason, internal note, review history; invariant tested at unit, UI and DB level. Migration `20260922140000` applied to staging + production 2026-09-22 (UPDATE blocked, verified live); signed-in E2E still pending |
+| P0-13 Reports CSV export UI | 🟡 Merged (#63): 13 reports + server CSV export with audit event. Signed-in E2E still pending |
+| P1-1 CSV import UI | 🟡 Merged (#63); migration `20260922140000` applied to staging + production 2026-09-22 (`read_only` rejected at the DB, verified live). Signed-in E2E still pending |
+| P0-14 Terms / Privacy routes | 🟡 Merged (#63): routes + links; content pending legal/product approval (⚪) |
 | P0-15…P0-19, P1-2, branch protection | ⚪ External — no staging app deployment, staging provider keys, Turnstile keys, backups/restore drill, alert destination; `main` unprotected |
 
 ## Delivery plan
