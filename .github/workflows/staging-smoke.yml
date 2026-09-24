@@ -196,7 +196,17 @@ jobs:
           UPLOAD_ABUSE_IP_HMAC_SECRET=${{ secrets.UPLOAD_ABUSE_IP_HMAC_SECRET }}
           VENDORCLEAR_SUPABASE_URL=${{ secrets.VENDORCLEAR_SUPABASE_URL }}
           VENDORCLEAR_SERVICE_ROLE_KEY=${{ secrets.VENDORCLEAR_SERVICE_ROLE_KEY }}
+          TURNSTILE_SECRET_KEY=1x0000000000000000000000000000000AA
+          RESEND_API_KEY=${{ secrets.RESEND_API_KEY }}
+          VIRUSTOTAL_API_KEY=${{ secrets.VIRUSTOTAL_API_KEY }}
           VARS
+        # TURNSTILE_SECRET_KEY above is Cloudflare's documented always-pass
+        # TEST secret (paired with the always-pass test site key in
+        # .env.staging), not a credential - it exercises the wiring without a
+        # Turnstile account, and production must never use it. RESEND_/
+        # VIRUSTOTAL_ resolve to empty until those staging-environment
+        # secrets exist, and the app treats an empty value as unset (its
+        # graceful "not configured" path), so this is safe to leave in.
 
       - name: Cache Playwright browsers
         id: playwright-cache
@@ -215,6 +225,9 @@ jobs:
 
       - name: Run the full signed-in suite against staging
         env:
+          # Opts vendor-contacts.spec.ts in, but only once a staging Resend
+          # key exists - it really sends (to Resend's sandbox addresses).
+          E2E_REQUEST_JOURNEY: ${{ secrets.RESEND_API_KEY != '' && '1' || '' }}
           E2E_DEMO_EMAIL: ${{ secrets.E2E_DEMO_EMAIL }}
           E2E_DEMO_PASSWORD: ${{ secrets.E2E_DEMO_PASSWORD }}
           E2E_MEMBER_EMAIL: ${{ secrets.E2E_MEMBER_EMAIL }}
