@@ -220,50 +220,56 @@ export function ProjectDetailPage({ projectId }: { projectId: string }) {
                 updateProject.mutate();
               }}
             >
-              <label className="grid gap-1 text-sm font-medium">
-                Project name
+              <div className="grid gap-1 text-sm font-medium">
+                <label htmlFor="project-name">Project name</label>
                 <input
+                  id="project-name"
                   required
                   value={name}
                   onChange={(event) => setName(event.target.value)}
                   className="focusable rounded-sm border border-input bg-background px-3 py-2 text-sm"
                 />
-              </label>
-              <label className="grid gap-1 text-sm font-medium">
-                Location
+              </div>
+              <div className="grid gap-1 text-sm font-medium">
+                <label htmlFor="project-location">Location</label>
                 <input
+                  id="project-location"
                   value={location}
                   onChange={(event) => setLocation(event.target.value)}
                   className="focusable rounded-sm border border-input bg-background px-3 py-2 text-sm"
                 />
-              </label>
-              <label className="grid gap-1 text-sm font-medium">
-                Project number
+              </div>
+              <div className="grid gap-1 text-sm font-medium">
+                <label htmlFor="project-number">Project number</label>
                 <input
+                  id="project-number"
                   value={projectNumber}
                   onChange={(event) => setProjectNumber(event.target.value)}
                   className="focusable rounded-sm border border-input bg-background px-3 py-2 text-sm"
                 />
-              </label>
-              <label className="grid gap-1 text-sm font-medium">
-                Certificate holder
+              </div>
+              <div className="grid gap-1 text-sm font-medium">
+                <label htmlFor="certificate-holder-name">Certificate holder</label>
                 <input
+                  id="certificate-holder-name"
                   value={certificateHolderName}
                   onChange={(event) => setCertificateHolderName(event.target.value)}
                   className="focusable rounded-sm border border-input bg-background px-3 py-2 text-sm"
                 />
-              </label>
-              <label className="grid gap-1 text-sm font-medium">
-                Certificate holder address
+              </div>
+              <div className="grid gap-1 text-sm font-medium">
+                <label htmlFor="certificate-holder-address">Certificate holder address</label>
                 <input
+                  id="certificate-holder-address"
                   value={certificateHolderAddress}
                   onChange={(event) => setCertificateHolderAddress(event.target.value)}
                   className="focusable rounded-sm border border-input bg-background px-3 py-2 text-sm"
                 />
-              </label>
-              <label className="grid gap-1 text-sm font-medium">
-                Status
+              </div>
+              <div className="grid gap-1 text-sm font-medium">
+                <label htmlFor="project-status">Status</label>
                 <select
+                  id="project-status"
                   value={status}
                   onChange={(event) => setStatus(event.target.value as ProjectStatus)}
                   className="focusable rounded-sm border border-input bg-background px-3 py-2 text-sm"
@@ -272,10 +278,11 @@ export function ProjectDetailPage({ projectId }: { projectId: string }) {
                   <option value="on_hold">On hold</option>
                   <option value="closed">Closed</option>
                 </select>
-              </label>
-              <label className="grid gap-1 text-sm font-medium">
-                Requirement profile
+              </div>
+              <div className="grid gap-1 text-sm font-medium">
+                <label htmlFor="project-requirement-profile">Requirement profile</label>
                 <select
+                  id="project-requirement-profile"
                   value={projectProfileId}
                   onChange={(event) => setProjectProfileId(event.target.value)}
                   className="focusable rounded-sm border border-input bg-background px-3 py-2 text-sm"
@@ -287,7 +294,7 @@ export function ProjectDetailPage({ projectId }: { projectId: string }) {
                     </option>
                   ))}
                 </select>
-              </label>
+              </div>
               <div className="flex items-end">
                 <button
                   type="submit"
@@ -332,9 +339,10 @@ export function ProjectDetailPage({ projectId }: { projectId: string }) {
                 addAssignment.mutate();
               }}
             >
-              <label className="grid gap-1 text-sm font-medium">
-                Vendor
+              <div className="grid gap-1 text-sm font-medium">
+                <label htmlFor="assignment-vendor">Vendor</label>
                 <select
+                  id="assignment-vendor"
                   required
                   value={vendorId}
                   onChange={(event) => setVendorId(event.target.value)}
@@ -347,35 +355,39 @@ export function ProjectDetailPage({ projectId }: { projectId: string }) {
                     </option>
                   ))}
                 </select>
-              </label>
-              <label className="grid gap-1 text-sm font-medium">
-                Trade
+              </div>
+              <div className="grid gap-1 text-sm font-medium">
+                <label htmlFor="assignment-trade">Trade</label>
                 <input
+                  id="assignment-trade"
                   value={tradeCode}
                   onChange={(event) => setTradeCode(event.target.value)}
                   className="focusable rounded-sm border border-input bg-background px-3 py-2 text-sm"
                 />
-              </label>
-              <label className="grid gap-1 text-sm font-medium">
-                Contract value
+              </div>
+              <div className="grid gap-1 text-sm font-medium">
+                <label htmlFor="assignment-contract-value">Contract value</label>
                 <input
+                  id="assignment-contract-value"
                   inputMode="decimal"
                   value={contractValue}
                   onChange={(event) => setContractValue(event.target.value)}
                   className="focusable rounded-sm border border-input bg-background px-3 py-2 text-sm"
                 />
-              </label>
-              <label className="grid gap-1 text-sm font-medium">
-                Risk classification
+              </div>
+              <div className="grid gap-1 text-sm font-medium">
+                <label htmlFor="assignment-risk-classification">Risk classification</label>
                 <input
+                  id="assignment-risk-classification"
                   value={riskClassification}
                   onChange={(event) => setRiskClassification(event.target.value)}
                   className="focusable rounded-sm border border-input bg-background px-3 py-2 text-sm"
                 />
-              </label>
-              <label className="grid gap-1 text-sm font-medium">
-                Requirement profile
+              </div>
+              <div className="grid gap-1 text-sm font-medium">
+                <label htmlFor="assignment-requirement-profile">Requirement profile</label>
                 <select
+                  id="assignment-requirement-profile"
                   value={assignmentProfileId}
                   onChange={(event) => setAssignmentProfileId(event.target.value)}
                   className="focusable rounded-sm border border-input bg-background px-3 py-2 text-sm"
@@ -387,7 +399,7 @@ export function ProjectDetailPage({ projectId }: { projectId: string }) {
                     </option>
                   ))}
                 </select>
-              </label>
+              </div>
               <div className="flex items-end">
                 <button
                   type="submit"
