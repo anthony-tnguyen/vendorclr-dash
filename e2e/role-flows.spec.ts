@@ -78,7 +78,8 @@ for (const viewport of viewports) {
 
       await expect(page).toHaveURL(/\/demo/);
       await expect(page.getByRole("heading", { name: "This is the demo console" })).toBeVisible();
-      await expect(page.getByLabel("Activation code")).toBeVisible();
+      // Without exact, this also substring-matches the "Have an activation code?" region.
+      await expect(page.getByLabel("Activation code", { exact: true })).toBeVisible();
       await capture(page, testInfo, `${viewport.name}-unactivated`);
     });
 
@@ -91,9 +92,12 @@ for (const viewport of viewports) {
       await signIn(page, account!);
       await page.goto("/dashboard/vendors", { waitUntil: "domcontentloaded" });
 
-      await expect(page.getByRole("heading", { name: "Vendors" })).toBeVisible();
+      // Without exact, this also substring-matches the later "No vendors match this
+      // search" heading once the empty-search assertion below runs.
+      await expect(page.getByRole("heading", { name: "Vendors", exact: true })).toBeVisible();
       await openNavigation(page, viewport.name);
-      await expect(page.getByRole("navigation")).toBeVisible();
+      // The page also has a "Legal" footer nav; only the sidebar is relevant here.
+      await expect(page.getByRole("navigation", { name: "Dashboard sections" })).toBeVisible();
 
       const search = page.getByLabel("Search vendors");
       await search.fill("no matching vendor at all");

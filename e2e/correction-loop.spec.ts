@@ -19,6 +19,10 @@ import { capture, credentials, isLiveBuild, signIn } from "./helpers";
  */
 
 test("a contractor requests correction on an open deficiency", async ({ page }, testInfo) => {
+  // A real company's roster can be large and only some vendors have an open
+  // deficiency - scanning for one needs more room than the default 30s.
+  test.setTimeout(90_000);
+
   const live = await isLiveBuild(page);
   test.skip(!live, "This build has no connection settings, so it runs as sample data.");
   const account = credentials("MEMBER");
@@ -27,15 +31,46 @@ test("a contractor requests correction on an open deficiency", async ({ page }, 
   await signIn(page, account!);
   await page.goto("/dashboard/vendors", { waitUntil: "domcontentloaded" });
 
-  const vendorLink = page.getByRole("list").getByRole("link").filter({ hasText: /./ }).first();
-  const anyVendor = (await vendorLink.count()) > 0;
-  test.skip(!anyVendor, "This environment has no vendors to open.");
+  // Vendors are rendered as rows in a <table>, not a role="list" - matching
+  // the aria-label every vendor Link already carries is the reliable way to
+  // find them, regardless of the surrounding markup. Not every vendor has an
+  // open deficiency (a real company's roster is a mix), so this checks each
+  // one in turn rather than assuming the first is representative. Collecting
+  // hrefs upfront and navigating directly to each (rather than click +
+  // goBack, which re-fetches the whole roster every time) keeps a 25-vendor
+  // scan well inside the timeout above.
+  const vendorLinks = page.getByRole("link", { name: /^Open vendor detail for / });
+  // count() does not auto-wait like expect() does, so it can run before the
+  // vendor list's own async fetch has resolved - give it a bounded chance to
+  // appear before treating an empty result as "genuinely no vendors."
+  await vendorLinks
+    .first()
+    .waitFor({ state: "visible", timeout: 5_000 })
+    .catch(() => undefined);
+  const vendorCount = await vendorLinks.count();
+  test.skip(vendorCount === 0, "This environment has no vendors to open.");
 
-  await vendorLink.click();
-  await page.waitForLoadState("domcontentloaded");
+  const hrefs = (
+    await Promise.all(
+      Array.from({ length: Math.min(vendorCount, 25) }, (_, i) =>
+        vendorLinks.nth(i).getAttribute("href"),
+      ),
+    )
+  ).filter((href): href is string => Boolean(href));
 
   const correctionButtons = page.getByRole("button", { name: "Request correction" });
-  const openDeficiency = (await correctionButtons.count()) > 0;
+  let openDeficiency = false;
+  for (const href of hrefs) {
+    await page.goto(href, { waitUntil: "domcontentloaded" });
+    await correctionButtons
+      .first()
+      .waitFor({ state: "visible", timeout: 1_500 })
+      .catch(() => undefined);
+    if ((await correctionButtons.count()) > 0) {
+      openDeficiency = true;
+      break;
+    }
+  }
   test.skip(!openDeficiency, "This environment has no open deficiency to correct.");
 
   await correctionButtons.first().click();

@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { ComplianceQueuePage } from "@/features/admin/ComplianceQueuePage";
 
-export const Route = createFileRoute("/dashboard/admin/compliance")({
+export const Route = createFileRoute("/dashboard/admin/compliance/")({
   head: () => ({
     meta: [
       { title: "Compliance queue — VendorClr admin" },

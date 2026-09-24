@@ -430,7 +430,14 @@ export function ProjectDetailPage({ projectId }: { projectId: string }) {
                   >
                     <div className="grid gap-1 sm:grid-cols-5">
                       <span className="font-medium">
-                        {assignment.vendor?.[0]?.name ?? "Unknown vendor"}
+                        {/* vendor:vendors(name) is a to-one embed (vendor_id is a single FK
+                            column on this table), so PostgREST returns it as an object -
+                            confirmed live. postgrest-js infers a result type purely from the
+                            select string, with no way to know the real FK cardinality, and
+                            always defaults an embed to an array - the cast corrects that;
+                            without it this silently rendered "Unknown vendor" on every row. */}
+                        {(assignment.vendor as unknown as { name: string } | null)?.name ??
+                          "Unknown vendor"}
                       </span>
                       <span>{assignment.trade_code ?? "Trade not set"}</span>
                       <span>

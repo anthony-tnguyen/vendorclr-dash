@@ -26,13 +26,23 @@ test("a reviewer corrects an extraction without overwriting the model's", async 
   await signIn(page, account!);
   await page.goto("/dashboard/admin/compliance", { waitUntil: "domcontentloaded" });
   const preview = page.getByRole("button", { name: "Preview as administrator" });
+  // Whether this button renders at all depends on the async is_platform_admin()
+  // identity check (see App.tsx's loadIdentity()) - a staff account starts in
+  // the "customer" role regardless, and only sees this button, and the admin
+  // console, once that resolves. count() does not wait for it the way
+  // expect() does, so check for it explicitly first.
+  await preview.waitFor({ state: "visible", timeout: 5_000 }).catch(() => undefined);
   if (await preview.count()) await preview.first().click();
 
   const openLink = page.getByRole("link", { name: /^Open review for / }).first();
+  // count() does not auto-wait like expect() does, so it can run before the
+  // queue's own async fetch has resolved - give it a bounded chance first.
+  await openLink.waitFor({ state: "visible", timeout: 5_000 }).catch(() => undefined);
   test.skip((await openLink.count()) === 0, "This environment has no documents awaiting review.");
   await openLink.click();
 
   const correct = page.getByRole("button", { name: "Correct extraction" });
+  await correct.waitFor({ state: "visible", timeout: 5_000 }).catch(() => undefined);
   test.skip(
     (await correct.count()) === 0,
     "The first queued document has no extraction to correct.",

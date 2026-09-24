@@ -31,7 +31,6 @@ import { Route as DashboardAdminIndexRouteImport } from './routes/dashboard.admi
 import { Route as DashboardAdminAccessRouteImport } from './routes/dashboard.admin.access'
 import { Route as DashboardAdminActivationRouteImport } from './routes/dashboard.admin.activation'
 import { Route as DashboardAdminCompaniesRouteImport } from './routes/dashboard.admin.companies'
-import { Route as DashboardAdminComplianceRouteImport } from './routes/dashboard.admin.compliance'
 import { Route as DashboardAdminLeadsRouteImport } from './routes/dashboard.admin.leads'
 import { Route as DashboardAdminOperationsRouteImport } from './routes/dashboard.admin.operations'
 import { Route as DashboardProjectsIndexRouteImport } from './routes/dashboard.projects.index'
@@ -39,6 +38,7 @@ import { Route as DashboardProjectsProjectIdRouteImport } from './routes/dashboa
 import { Route as DashboardVendorsIndexRouteImport } from './routes/dashboard.vendors.index'
 import { Route as DashboardVendorsVendorIdRouteImport } from './routes/dashboard.vendors.$vendorId'
 import { Route as DashboardVendorsImportRouteImport } from './routes/dashboard.vendors.import'
+import { Route as DashboardAdminComplianceIndexRouteImport } from './routes/dashboard.admin.compliance.index'
 import { Route as DashboardAdminComplianceQueueItemIdRouteImport } from './routes/dashboard.admin.compliance.$queueItemId'
 
 const IndexRoute = IndexRouteImport.update({
@@ -153,12 +153,6 @@ const DashboardAdminCompaniesRoute = DashboardAdminCompaniesRouteImport.update({
   path: '/dashboard/admin/companies',
   getParentRoute: () => rootRouteImport,
 } as any)
-const DashboardAdminComplianceRoute =
-  DashboardAdminComplianceRouteImport.update({
-    id: '/dashboard/admin/compliance',
-    path: '/dashboard/admin/compliance',
-    getParentRoute: () => rootRouteImport,
-  } as any)
 const DashboardAdminLeadsRoute = DashboardAdminLeadsRouteImport.update({
   id: '/dashboard/admin/leads',
   path: '/dashboard/admin/leads',
@@ -197,11 +191,17 @@ const DashboardVendorsImportRoute = DashboardVendorsImportRouteImport.update({
   path: '/dashboard/vendors/import',
   getParentRoute: () => rootRouteImport,
 } as any)
+const DashboardAdminComplianceIndexRoute =
+  DashboardAdminComplianceIndexRouteImport.update({
+    id: '/dashboard/admin/compliance/',
+    path: '/dashboard/admin/compliance/',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const DashboardAdminComplianceQueueItemIdRoute =
   DashboardAdminComplianceQueueItemIdRouteImport.update({
-    id: '/$queueItemId',
-    path: '/$queueItemId',
-    getParentRoute: () => DashboardAdminComplianceRoute,
+    id: '/dashboard/admin/compliance/$queueItemId',
+    path: '/dashboard/admin/compliance/$queueItemId',
+    getParentRoute: () => rootRouteImport,
   } as any)
 
 export interface FileRoutesByFullPath {
@@ -226,7 +226,6 @@ export interface FileRoutesByFullPath {
   '/dashboard/admin/access': typeof DashboardAdminAccessRoute
   '/dashboard/admin/activation': typeof DashboardAdminActivationRoute
   '/dashboard/admin/companies': typeof DashboardAdminCompaniesRoute
-  '/dashboard/admin/compliance': typeof DashboardAdminComplianceRouteWithChildren
   '/dashboard/admin/leads': typeof DashboardAdminLeadsRoute
   '/dashboard/admin/operations': typeof DashboardAdminOperationsRoute
   '/dashboard/projects/$projectId': typeof DashboardProjectsProjectIdRoute
@@ -236,6 +235,7 @@ export interface FileRoutesByFullPath {
   '/dashboard/projects/': typeof DashboardProjectsIndexRoute
   '/dashboard/vendors/': typeof DashboardVendorsIndexRoute
   '/dashboard/admin/compliance/$queueItemId': typeof DashboardAdminComplianceQueueItemIdRoute
+  '/dashboard/admin/compliance/': typeof DashboardAdminComplianceIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -259,7 +259,6 @@ export interface FileRoutesByTo {
   '/dashboard/admin/access': typeof DashboardAdminAccessRoute
   '/dashboard/admin/activation': typeof DashboardAdminActivationRoute
   '/dashboard/admin/companies': typeof DashboardAdminCompaniesRoute
-  '/dashboard/admin/compliance': typeof DashboardAdminComplianceRouteWithChildren
   '/dashboard/admin/leads': typeof DashboardAdminLeadsRoute
   '/dashboard/admin/operations': typeof DashboardAdminOperationsRoute
   '/dashboard/projects/$projectId': typeof DashboardProjectsProjectIdRoute
@@ -269,6 +268,7 @@ export interface FileRoutesByTo {
   '/dashboard/projects': typeof DashboardProjectsIndexRoute
   '/dashboard/vendors': typeof DashboardVendorsIndexRoute
   '/dashboard/admin/compliance/$queueItemId': typeof DashboardAdminComplianceQueueItemIdRoute
+  '/dashboard/admin/compliance': typeof DashboardAdminComplianceIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -293,7 +293,6 @@ export interface FileRoutesById {
   '/dashboard/admin/access': typeof DashboardAdminAccessRoute
   '/dashboard/admin/activation': typeof DashboardAdminActivationRoute
   '/dashboard/admin/companies': typeof DashboardAdminCompaniesRoute
-  '/dashboard/admin/compliance': typeof DashboardAdminComplianceRouteWithChildren
   '/dashboard/admin/leads': typeof DashboardAdminLeadsRoute
   '/dashboard/admin/operations': typeof DashboardAdminOperationsRoute
   '/dashboard/projects/$projectId': typeof DashboardProjectsProjectIdRoute
@@ -303,6 +302,7 @@ export interface FileRoutesById {
   '/dashboard/projects/': typeof DashboardProjectsIndexRoute
   '/dashboard/vendors/': typeof DashboardVendorsIndexRoute
   '/dashboard/admin/compliance/$queueItemId': typeof DashboardAdminComplianceQueueItemIdRoute
+  '/dashboard/admin/compliance/': typeof DashboardAdminComplianceIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -328,7 +328,6 @@ export interface FileRouteTypes {
     | '/dashboard/admin/access'
     | '/dashboard/admin/activation'
     | '/dashboard/admin/companies'
-    | '/dashboard/admin/compliance'
     | '/dashboard/admin/leads'
     | '/dashboard/admin/operations'
     | '/dashboard/projects/$projectId'
@@ -338,6 +337,7 @@ export interface FileRouteTypes {
     | '/dashboard/projects/'
     | '/dashboard/vendors/'
     | '/dashboard/admin/compliance/$queueItemId'
+    | '/dashboard/admin/compliance/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -361,7 +361,6 @@ export interface FileRouteTypes {
     | '/dashboard/admin/access'
     | '/dashboard/admin/activation'
     | '/dashboard/admin/companies'
-    | '/dashboard/admin/compliance'
     | '/dashboard/admin/leads'
     | '/dashboard/admin/operations'
     | '/dashboard/projects/$projectId'
@@ -371,6 +370,7 @@ export interface FileRouteTypes {
     | '/dashboard/projects'
     | '/dashboard/vendors'
     | '/dashboard/admin/compliance/$queueItemId'
+    | '/dashboard/admin/compliance'
   id:
     | '__root__'
     | '/'
@@ -394,7 +394,6 @@ export interface FileRouteTypes {
     | '/dashboard/admin/access'
     | '/dashboard/admin/activation'
     | '/dashboard/admin/companies'
-    | '/dashboard/admin/compliance'
     | '/dashboard/admin/leads'
     | '/dashboard/admin/operations'
     | '/dashboard/projects/$projectId'
@@ -404,6 +403,7 @@ export interface FileRouteTypes {
     | '/dashboard/projects/'
     | '/dashboard/vendors/'
     | '/dashboard/admin/compliance/$queueItemId'
+    | '/dashboard/admin/compliance/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -428,7 +428,6 @@ export interface RootRouteChildren {
   DashboardAdminAccessRoute: typeof DashboardAdminAccessRoute
   DashboardAdminActivationRoute: typeof DashboardAdminActivationRoute
   DashboardAdminCompaniesRoute: typeof DashboardAdminCompaniesRoute
-  DashboardAdminComplianceRoute: typeof DashboardAdminComplianceRouteWithChildren
   DashboardAdminLeadsRoute: typeof DashboardAdminLeadsRoute
   DashboardAdminOperationsRoute: typeof DashboardAdminOperationsRoute
   DashboardProjectsProjectIdRoute: typeof DashboardProjectsProjectIdRoute
@@ -437,6 +436,8 @@ export interface RootRouteChildren {
   DashboardAdminIndexRoute: typeof DashboardAdminIndexRoute
   DashboardProjectsIndexRoute: typeof DashboardProjectsIndexRoute
   DashboardVendorsIndexRoute: typeof DashboardVendorsIndexRoute
+  DashboardAdminComplianceQueueItemIdRoute: typeof DashboardAdminComplianceQueueItemIdRoute
+  DashboardAdminComplianceIndexRoute: typeof DashboardAdminComplianceIndexRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -595,13 +596,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DashboardAdminCompaniesRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/dashboard/admin/compliance': {
-      id: '/dashboard/admin/compliance'
-      path: '/dashboard/admin/compliance'
-      fullPath: '/dashboard/admin/compliance'
-      preLoaderRoute: typeof DashboardAdminComplianceRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/dashboard/admin/leads': {
       id: '/dashboard/admin/leads'
       path: '/dashboard/admin/leads'
@@ -651,30 +645,22 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DashboardVendorsImportRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/dashboard/admin/compliance/': {
+      id: '/dashboard/admin/compliance/'
+      path: '/dashboard/admin/compliance'
+      fullPath: '/dashboard/admin/compliance/'
+      preLoaderRoute: typeof DashboardAdminComplianceIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/dashboard/admin/compliance/$queueItemId': {
       id: '/dashboard/admin/compliance/$queueItemId'
-      path: '/$queueItemId'
+      path: '/dashboard/admin/compliance/$queueItemId'
       fullPath: '/dashboard/admin/compliance/$queueItemId'
       preLoaderRoute: typeof DashboardAdminComplianceQueueItemIdRouteImport
-      parentRoute: typeof DashboardAdminComplianceRoute
+      parentRoute: typeof rootRouteImport
     }
   }
 }
-
-interface DashboardAdminComplianceRouteChildren {
-  DashboardAdminComplianceQueueItemIdRoute: typeof DashboardAdminComplianceQueueItemIdRoute
-}
-
-const DashboardAdminComplianceRouteChildren: DashboardAdminComplianceRouteChildren =
-  {
-    DashboardAdminComplianceQueueItemIdRoute:
-      DashboardAdminComplianceQueueItemIdRoute,
-  }
-
-const DashboardAdminComplianceRouteWithChildren =
-  DashboardAdminComplianceRoute._addFileChildren(
-    DashboardAdminComplianceRouteChildren,
-  )
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
@@ -698,7 +684,6 @@ const rootRouteChildren: RootRouteChildren = {
   DashboardAdminAccessRoute: DashboardAdminAccessRoute,
   DashboardAdminActivationRoute: DashboardAdminActivationRoute,
   DashboardAdminCompaniesRoute: DashboardAdminCompaniesRoute,
-  DashboardAdminComplianceRoute: DashboardAdminComplianceRouteWithChildren,
   DashboardAdminLeadsRoute: DashboardAdminLeadsRoute,
   DashboardAdminOperationsRoute: DashboardAdminOperationsRoute,
   DashboardProjectsProjectIdRoute: DashboardProjectsProjectIdRoute,
@@ -707,6 +692,9 @@ const rootRouteChildren: RootRouteChildren = {
   DashboardAdminIndexRoute: DashboardAdminIndexRoute,
   DashboardProjectsIndexRoute: DashboardProjectsIndexRoute,
   DashboardVendorsIndexRoute: DashboardVendorsIndexRoute,
+  DashboardAdminComplianceQueueItemIdRoute:
+    DashboardAdminComplianceQueueItemIdRoute,
+  DashboardAdminComplianceIndexRoute: DashboardAdminComplianceIndexRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
