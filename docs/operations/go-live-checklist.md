@@ -25,11 +25,7 @@ date. Nothing is copied forward from an earlier status document.
 >   sharing its path prefix with the `$queueItemId` detail route, so TanStack
 >   Router treated it as that route's parent layout with no `<Outlet />` -
 >   clicking into a queue item changed the URL but nothing in the child route
->   ever appeared. See PR #69 for the full detail. Latest verified run: 25
->   passed, 3 skipped (2 because a hand-seeded open-deficiency fixture was
->   already consumed by an earlier successful run - not a defect, a real
->   environment has an ongoing stream of these; 1 because vendor-contacts.spec.ts
->   needs the staging Resend key, still open below).
+>   ever appeared. See PR #69 for the full detail. Latest verified run (2026-09-24, after the staging Resend key was added): 26 passed, 2 skipped (both because a hand-seeded open-deficiency fixture was already consumed by an earlier successful run - not a defect; a real environment has an ongoing stream of these). vendor-contacts.spec.ts now runs and passes, sending a real request through staging Resend to its sandbox addresses.
 
 | Mark | Meaning                                                                         |
 | ---- | ------------------------------------------------------------------------------- |
