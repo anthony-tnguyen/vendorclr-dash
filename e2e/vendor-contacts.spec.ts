@@ -53,7 +53,12 @@ test("a member sends a document request to a broker and the operational contact,
     await page.goto(`/dashboard/vendors/${vendorId}`, { waitUntil: "domcontentloaded" });
   } else {
     await page.goto("/dashboard/vendors", { waitUntil: "domcontentloaded" });
-    await page.locator('a[href^="/dashboard/vendors/"]').first().click();
+    // Not a bare a[href^="/dashboard/vendors/"]: that also matches the
+    // "Import CSV" link (/dashboard/vendors/import), which sits before any row.
+    await page
+      .getByRole("link", { name: /^Open vendor detail for / })
+      .first()
+      .click();
   }
   const contacts = page.getByRole("region", { name: "Contacts" });
   await expect(contacts).toBeVisible();
