@@ -6,6 +6,7 @@ import { useSession } from "@/app/App";
 import { routes } from "@/app/router";
 import { ComplianceMatrix } from "@/components/compliance/ComplianceMatrix";
 import { ErrorState, LoadingState } from "@/components/states/AsyncState";
+import { LegalConsent } from "@/features/legal/LegalPages";
 import { createDemoRepository } from "@/data/demoRepository";
 import { getRepository, isBackendConfigured } from "@/data/repository";
 import { cn } from "@/lib/utils";
@@ -136,6 +137,7 @@ function ActivationForm() {
         >
           {state.status === "pending" ? "Checking…" : "Activate my workspace"}
         </button>
+        <LegalConsent action="activating your workspace" />
       </form>
 
       {state.status === "error" && state.message ? (

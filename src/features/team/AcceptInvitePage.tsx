@@ -11,6 +11,7 @@ import {
   previewCompanyInvitation,
   INVITATION_TTL_DAYS,
 } from "@/workflows/companyInvitations";
+import { LegalConsent } from "@/features/legal/LegalPages";
 import { roleLabel } from "./roleOptions";
 
 function Shell({ children }: { children: ReactNode }) {
@@ -206,6 +207,10 @@ export function AcceptInvitePage({ token }: { token: string }) {
       >
         {accept.isPending ? "Joining…" : "Accept invitation"}
       </button>
+      <LegalConsent
+        action="accepting this invitation"
+        className="mt-3 text-xs leading-5 text-muted-foreground"
+      />
     </Shell>
   );
 }
