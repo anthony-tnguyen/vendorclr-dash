@@ -939,8 +939,10 @@ Customer UI over backend that already existed (2026-09-22):
     projects, and the security advisor reported no new warning.
 - **Reviewer editing** - see [The review queue screen](#the-review-queue-screen)
   and the Known compromises entry above.
-- **`/terms` and `/privacy`** - factual descriptions only, every commitment
-  section marked "Pending legal/product approval".
+- **`/terms` and `/privacy`** - interim, pre-attorney-review text written
+  2026-09-24 (operator Anjeko Holdings LLC, California). Every factual claim is
+  tied to evidence in `docs/legal/interim-terms-notes.md`; no retention day
+  counts, SLA or certification is promised. Counsel review is still pending.
 
 ### Deployment verification
 

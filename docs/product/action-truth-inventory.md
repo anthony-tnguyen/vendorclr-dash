@@ -25,7 +25,7 @@ is still blocking a pilot, see `docs/operations/go-live-checklist.md`.
 | Demo console | Browse the sample roster | `demo-preview` | Rendered from the in-memory demo repository, labelled as sample data, with no add/upload/request control to click. |
 | Demo console | Enter an activation code | `live` | The screen calls `redeem_activation_code()`; that function and the `activation_codes` table are applied to the hosted database via `supabase/migrations/20260918000200_activation_codes.sql` and verified with a live seeded redemption. |
 | Password reset | Send reset link | `live` | Supabase password-reset API is called when configured. |
-| Auth screens, vendor portal, console sidebar | Terms / Privacy links → `/terms`, `/privacy` | `live` | Public, signed-out routes. Factual descriptions only; every section that would carry a legal commitment reads "Pending legal/product approval". |
+| Auth screens, vendor portal, console sidebar | Terms / Privacy links → `/terms`, `/privacy` | `live` | Public, signed-out routes. Interim pre-attorney-review text (2026-09-24); see `docs/legal/interim-terms-notes.md`. Agreement is also stated at sign-up, invitation acceptance, workspace activation and vendor upload. |
 | App navigation | Sidebar, mobile navigation, back links, vendor/detail links | `live` | Client-side routing only; does not claim a data mutation. |
 | Staff/customer selector | Change visible console | `demo-preview` | A view toggle only; it is explicitly not an authorization boundary. |
 | Session | Sign out | `live` | Supabase sign-out is called outside preview mode. |

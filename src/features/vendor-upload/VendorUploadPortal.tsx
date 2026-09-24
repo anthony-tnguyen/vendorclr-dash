@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState, type DragEvent } from "react";
 import { ErrorState, LoadingState } from "@/components/states/AsyncState";
-import { LegalLinks } from "@/features/legal/LegalPages";
+import { LegalConsent, LegalLinks } from "@/features/legal/LegalPages";
 import type { DocumentKind } from "@/data/dbTypeAliases";
 import { ALLOWED_UPLOAD_MIME_TYPES, MAX_UPLOAD_BYTES } from "@/workflows/uploadTokens";
 import {
@@ -336,6 +336,11 @@ export function VendorUploadPortal({ token }: { token: string }) {
                 Secure-link expiry: {new Date(request.data.expiresAt).toLocaleDateString()}
               </p>
             </section>
+            <LegalConsent
+              action="uploading documents here"
+              note="You confirm you are authorized to share them and that they are genuine and unaltered."
+              className="mt-4 text-xs leading-5 text-muted-foreground"
+            />
             <UploadPackage token={token} view={packageQuery.data} />
             <p className="mt-6 text-xs text-muted-foreground">
               This secure link does not require a VendorClr account.

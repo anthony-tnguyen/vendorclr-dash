@@ -1,5 +1,5 @@
 import { Link, useNavigate, useSearch } from "@tanstack/react-router";
-import { LegalLinks } from "@/features/legal/LegalPages";
+import { LegalConsent, LegalLinks } from "@/features/legal/LegalPages";
 import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 
 import { useSession } from "@/app/App";
@@ -305,6 +305,7 @@ export function SignupPage() {
         <button type="submit" disabled={pending} className={submitClass}>
           {pending ? "Creating…" : live ? "Create account" : "Create account (demo)"}
         </button>
+        <LegalConsent action="creating an account" />
         <Messages notice={notice} error={error} />
       </form>
     </AuthLayout>
