@@ -110,7 +110,8 @@ test("a member sends a document request to a broker and the operational contact,
   // --- send --------------------------------------------------------------
   await composer.getByRole("button", { name: /^Send to \d+ recipients?$/ }).click();
   await expect(comms.getByText("Request created.")).toBeVisible();
-  await expect(comms.getByText(new RegExp(`${escape(broker.email)}.*Sent`))).toBeVisible();
+  // The result row and its enclosing container both match; either proves it.
+  await expect(comms.getByText(new RegExp(`${escape(broker.email)}.*Sent`)).first()).toBeVisible();
 
   // --- history shows the request ----------------------------------------
   await comms.getByRole("button", { name: "Done" }).click();
