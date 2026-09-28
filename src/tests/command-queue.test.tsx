@@ -19,13 +19,29 @@ describe("command-queue dashboards", () => {
   it("keeps the customer focused on a selected compliance exception and its resolution evidence", async () => {
     const user = await renderRoute("/dashboard");
 
-    expect(await screen.findByRole("heading", { name: "Needs action now" })).toBeInTheDocument();
-    expect((await screen.findAllByText("Delgado Concrete Works")).length).toBeGreaterThan(0);
-    expect(screen.getByRole("region", { name: "Compliance posture" })).toBeInTheDocument();
     expect(
-      screen.getByLabelText("Compliance matrix for Delgado Concrete Works"),
+      await screen.findByRole("heading", { level: 1, name: "Compliance overview" }),
     ).toBeInTheDocument();
+    expect(
+      await screen.findByText(/vendors need resolution across \d+ active projects/i),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Import vendors" })).toHaveAttribute(
+      "href",
+      "/dashboard/vendors/import",
+    );
+    expect(screen.getByRole("button", { name: /show action needed/i })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    expect(await screen.findByRole("heading", { name: "Needs attention" })).toBeInTheDocument();
+    expect((await screen.findAllByText("Delgado Concrete Works")).length).toBeGreaterThan(0);
     expect(screen.getByRole("heading", { name: "Resolution inspector" })).toBeInTheDocument();
+    const register = screen.getByRole("table", { name: "Vendor compliance" });
+    expect(within(register).getByRole("columnheader", { name: "Certificate of insurance" }));
+    expect(within(register).getByRole("columnheader", { name: "Additional insured" }));
+    expect(within(register).getByRole("columnheader", { name: "Waiver of subrogation" }));
+    expect(within(register).getByRole("columnheader", { name: "Lien waiver" }));
+    expect(within(register).getByRole("columnheader", { name: "Renewal" }));
 
     await user.click(screen.getByRole("button", { name: "Inspect Rivera Electrical Contractors" }));
 
@@ -34,13 +50,21 @@ describe("command-queue dashboards", () => {
         "Rivera Electrical Contractors",
       ),
     ).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /show expiring soon/i }));
+    expect(screen.getByRole("button", { name: /show expiring soon/i })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    expect(screen.getByRole("button", { name: "Inspect Rivera Electrical Contractors" }));
+    expect(screen.queryByRole("button", { name: "Inspect Delgado Concrete Works" })).toBeNull();
   });
 
   it("shows only role-appropriate navigation for the customer command center", async () => {
     await renderRoute("/dashboard");
 
     const navigation = screen.getByRole("navigation", { name: "Dashboard sections" });
-    expect(within(navigation).getByText("Command center")).toBeInTheDocument();
+    expect(within(navigation).getByText("Overview")).toBeInTheDocument();
     expect(within(navigation).queryByText("Review queue")).not.toBeInTheDocument();
   });
 
@@ -78,7 +102,7 @@ describe("command-queue dashboards", () => {
     await user.click(screen.getByRole("button", { name: "Open navigation menu" }));
 
     expect(screen.getByRole("navigation", { name: "Mobile dashboard sections" })).toHaveTextContent(
-      "Command center",
+      "Overview",
     );
   });
 });

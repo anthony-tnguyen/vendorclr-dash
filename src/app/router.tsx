@@ -46,7 +46,7 @@ export interface NavItem {
 }
 
 export const customerNav = [
-  { label: "Command center", to: routes.dashboard, description: "Compliance priorities and KPIs" },
+  { label: "Overview", to: routes.dashboard, description: "Compliance priorities and status" },
   { label: "Vendors", to: routes.vendors, description: "Vendor roster and compliance rail" },
   { label: "Projects", to: routes.projects, description: "Project assignments and requirements" },
   { label: "Tasks", to: routes.tasks, description: "Open compliance follow-ups" },
