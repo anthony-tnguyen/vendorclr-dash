@@ -82,13 +82,6 @@ export interface TaskItem {
   owner: string;
 }
 
-export interface OverviewMetric {
-  id: string;
-  label: string;
-  value: string;
-  detail: string;
-}
-
 export interface ReportRow {
   id: string;
   project: string;
@@ -191,7 +184,6 @@ export interface DashboardRepository {
   getVendor(vendorId: string): Promise<Vendor | null>;
   createVendor(draft: VendorDraft): Promise<Vendor>;
   listTasks(): Promise<TaskItem[]>;
-  listOverviewMetrics(): Promise<OverviewMetric[]>;
   listReportRows(): Promise<ReportRow[]>;
   listCompanies(): Promise<Company[]>;
   listQueue(): Promise<QueueItem[]>;

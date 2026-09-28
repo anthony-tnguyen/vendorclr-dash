@@ -7,7 +7,6 @@ import type {
   ComplianceItem,
   DashboardRepository,
   Lead,
-  OverviewMetric,
   QueueItem,
   ReportRow,
   TaskItem,
@@ -302,13 +301,6 @@ const tasks: TaskItem[] = [
   },
 ];
 
-const metrics: OverviewMetric[] = [
-  { id: "m1", label: "Vendors tracked", value: "8", detail: "Across 3 active projects" },
-  { id: "m2", label: "Fully compliant", value: "4", detail: "All five rail items green" },
-  { id: "m3", label: "Expiring in 30 days", value: "3", detail: "Earliest 2026-09-14" },
-  { id: "m4", label: "Open exceptions", value: "6", detail: "2 expired, 3 missing, 1 limit gap" },
-];
-
 const reportRows: ReportRow[] = [
   {
     id: "rpt-1",
@@ -561,7 +553,6 @@ export function createDemoRepository(): DashboardRepository {
       return delay(vendor);
     },
     listTasks: () => delay(tasks.map((t) => ({ ...t }))),
-    listOverviewMetrics: () => delay(metrics.map((m) => ({ ...m }))),
     listReportRows: () => delay(reportRows.map((r) => ({ ...r }))),
     listCompanies: () => delay(companies.map((r) => ({ ...r }))),
     listQueue: () => delay(queue.map((r) => ({ ...r }))),
