@@ -66,7 +66,7 @@ describe("signed-out console gate", () => {
     await renderRoute("/dashboard");
 
     expect(
-      await screen.findByRole("heading", { level: 1, name: "Command center" }),
+      await screen.findByRole("heading", { level: 1, name: "Compliance overview" }),
     ).toBeInTheDocument();
   });
 

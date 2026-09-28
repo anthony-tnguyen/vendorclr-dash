@@ -44,13 +44,13 @@ describe("authenticated-demo route behavior", () => {
     expect(screen.queryByLabelText("Company name")).not.toBeInTheDocument();
   });
 
-  it("renders command-center metrics and a vendor needing attention", async () => {
+  it("renders the compliance overview and a vendor needing attention", async () => {
     await renderRoute("/dashboard");
 
     expect(
-      await screen.findByRole("heading", { level: 1, name: "Command center" }),
+      await screen.findByRole("heading", { level: 1, name: "Compliance overview" }),
     ).toBeInTheDocument();
-    expect(await screen.findByText("Vendors tracked")).toBeInTheDocument();
+    expect(await screen.findByRole("table", { name: "Vendor compliance" })).toBeInTheDocument();
     expect((await screen.findAllByText("Delgado Concrete Works")).length).toBeGreaterThan(0);
   });
 
