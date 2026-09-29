@@ -4,6 +4,7 @@ import { Link } from "@tanstack/react-router";
 import { ArrowUpFromLine, ChevronRight, FilePlus2, X } from "lucide-react";
 import { StatusIcon, statusIconStyles } from "@/components/compliance/statusVisuals";
 import { AppShell } from "@/components/shell/AppShell";
+import { VendorUsageNotice } from "@/components/billing/VendorUsageNotice";
 import { EmptyState, ErrorState, LoadingState } from "@/components/states/AsyncState";
 import {
   STATUS_LABELS,
@@ -308,6 +309,7 @@ export function OverviewPage() {
       }
     >
       <div className="space-y-6">
+        <VendorUsageNotice />
         <div className="flex flex-wrap gap-2" aria-label="Compliance filters">
           {filterConfig.map((item) => {
             const active = filter === item.id;

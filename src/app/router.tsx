@@ -34,6 +34,7 @@ export const routes = {
   team: "/dashboard/team",
   adminOverview: "/dashboard/admin",
   adminCompanies: "/dashboard/admin/companies",
+  adminOnboarding: "/dashboard/admin/onboarding",
   adminCompliance: "/dashboard/admin/compliance",
   adminLeads: "/dashboard/admin/leads",
   adminAccess: "/dashboard/admin/access",
@@ -65,6 +66,11 @@ export const customerNav = [
 export const adminNav = [
   { label: "Review queue", to: routes.adminOverview, description: "Priority document decisions" },
   { label: "Companies", to: routes.adminCompanies, description: "Customer accounts" },
+  {
+    label: "Onboarding review",
+    to: routes.adminOnboarding,
+    description: "Validate new companies and launch their workspace",
+  },
   {
     label: "Compliance queue",
     to: routes.adminCompliance,

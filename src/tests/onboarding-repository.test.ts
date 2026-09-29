@@ -41,5 +41,19 @@ describe("onboarding repository (demo)", () => {
     expect(usage.maxActiveVendors).toBe(75);
     expect(usage.activeVendors).toBeGreaterThanOrEqual(0);
     expect(usage.utilization).toBeGreaterThanOrEqual(0);
+    // Utilization is the count over the ceiling, not a hard-coded zero.
+    expect(usage.utilization).toBeCloseTo(usage.activeVendors / 75, 4);
+  });
+
+  it("lists onboarding reviews for staff, including the wizard answers", async () => {
+    const repo = createDemoRepository();
+    const reviews = await repo.listOnboardingReviews();
+    expect(reviews.length).toBeGreaterThan(0);
+    // Only companies still onboarding / under review belong here.
+    expect(reviews.every((r) => r.serviceStatus !== "live")).toBe(true);
+    const submitted = reviews.find((r) => r.serviceStatus === "in_review");
+    expect(submitted).toBeDefined();
+    expect(submitted?.submittedAt).not.toBeNull();
+    expect(submitted?.companyInfo).toMatchObject({ companyName: expect.any(String) });
   });
 });

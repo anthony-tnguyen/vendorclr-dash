@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { AppShell } from "@/components/shell/AppShell";
+import { VendorUsageNotice } from "@/components/billing/VendorUsageNotice";
 import { ComplianceRail } from "@/components/compliance/ComplianceRail";
 import { EmptyState, ErrorState, LoadingState } from "@/components/states/AsyncState";
 import type { ComplianceStatus, Vendor } from "@/data/contracts";
@@ -97,6 +98,7 @@ export function VendorsPage() {
       }
     >
       <div className="space-y-4">
+        <VendorUsageNotice />
         {showForm ? <VendorForm onDone={() => setShowForm(false)} /> : null}
 
         <div className="max-w-sm">

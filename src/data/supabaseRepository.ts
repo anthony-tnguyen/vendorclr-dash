@@ -11,6 +11,7 @@ import type {
   DashboardRepository,
   Lead,
   OnboardingPatch,
+  OnboardingReview,
   OnboardingState,
   QueueItem,
   ReportRow,
@@ -23,8 +24,10 @@ import type {
 import type {
   ActivationCodeRow,
   AdminCompanyStatsView,
+  CompanyPlan,
   CompanyReportRowView,
   CompanyRole,
+  CompanyServiceStatus,
   ComplianceRequirementRow,
   LeadRow,
   RedeemedCompanyRow,
@@ -183,6 +186,17 @@ function toActivationCode(row: ActivationCodeRow): ActivationCode {
     createdOn: row.created_at.slice(0, 10),
     usedOn: row.used_at,
   };
+}
+
+/** The company_onboarding columns embedded into the staff review query. */
+interface OnboardingEmbed {
+  current_step: number;
+  company_info: Record<string, unknown> | null;
+  program: Record<string, unknown> | null;
+  projects: Record<string, unknown> | null;
+  requirements: Record<string, unknown> | null;
+  submitted_at: string | null;
+  reviewed_at: string | null;
 }
 
 export function createSupabaseRepository(
@@ -638,6 +652,62 @@ export function createSupabaseRepository(
         maxActiveVendors: row?.max_active_vendors ?? null,
         utilization: Number(row?.utilization ?? 0),
       };
+    },
+
+    async listOnboardingReviews(): Promise<OnboardingReview[]> {
+      const supabase = clientFactory();
+      // Staff-only in effect: companies RLS returns other companies' rows only
+      // to is_platform_admin(), and company_onboarding is embedded through the
+      // same gate. A non-staff caller sees at most their own row (which is not
+      // what this screen is for) - the AdminGuard hides it from them anyway.
+      const rows = unwrap(
+        await supabase
+          .from("companies")
+          .select(
+            "id, name, plan, service_status, created_at, company_onboarding ( current_step, company_info, program, projects, requirements, submitted_at, reviewed_at )",
+          )
+          .in("service_status", ["onboarding", "in_review"])
+          .order("created_at", { ascending: true }),
+      ) as Array<{
+        id: string;
+        name: string;
+        plan: CompanyPlan;
+        service_status: CompanyServiceStatus;
+        created_at: string;
+        company_onboarding: OnboardingEmbed | OnboardingEmbed[] | null;
+      }>;
+
+      // Active-vendor counts come from the admin stats view (vendor_count is
+      // non-archived vendors) rather than N calls to company_vendor_usage().
+      const ids = rows.map((row) => row.id);
+      const vendorCountById = new Map<string, number>();
+      if (ids.length > 0) {
+        const stats = unwrap(
+          await supabase.from("admin_company_stats").select("id, vendor_count").in("id", ids),
+        ) as Array<{ id: string; vendor_count: number }>;
+        for (const stat of stats) vendorCountById.set(stat.id, stat.vendor_count);
+      }
+
+      return rows.map((row) => {
+        const ob = Array.isArray(row.company_onboarding)
+          ? (row.company_onboarding[0] ?? null)
+          : row.company_onboarding;
+        return {
+          companyId: row.id,
+          companyName: row.name,
+          plan: row.plan,
+          serviceStatus: row.service_status,
+          currentStep: ob?.current_step ?? 1,
+          companyInfo: ob?.company_info ?? {},
+          program: ob?.program ?? {},
+          projects: ob?.projects ?? {},
+          requirements: ob?.requirements ?? {},
+          activeVendors: vendorCountById.get(row.id) ?? 0,
+          submittedAt: ob?.submitted_at ?? null,
+          reviewedAt: ob?.reviewed_at ?? null,
+          createdAt: row.created_at,
+        };
+      });
     },
 
     async setCompanyServiceStatus(

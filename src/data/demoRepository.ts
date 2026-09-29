@@ -8,6 +8,7 @@ import type {
   DashboardRepository,
   Lead,
   OnboardingPatch,
+  OnboardingReview,
   OnboardingState,
   QueueItem,
   ReportRow,
@@ -370,6 +371,68 @@ const companies: Company[] = [
   },
 ];
 
+// Two companies mid-onboarding for the staff Step 6 review screen: one that has
+// submitted (in_review, waiting on VendorClr) and one still filling the wizard.
+const onboardingReviews: OnboardingReview[] = [
+  {
+    companyId: "co-15",
+    companyName: "Northgate Construction",
+    plan: "operations",
+    serviceStatus: "in_review",
+    currentStep: 6,
+    companyInfo: {
+      companyName: "Northgate Construction",
+      primaryContact: "Priya Nair",
+      industry: "Commercial general contractor",
+      location: "Austin, TX",
+      approxVendors: "140",
+    },
+    program: {
+      vendorTypes: "Concrete, electrical, mechanical, earthwork subcontractors",
+      existingRequirements: "$1M GL each occurrence, $2M aggregate, AI + WOS on all trades",
+      currentTracking: "Spreadsheet the PM team updates by hand",
+      painPoints: "Chasing renewals and never knowing who is actually compliant",
+    },
+    projects: {
+      existingProjects: "Mueller Block 12\nDomain Tower C",
+      projectRequirements: "Umbrella $5M on the tower job",
+      owners: "Priya Nair, Marcus Webb",
+    },
+    requirements: {
+      coverages: ["General Liability", "Workers' Compensation", "Additional Insured"],
+      other: "Primary & noncontributory wording required",
+    },
+    activeVendors: 96,
+    submittedAt: "2026-09-27T15:20:00.000Z",
+    reviewedAt: null,
+    createdAt: "2026-09-25T18:00:00.000Z",
+  },
+  {
+    companyId: "co-16",
+    companyName: "Beacon Facilities Group",
+    plan: "core",
+    serviceStatus: "onboarding",
+    currentStep: 3,
+    companyInfo: {
+      companyName: "Beacon Facilities Group",
+      primaryContact: "Devon Ellis",
+      industry: "Facilities management",
+      location: "Denver, CO",
+      approxVendors: "40",
+    },
+    program: {
+      vendorTypes: "Janitorial, HVAC service, landscaping",
+      painPoints: "No central place for certificates",
+    },
+    projects: {},
+    requirements: {},
+    activeVendors: 12,
+    submittedAt: null,
+    reviewedAt: null,
+    createdAt: "2026-09-28T13:00:00.000Z",
+  },
+];
+
 const queue: QueueItem[] = [
   {
     id: "q-501",
@@ -631,8 +694,16 @@ export function createDemoRepository(): DashboardRepository {
       onboardingState = { ...onboardingState, submittedAt: new Date().toISOString() };
       return delay(undefined);
     },
-    getVendorUsage: (): Promise<VendorUsage> =>
-      delay({ activeVendors: vendorStore.length, maxActiveVendors: 75, utilization: 0 }),
+    getVendorUsage: (): Promise<VendorUsage> => {
+      const maxActiveVendors = 75;
+      const activeVendors = vendorStore.length;
+      return delay({
+        activeVendors,
+        maxActiveVendors,
+        utilization: Number((activeVendors / maxActiveVendors).toFixed(4)),
+      });
+    },
+    listOnboardingReviews: () => delay(onboardingReviews.map((r) => ({ ...r }))),
     setCompanyServiceStatus: (): Promise<void> =>
       Promise.reject(new Error("Demo mode: there is no company here to launch.")),
   };

@@ -34,6 +34,7 @@ import { Route as DashboardAdminAccessRouteImport } from './routes/dashboard.adm
 import { Route as DashboardAdminActivationRouteImport } from './routes/dashboard.admin.activation'
 import { Route as DashboardAdminCompaniesRouteImport } from './routes/dashboard.admin.companies'
 import { Route as DashboardAdminLeadsRouteImport } from './routes/dashboard.admin.leads'
+import { Route as DashboardAdminOnboardingRouteImport } from './routes/dashboard.admin.onboarding'
 import { Route as DashboardAdminOperationsRouteImport } from './routes/dashboard.admin.operations'
 import { Route as DashboardProjectsIndexRouteImport } from './routes/dashboard.projects.index'
 import { Route as DashboardProjectsProjectIdRouteImport } from './routes/dashboard.projects.$projectId'
@@ -171,6 +172,12 @@ const DashboardAdminLeadsRoute = DashboardAdminLeadsRouteImport.update({
   path: '/dashboard/admin/leads',
   getParentRoute: () => rootRouteImport,
 } as any)
+const DashboardAdminOnboardingRoute =
+  DashboardAdminOnboardingRouteImport.update({
+    id: '/dashboard/admin/onboarding',
+    path: '/dashboard/admin/onboarding',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const DashboardAdminOperationsRoute =
   DashboardAdminOperationsRouteImport.update({
     id: '/dashboard/admin/operations',
@@ -248,6 +255,7 @@ export interface FileRoutesByFullPath {
   '/dashboard/admin/activation': typeof DashboardAdminActivationRoute
   '/dashboard/admin/companies': typeof DashboardAdminCompaniesRoute
   '/dashboard/admin/leads': typeof DashboardAdminLeadsRoute
+  '/dashboard/admin/onboarding': typeof DashboardAdminOnboardingRoute
   '/dashboard/admin/operations': typeof DashboardAdminOperationsRoute
   '/dashboard/projects/$projectId': typeof DashboardProjectsProjectIdRoute
   '/dashboard/vendors/$vendorId': typeof DashboardVendorsVendorIdRoute
@@ -284,6 +292,7 @@ export interface FileRoutesByTo {
   '/dashboard/admin/activation': typeof DashboardAdminActivationRoute
   '/dashboard/admin/companies': typeof DashboardAdminCompaniesRoute
   '/dashboard/admin/leads': typeof DashboardAdminLeadsRoute
+  '/dashboard/admin/onboarding': typeof DashboardAdminOnboardingRoute
   '/dashboard/admin/operations': typeof DashboardAdminOperationsRoute
   '/dashboard/projects/$projectId': typeof DashboardProjectsProjectIdRoute
   '/dashboard/vendors/$vendorId': typeof DashboardVendorsVendorIdRoute
@@ -321,6 +330,7 @@ export interface FileRoutesById {
   '/dashboard/admin/activation': typeof DashboardAdminActivationRoute
   '/dashboard/admin/companies': typeof DashboardAdminCompaniesRoute
   '/dashboard/admin/leads': typeof DashboardAdminLeadsRoute
+  '/dashboard/admin/onboarding': typeof DashboardAdminOnboardingRoute
   '/dashboard/admin/operations': typeof DashboardAdminOperationsRoute
   '/dashboard/projects/$projectId': typeof DashboardProjectsProjectIdRoute
   '/dashboard/vendors/$vendorId': typeof DashboardVendorsVendorIdRoute
@@ -359,6 +369,7 @@ export interface FileRouteTypes {
     | '/dashboard/admin/activation'
     | '/dashboard/admin/companies'
     | '/dashboard/admin/leads'
+    | '/dashboard/admin/onboarding'
     | '/dashboard/admin/operations'
     | '/dashboard/projects/$projectId'
     | '/dashboard/vendors/$vendorId'
@@ -395,6 +406,7 @@ export interface FileRouteTypes {
     | '/dashboard/admin/activation'
     | '/dashboard/admin/companies'
     | '/dashboard/admin/leads'
+    | '/dashboard/admin/onboarding'
     | '/dashboard/admin/operations'
     | '/dashboard/projects/$projectId'
     | '/dashboard/vendors/$vendorId'
@@ -431,6 +443,7 @@ export interface FileRouteTypes {
     | '/dashboard/admin/activation'
     | '/dashboard/admin/companies'
     | '/dashboard/admin/leads'
+    | '/dashboard/admin/onboarding'
     | '/dashboard/admin/operations'
     | '/dashboard/projects/$projectId'
     | '/dashboard/vendors/$vendorId'
@@ -468,6 +481,7 @@ export interface RootRouteChildren {
   DashboardAdminActivationRoute: typeof DashboardAdminActivationRoute
   DashboardAdminCompaniesRoute: typeof DashboardAdminCompaniesRoute
   DashboardAdminLeadsRoute: typeof DashboardAdminLeadsRoute
+  DashboardAdminOnboardingRoute: typeof DashboardAdminOnboardingRoute
   DashboardAdminOperationsRoute: typeof DashboardAdminOperationsRoute
   DashboardProjectsProjectIdRoute: typeof DashboardProjectsProjectIdRoute
   DashboardVendorsVendorIdRoute: typeof DashboardVendorsVendorIdRoute
@@ -657,6 +671,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DashboardAdminLeadsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/dashboard/admin/onboarding': {
+      id: '/dashboard/admin/onboarding'
+      path: '/dashboard/admin/onboarding'
+      fullPath: '/dashboard/admin/onboarding'
+      preLoaderRoute: typeof DashboardAdminOnboardingRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/dashboard/admin/operations': {
       id: '/dashboard/admin/operations'
       path: '/dashboard/admin/operations'
@@ -748,6 +769,7 @@ const rootRouteChildren: RootRouteChildren = {
   DashboardAdminActivationRoute: DashboardAdminActivationRoute,
   DashboardAdminCompaniesRoute: DashboardAdminCompaniesRoute,
   DashboardAdminLeadsRoute: DashboardAdminLeadsRoute,
+  DashboardAdminOnboardingRoute: DashboardAdminOnboardingRoute,
   DashboardAdminOperationsRoute: DashboardAdminOperationsRoute,
   DashboardProjectsProjectIdRoute: DashboardProjectsProjectIdRoute,
   DashboardVendorsVendorIdRoute: DashboardVendorsVendorIdRoute,

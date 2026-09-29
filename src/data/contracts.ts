@@ -5,7 +5,7 @@
  * repository. Nothing is persisted, emailed, uploaded, reviewed or exported.
  */
 
-import type { CompanyPlan } from "./dbTypeAliases";
+import type { CompanyPlan, CompanyServiceStatus } from "./dbTypeAliases";
 
 export type DemoRole = "customer" | "admin";
 
@@ -214,6 +214,30 @@ export interface VendorUsage {
   utilization: number;
 }
 
+/**
+ * A company still moving through onboarding, as VendorClr staff see it for the
+ * Step 6 review: the wizard's submitted answers plus enough context (plan,
+ * active-vendor count, where they are) to validate the setup and launch. Read
+ * only by staff (RLS returns nothing to anyone who is not VendorClr staff).
+ */
+export interface OnboardingReview {
+  companyId: string;
+  companyName: string;
+  plan: CompanyPlan;
+  serviceStatus: CompanyServiceStatus;
+  currentStep: number;
+  companyInfo: Record<string, unknown>;
+  program: Record<string, unknown>;
+  projects: Record<string, unknown>;
+  requirements: Record<string, unknown>;
+  /** Non-archived vendors this company has created so far. */
+  activeVendors: number;
+  /** Set once the customer finishes the wizard (service_status -> in_review). */
+  submittedAt: string | null;
+  reviewedAt: string | null;
+  createdAt: string;
+}
+
 export interface DashboardRepository {
   listVendors(): Promise<Vendor[]>;
   getVendor(vendorId: string): Promise<Vendor | null>;
@@ -254,6 +278,11 @@ export interface DashboardRepository {
   submitOnboarding(): Promise<void>;
   /** Active-vendor count vs the plan ceiling, for the utilization notice. */
   getVendorUsage(): Promise<VendorUsage>;
+  /**
+   * Staff-only: companies in onboarding / in_review, with the wizard answers
+   * for the Step 6 review. RLS returns nothing to a non-staff caller.
+   */
+  listOnboardingReviews(): Promise<OnboardingReview[]>;
   /** Staff-only: move a company's managed-service status (e.g. launch to live). */
   setCompanyServiceStatus(
     companyId: string,
