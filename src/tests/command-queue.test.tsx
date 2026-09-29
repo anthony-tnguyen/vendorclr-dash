@@ -35,7 +35,8 @@ describe("command-queue dashboards", () => {
     );
     expect(await screen.findByRole("heading", { name: "Needs attention" })).toBeInTheDocument();
     expect((await screen.findAllByText("Delgado Concrete Works")).length).toBeGreaterThan(0);
-    expect(screen.getByRole("heading", { name: "Resolution inspector" })).toBeInTheDocument();
+    // The resolution inspector is a popup now: closed until a row is inspected.
+    expect(screen.queryByRole("dialog", { name: "Resolution inspector" })).toBeNull();
     const register = screen.getByRole("table", { name: "Vendor compliance" });
     expect(within(register).getByRole("columnheader", { name: "Certificate of insurance" }));
     expect(within(register).getByRole("columnheader", { name: "Additional insured" }));
@@ -45,11 +46,12 @@ describe("command-queue dashboards", () => {
 
     await user.click(screen.getByRole("button", { name: "Inspect Rivera Electrical Contractors" }));
 
-    expect(
-      within(screen.getByRole("complementary", { name: "Resolution inspector" })).getByText(
-        "Rivera Electrical Contractors",
-      ),
-    ).toBeInTheDocument();
+    const inspector = screen.getByRole("dialog", { name: "Resolution inspector" });
+    expect(within(inspector).getByText("Rivera Electrical Contractors")).toBeInTheDocument();
+
+    // Closing the popup returns the customer to the queue.
+    await user.click(screen.getByRole("button", { name: "Close resolution inspector" }));
+    expect(screen.queryByRole("dialog", { name: "Resolution inspector" })).toBeNull();
 
     await user.click(screen.getByRole("button", { name: /show expiring soon/i }));
     expect(screen.getByRole("button", { name: /show expiring soon/i })).toHaveAttribute(

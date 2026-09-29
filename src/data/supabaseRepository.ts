@@ -10,7 +10,6 @@ import type {
   CoverageLimit,
   DashboardRepository,
   Lead,
-  OverviewMetric,
   QueueItem,
   ReportRow,
   TaskItem,
@@ -341,59 +340,6 @@ export function createSupabaseRepository(
       }));
     },
 
-    async listOverviewMetrics(): Promise<OverviewMetric[]> {
-      // [] is fine here: only .project/.compliance are read below, neither
-      // of which toVendor() derives from requirements - no need to fetch
-      // compliance_requirements just to compute vendor counts and rail status.
-      const vendors = (await loadVendors()).map((v) => toVendor(v, []));
-
-      const projects = new Set(vendors.map((v) => v.project));
-      const compliant = vendors.filter((v) => v.compliance.every((c) => c.status === "compliant"));
-      const exceptions = vendors.flatMap((v) =>
-        v.compliance.filter((c) => c.status !== "compliant"),
-      );
-
-      const horizon = new Date();
-      horizon.setDate(horizon.getDate() + 30);
-      const today = new Date().toISOString().slice(0, 10);
-      const horizonIso = horizon.toISOString().slice(0, 10);
-
-      const expiring = vendors.filter(
-        (v) => v.expiresOn !== NO_EXPIRY && v.expiresOn >= today && v.expiresOn <= horizonIso,
-      );
-      const earliest = expiring
-        .map((v) => v.expiresOn)
-        .sort()
-        .at(0);
-
-      return [
-        {
-          id: "m1",
-          label: "Vendors tracked",
-          value: String(vendors.length),
-          detail: `Across ${projects.size} active project${projects.size === 1 ? "" : "s"}`,
-        },
-        {
-          id: "m2",
-          label: "Fully compliant",
-          value: String(compliant.length),
-          detail: "All five rail items green",
-        },
-        {
-          id: "m3",
-          label: "Expiring in 30 days",
-          value: String(expiring.length),
-          detail: earliest ? `Earliest ${earliest}` : "Nothing lapsing this month",
-        },
-        {
-          id: "m4",
-          label: "Open exceptions",
-          value: String(exceptions.length),
-          detail: summariseExceptions(exceptions),
-        },
-      ];
-    },
-
     async listReportRows(): Promise<ReportRow[]> {
       const supabase = clientFactory();
       const rows = unwrap(
@@ -600,17 +546,4 @@ export function createSupabaseRepository(
       );
     },
   };
-}
-
-function summariseExceptions(items: ComplianceItem[]): string {
-  const counts = items.reduce<Partial<Record<ComplianceStatus, number>>>((acc, item) => {
-    acc[item.status] = (acc[item.status] ?? 0) + 1;
-    return acc;
-  }, {});
-
-  const parts = (["expired", "missing", "expiring", "pending"] as const)
-    .filter((status) => counts[status])
-    .map((status) => `${counts[status]} ${status}`);
-
-  return parts.length > 0 ? parts.join(", ") : "No open exceptions";
 }
