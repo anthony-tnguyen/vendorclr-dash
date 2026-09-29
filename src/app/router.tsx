@@ -12,6 +12,10 @@ export const routes = {
   resetPassword: "/reset-password",
   /** Read-only sample console for accounts that have not been activated yet. */
   demo: "/demo",
+  /** Plan selection + Stripe self-checkout for a signed-in account with no workspace. */
+  checkout: "/checkout",
+  /** Post-checkout onboarding wizard, shown until service_status reaches 'live'. */
+  onboarding: "/onboarding",
   /** Public link a teammate receives by email. Not in customerNav - nothing in-app links to it. */
   acceptInvite: "/accept-invite/$token",
   dashboard: "/dashboard",
@@ -19,6 +23,8 @@ export const routes = {
   vendorDetail: "/dashboard/vendors/$vendorId",
   /** Bulk CSV onboarding. Reached from the Vendors page, not the sidebar. */
   vendorImport: "/dashboard/vendors/import",
+  /** COI-driven vendor intake. Reached from the Vendors page and onboarding, not the sidebar. */
+  vendorCoiImport: "/dashboard/vendors/coi-import",
   tasks: "/dashboard/tasks",
   reports: "/dashboard/reports",
   projects: "/dashboard/projects",

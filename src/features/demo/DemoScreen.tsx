@@ -363,9 +363,19 @@ export function DemoScreen() {
                 </p>
                 <p className="mt-2 text-sm text-foreground">
                   {noCompanyYet
-                    ? "Your account has no workspace yet. Enter the activation code your VendorClr contact gave you and a real one is created for your company."
+                    ? "Your account has no workspace yet. Subscribe to a plan to open one now, or enter the activation code your VendorClr contact gave you."
                     : "Enter a new activation code to open another workspace."}
                 </p>
+                {noCompanyYet ? (
+                  <p className="mt-3">
+                    <Link
+                      to={routes.checkout}
+                      className="focusable inline-flex rounded-sm bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground"
+                    >
+                      Subscribe to a plan →
+                    </Link>
+                  </p>
+                ) : null}
               </section>
             )}
 

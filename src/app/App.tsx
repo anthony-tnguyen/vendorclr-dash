@@ -2,7 +2,11 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState } 
 import type { ReactNode } from "react";
 
 import type { DemoRole } from "@/data/contracts";
-import type { CompanyActivationStatus, CompanyRole } from "@/data/dbTypeAliases";
+import type {
+  CompanyActivationStatus,
+  CompanyRole,
+  CompanyServiceStatus,
+} from "@/data/dbTypeAliases";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { hasBackendEnv } from "@/lib/supabase/env";
 
@@ -50,6 +54,14 @@ export interface Session {
    * what the demo screen exists for.
    */
   activation: CompanyActivationStatus | "none";
+  /**
+   * Managed-service readiness of the caller's company. "live" once VendorClr has
+   * validated the setup; "onboarding"/"in_review" means the post-checkout wizard
+   * is still in progress. null when the caller belongs to no company. Decides
+   * whether an activated account is routed to the onboarding wizard or the
+   * console; grants nothing (RLS is the boundary).
+   */
+  serviceStatus: CompanyServiceStatus | null;
   /** True for VendorClr staff (platform_admins), who are never gated. */
   isStaff: boolean;
   /**
@@ -77,6 +89,7 @@ const DEMO_FALLBACK: Session = {
   companyId: null,
   companyRole: "owner",
   activation: "demo",
+  serviceStatus: "live",
   isStaff: false,
   refresh: () => {},
   userId: null,
@@ -106,6 +119,7 @@ function useDemoSessionValue(): Session {
       // "demo" here means "the sample sandbox"; AppShell only ever gates
       // sessions in live mode, so this value is descriptive, not load-bearing.
       activation: "demo" as CompanyActivationStatus,
+      serviceStatus: "live" as CompanyServiceStatus,
       isStaff: false,
       refresh: () => {},
       userId: null,
@@ -128,7 +142,23 @@ interface LiveIdentity {
   companyId: string | null;
   companyRole: CompanyRole | null;
   activation: CompanyActivationStatus | "none";
+  serviceStatus: CompanyServiceStatus | null;
   isPlatformAdmin: boolean;
+}
+
+/** Narrows the embedded companies row's service_status, failing closed to onboarding. */
+function toServiceStatus(
+  companyId: string | null,
+  rawStatus: string | null | undefined,
+): CompanyServiceStatus | null {
+  if (!companyId) return null;
+  if (rawStatus === "onboarding" || rawStatus === "in_review" || rawStatus === "live") {
+    return rawStatus;
+  }
+  // Column missing (migration not applied) or embed failed: treat as "live" so a
+  // pre-existing activated workspace is never pushed into an onboarding flow it
+  // never had. New checkout companies always carry an explicit 'onboarding'.
+  return "live";
 }
 
 /** Narrows whatever the embedded companies row carried, failing closed. */
@@ -167,7 +197,7 @@ function useLiveSessionValue(): Session {
         supabase.from("profiles").select("full_name, email").eq("id", userId).maybeSingle(),
         supabase
           .from("company_members")
-          .select("company_id, role, companies ( name, activation_status )")
+          .select("company_id, role, companies ( name, activation_status, service_status )")
           .order("created_at", { ascending: true })
           .limit(1)
           .maybeSingle(),
@@ -179,7 +209,7 @@ function useLiveSessionValue(): Session {
       const membership = membershipResult.data as {
         company_id?: string | null;
         role?: string | null;
-        companies?: { name?: string; activation_status?: string } | null;
+        companies?: { name?: string; activation_status?: string; service_status?: string } | null;
       } | null;
       const company = membership?.companies;
       const companyId = membership?.company_id ?? null;
@@ -192,6 +222,7 @@ function useLiveSessionValue(): Session {
         companyId,
         companyRole: (membership?.role as CompanyRole | undefined) ?? null,
         activation: toActivation(companyId, company?.activation_status),
+        serviceStatus: toServiceStatus(companyId, company?.service_status),
         isPlatformAdmin: adminResult.data === true,
       });
       setStatus("authenticated");
@@ -254,6 +285,7 @@ function useLiveSessionValue(): Session {
       companyId: identity?.companyId ?? null,
       companyRole: identity?.companyRole ?? null,
       activation: identity?.activation ?? "none",
+      serviceStatus: identity?.serviceStatus ?? null,
       isStaff: identity?.isPlatformAdmin === true,
       refresh,
       userId: identity?.userId ?? null,

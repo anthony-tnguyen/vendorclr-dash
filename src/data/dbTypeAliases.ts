@@ -39,6 +39,7 @@ type NonNullableRow<T> = { [K in keyof T]: NonNullable<T[K]> };
  * supabaseRepository.ts already uses for its row casts. */
 export type CompanyPlan = PlanId;
 export type CompanyRole = "owner" | "risk_manager" | "project_engineer" | "read_only";
+export type CompanyServiceStatus = "onboarding" | "in_review" | "live";
 
 export type PolicyType =
   | "general_liability"

@@ -181,6 +181,39 @@ export interface ActivatedWorkspace {
   plan: CompanyPlan;
 }
 
+/**
+ * Post-checkout onboarding wizard state (company_onboarding). Steps 1-3 and 5
+ * are captured as free-form objects the VendorClr team reviews; step 4 (vendors)
+ * is real data created through the CSV / COI importers. The gate on the console
+ * is companies.service_status, exposed through the session, not stored here.
+ */
+export interface OnboardingState {
+  currentStep: number;
+  companyInfo: Record<string, unknown>;
+  program: Record<string, unknown>;
+  projects: Record<string, unknown>;
+  requirements: Record<string, unknown>;
+  submittedAt: string | null;
+  reviewedAt: string | null;
+}
+
+export interface OnboardingPatch {
+  currentStep?: number;
+  companyInfo?: Record<string, unknown>;
+  program?: Record<string, unknown>;
+  projects?: Record<string, unknown>;
+  requirements?: Record<string, unknown>;
+}
+
+/** Active-vendor usage against the plan ceiling, for the utilization notice. */
+export interface VendorUsage {
+  activeVendors: number;
+  /** null = unlimited (Enterprise). */
+  maxActiveVendors: number | null;
+  /** 0..1; 0 when the plan has no ceiling. */
+  utilization: number;
+}
+
 export interface DashboardRepository {
   listVendors(): Promise<Vendor[]>;
   getVendor(vendorId: string): Promise<Vendor | null>;
@@ -213,6 +246,19 @@ export interface DashboardRepository {
    * returns the portal URL. Runs the `billing-portal` Edge Function.
    */
   createBillingPortalSession(): Promise<{ url: string }>;
+  /** The caller's onboarding wizard state, or null if no row exists yet. */
+  getOnboarding(): Promise<OnboardingState | null>;
+  /** Upsert the wizard's progress and answers (only the provided fields change). */
+  saveOnboarding(patch: OnboardingPatch): Promise<void>;
+  /** Mark the wizard finished: moves the company from onboarding to in_review. */
+  submitOnboarding(): Promise<void>;
+  /** Active-vendor count vs the plan ceiling, for the utilization notice. */
+  getVendorUsage(): Promise<VendorUsage>;
+  /** Staff-only: move a company's managed-service status (e.g. launch to live). */
+  setCompanyServiceStatus(
+    companyId: string,
+    status: "onboarding" | "in_review" | "live",
+  ): Promise<void>;
 }
 
 export const COMPLIANCE_LABELS: Record<ComplianceKey, string> = {

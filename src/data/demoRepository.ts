@@ -7,11 +7,14 @@ import type {
   ComplianceItem,
   DashboardRepository,
   Lead,
+  OnboardingPatch,
+  OnboardingState,
   QueueItem,
   ReportRow,
   TaskItem,
   Vendor,
   VendorDraft,
+  VendorUsage,
 } from "./contracts";
 
 /**
@@ -522,6 +525,15 @@ const delay = <T>(value: T): Promise<T> =>
 export function createDemoRepository(): DashboardRepository {
   const vendorStore = vendors.map((v) => ({ ...v }));
   const codeStore = activationCodes.map((r) => ({ ...r }));
+  let onboardingState: OnboardingState = {
+    currentStep: 1,
+    companyInfo: {},
+    program: {},
+    projects: {},
+    requirements: {},
+    submittedAt: null,
+    reviewedAt: null,
+  };
 
   return {
     listVendors: () => delay(vendorStore.map((v) => ({ ...v }))),
@@ -603,5 +615,25 @@ export function createDemoRepository(): DashboardRepository {
       ),
     createBillingPortalSession: (): Promise<{ url: string }> =>
       Promise.reject(new Error("Demo mode: there is no subscription here to manage.")),
+    getOnboarding: () => delay({ ...onboardingState }),
+    saveOnboarding: (patch: OnboardingPatch) => {
+      onboardingState = {
+        ...onboardingState,
+        ...(patch.currentStep !== undefined ? { currentStep: patch.currentStep } : {}),
+        ...(patch.companyInfo !== undefined ? { companyInfo: patch.companyInfo } : {}),
+        ...(patch.program !== undefined ? { program: patch.program } : {}),
+        ...(patch.projects !== undefined ? { projects: patch.projects } : {}),
+        ...(patch.requirements !== undefined ? { requirements: patch.requirements } : {}),
+      };
+      return delay(undefined);
+    },
+    submitOnboarding: () => {
+      onboardingState = { ...onboardingState, submittedAt: new Date().toISOString() };
+      return delay(undefined);
+    },
+    getVendorUsage: (): Promise<VendorUsage> =>
+      delay({ activeVendors: vendorStore.length, maxActiveVendors: 75, utilization: 0 }),
+    setCompanyServiceStatus: (): Promise<void> =>
+      Promise.reject(new Error("Demo mode: there is no company here to launch.")),
   };
 }

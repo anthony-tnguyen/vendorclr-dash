@@ -10,12 +10,15 @@ import type {
   CoverageLimit,
   DashboardRepository,
   Lead,
+  OnboardingPatch,
+  OnboardingState,
   QueueItem,
   ReportRow,
   TaskItem,
   Vendor,
   VendorDraft,
   VendorTrade,
+  VendorUsage,
 } from "./contracts";
 import type {
   ActivationCodeRow,
@@ -567,6 +570,87 @@ export function createSupabaseRepository(
       const url = (data as { url?: string } | null)?.url;
       if (!url) throw new Error("Billing portal did not return a URL.");
       return { url };
+    },
+
+    async getOnboarding(): Promise<OnboardingState | null> {
+      const supabase = clientFactory();
+      const companyId = await resolveCompanyId();
+      const { data, error } = await supabase
+        .from("company_onboarding")
+        .select(
+          "current_step, company_info, program, projects, requirements, submitted_at, reviewed_at",
+        )
+        .eq("company_id", companyId)
+        .maybeSingle();
+      if (error) throw new Error(error.message);
+      if (!data) return null;
+      const row = data as {
+        current_step: number;
+        company_info: Record<string, unknown> | null;
+        program: Record<string, unknown> | null;
+        projects: Record<string, unknown> | null;
+        requirements: Record<string, unknown> | null;
+        submitted_at: string | null;
+        reviewed_at: string | null;
+      };
+      return {
+        currentStep: row.current_step,
+        companyInfo: row.company_info ?? {},
+        program: row.program ?? {},
+        projects: row.projects ?? {},
+        requirements: row.requirements ?? {},
+        submittedAt: row.submitted_at,
+        reviewedAt: row.reviewed_at,
+      };
+    },
+
+    async saveOnboarding(patch: OnboardingPatch): Promise<void> {
+      const supabase = clientFactory();
+      const companyId = await resolveCompanyId();
+      const row: Record<string, unknown> = { company_id: companyId };
+      if (patch.currentStep !== undefined) row["current_step"] = patch.currentStep;
+      if (patch.companyInfo !== undefined) row["company_info"] = patch.companyInfo;
+      if (patch.program !== undefined) row["program"] = patch.program;
+      if (patch.projects !== undefined) row["projects"] = patch.projects;
+      if (patch.requirements !== undefined) row["requirements"] = patch.requirements;
+      unwrap(await supabase.from("company_onboarding").upsert(row, { onConflict: "company_id" }));
+    },
+
+    async submitOnboarding(): Promise<void> {
+      const supabase = clientFactory();
+      const companyId = await resolveCompanyId();
+      unwrap(await supabase.rpc("submit_company_onboarding", { target_company: companyId }));
+    },
+
+    async getVendorUsage(): Promise<VendorUsage> {
+      const supabase = clientFactory();
+      const companyId = await resolveCompanyId();
+      const rows = unwrap(
+        await supabase.rpc("company_vendor_usage", { target_company: companyId }),
+      ) as
+        | Array<{ active_vendors: number; max_active_vendors: number | null; utilization: number }>
+        | { active_vendors: number; max_active_vendors: number | null; utilization: number }
+        | null;
+      // A TABLE-returning function comes back as an array; be tolerant of either.
+      const row = Array.isArray(rows) ? rows[0] : rows;
+      return {
+        activeVendors: row?.active_vendors ?? 0,
+        maxActiveVendors: row?.max_active_vendors ?? null,
+        utilization: Number(row?.utilization ?? 0),
+      };
+    },
+
+    async setCompanyServiceStatus(
+      companyId: string,
+      status: "onboarding" | "in_review" | "live",
+    ): Promise<void> {
+      const supabase = clientFactory();
+      unwrap(
+        await supabase.rpc("set_company_service_status", {
+          target_company: companyId,
+          next_status: status,
+        }),
+      );
     },
   };
 }
