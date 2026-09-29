@@ -39,6 +39,9 @@ const complianceOrder: ComplianceKey[] = [
   "renewal",
 ];
 
+// Columns rendered with tighter horizontal padding in the overview matrix.
+const tightSpacingColumns = new Set<ComplianceKey>(["coi", "waiverOfSubrogation"]);
+
 type AttentionFilter = "action" | "expiring" | "pending";
 
 const filterConfig: Array<{
@@ -477,7 +480,9 @@ export function OverviewPage() {
                     {complianceOrder.map((key) => (
                       <th
                         key={key}
-                        className="border-l border-border/60 px-2 py-2 align-bottom font-semibold"
+                        className={`border-l border-border/60 ${
+                          tightSpacingColumns.has(key) ? "px-1" : "px-2"
+                        } py-2 align-bottom font-semibold`}
                       >
                         {overviewRequirementLabels[key]}
                       </th>
@@ -506,7 +511,12 @@ export function OverviewPage() {
                           effectiveDate: null,
                         };
                         return (
-                          <td key={key} className="border-l border-border/60 px-2 py-3 align-top">
+                          <td
+                            key={key}
+                            className={`border-l border-border/60 ${
+                              tightSpacingColumns.has(key) ? "px-1" : "px-2"
+                            } py-3 align-top`}
+                          >
                             <ComplianceStatusCell item={item} />
                           </td>
                         );
