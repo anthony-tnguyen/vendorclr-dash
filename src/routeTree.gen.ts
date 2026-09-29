@@ -37,6 +37,7 @@ import { Route as DashboardProjectsIndexRouteImport } from './routes/dashboard.p
 import { Route as DashboardProjectsProjectIdRouteImport } from './routes/dashboard.projects.$projectId'
 import { Route as DashboardVendorsIndexRouteImport } from './routes/dashboard.vendors.index'
 import { Route as DashboardVendorsVendorIdRouteImport } from './routes/dashboard.vendors.$vendorId'
+import { Route as DashboardVendorsCoiImportRouteImport } from './routes/dashboard.vendors.coi-import'
 import { Route as DashboardVendorsImportRouteImport } from './routes/dashboard.vendors.import'
 import { Route as DashboardAdminComplianceIndexRouteImport } from './routes/dashboard.admin.compliance.index'
 import { Route as DashboardAdminComplianceQueueItemIdRouteImport } from './routes/dashboard.admin.compliance.$queueItemId'
@@ -186,6 +187,12 @@ const DashboardVendorsVendorIdRoute =
     path: '/dashboard/vendors/$vendorId',
     getParentRoute: () => rootRouteImport,
   } as any)
+const DashboardVendorsCoiImportRoute =
+  DashboardVendorsCoiImportRouteImport.update({
+    id: '/dashboard/vendors/coi-import',
+    path: '/dashboard/vendors/coi-import',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const DashboardVendorsImportRoute = DashboardVendorsImportRouteImport.update({
   id: '/dashboard/vendors/import',
   path: '/dashboard/vendors/import',
@@ -230,6 +237,7 @@ export interface FileRoutesByFullPath {
   '/dashboard/admin/operations': typeof DashboardAdminOperationsRoute
   '/dashboard/projects/$projectId': typeof DashboardProjectsProjectIdRoute
   '/dashboard/vendors/$vendorId': typeof DashboardVendorsVendorIdRoute
+  '/dashboard/vendors/coi-import': typeof DashboardVendorsCoiImportRoute
   '/dashboard/vendors/import': typeof DashboardVendorsImportRoute
   '/dashboard/admin/': typeof DashboardAdminIndexRoute
   '/dashboard/projects/': typeof DashboardProjectsIndexRoute
@@ -263,6 +271,7 @@ export interface FileRoutesByTo {
   '/dashboard/admin/operations': typeof DashboardAdminOperationsRoute
   '/dashboard/projects/$projectId': typeof DashboardProjectsProjectIdRoute
   '/dashboard/vendors/$vendorId': typeof DashboardVendorsVendorIdRoute
+  '/dashboard/vendors/coi-import': typeof DashboardVendorsCoiImportRoute
   '/dashboard/vendors/import': typeof DashboardVendorsImportRoute
   '/dashboard/admin': typeof DashboardAdminIndexRoute
   '/dashboard/projects': typeof DashboardProjectsIndexRoute
@@ -297,6 +306,7 @@ export interface FileRoutesById {
   '/dashboard/admin/operations': typeof DashboardAdminOperationsRoute
   '/dashboard/projects/$projectId': typeof DashboardProjectsProjectIdRoute
   '/dashboard/vendors/$vendorId': typeof DashboardVendorsVendorIdRoute
+  '/dashboard/vendors/coi-import': typeof DashboardVendorsCoiImportRoute
   '/dashboard/vendors/import': typeof DashboardVendorsImportRoute
   '/dashboard/admin/': typeof DashboardAdminIndexRoute
   '/dashboard/projects/': typeof DashboardProjectsIndexRoute
@@ -332,6 +342,7 @@ export interface FileRouteTypes {
     | '/dashboard/admin/operations'
     | '/dashboard/projects/$projectId'
     | '/dashboard/vendors/$vendorId'
+    | '/dashboard/vendors/coi-import'
     | '/dashboard/vendors/import'
     | '/dashboard/admin/'
     | '/dashboard/projects/'
@@ -365,6 +376,7 @@ export interface FileRouteTypes {
     | '/dashboard/admin/operations'
     | '/dashboard/projects/$projectId'
     | '/dashboard/vendors/$vendorId'
+    | '/dashboard/vendors/coi-import'
     | '/dashboard/vendors/import'
     | '/dashboard/admin'
     | '/dashboard/projects'
@@ -398,6 +410,7 @@ export interface FileRouteTypes {
     | '/dashboard/admin/operations'
     | '/dashboard/projects/$projectId'
     | '/dashboard/vendors/$vendorId'
+    | '/dashboard/vendors/coi-import'
     | '/dashboard/vendors/import'
     | '/dashboard/admin/'
     | '/dashboard/projects/'
@@ -432,6 +445,7 @@ export interface RootRouteChildren {
   DashboardAdminOperationsRoute: typeof DashboardAdminOperationsRoute
   DashboardProjectsProjectIdRoute: typeof DashboardProjectsProjectIdRoute
   DashboardVendorsVendorIdRoute: typeof DashboardVendorsVendorIdRoute
+  DashboardVendorsCoiImportRoute: typeof DashboardVendorsCoiImportRoute
   DashboardVendorsImportRoute: typeof DashboardVendorsImportRoute
   DashboardAdminIndexRoute: typeof DashboardAdminIndexRoute
   DashboardProjectsIndexRoute: typeof DashboardProjectsIndexRoute
@@ -638,6 +652,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DashboardVendorsVendorIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/dashboard/vendors/coi-import': {
+      id: '/dashboard/vendors/coi-import'
+      path: '/dashboard/vendors/coi-import'
+      fullPath: '/dashboard/vendors/coi-import'
+      preLoaderRoute: typeof DashboardVendorsCoiImportRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/dashboard/vendors/import': {
       id: '/dashboard/vendors/import'
       path: '/dashboard/vendors/import'
@@ -688,6 +709,7 @@ const rootRouteChildren: RootRouteChildren = {
   DashboardAdminOperationsRoute: DashboardAdminOperationsRoute,
   DashboardProjectsProjectIdRoute: DashboardProjectsProjectIdRoute,
   DashboardVendorsVendorIdRoute: DashboardVendorsVendorIdRoute,
+  DashboardVendorsCoiImportRoute: DashboardVendorsCoiImportRoute,
   DashboardVendorsImportRoute: DashboardVendorsImportRoute,
   DashboardAdminIndexRoute: DashboardAdminIndexRoute,
   DashboardProjectsIndexRoute: DashboardProjectsIndexRoute,

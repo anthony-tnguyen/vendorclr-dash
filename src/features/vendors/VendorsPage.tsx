@@ -74,6 +74,12 @@ export function VendorsPage() {
       actions={
         <>
           <Link
+            to="/dashboard/vendors/coi-import"
+            className="focusable rounded-sm border border-border px-3 py-2 text-sm font-medium"
+          >
+            Add from COIs
+          </Link>
+          <Link
             to="/dashboard/vendors/import"
             className="focusable rounded-sm border border-border px-3 py-2 text-sm font-medium"
           >
