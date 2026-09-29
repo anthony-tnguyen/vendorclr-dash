@@ -5,6 +5,8 @@
  * repository. Nothing is persisted, emailed, uploaded, reviewed or exported.
  */
 
+import type { CompanyPlan } from "./dbTypeAliases";
+
 export type DemoRole = "customer" | "admin";
 
 export type ComplianceKey =
@@ -94,7 +96,7 @@ export interface ReportRow {
 export interface Company {
   id: string;
   name: string;
-  plan: "Field" | "Program" | "Enterprise";
+  plan: CompanyPlan;
   vendors: number;
   seats: number;
   complianceRate: number;
@@ -154,7 +156,7 @@ export interface ActivationCode {
   code: string;
   email: string;
   companyName: string;
-  plan: "Field" | "Program" | "Enterprise";
+  plan: CompanyPlan;
   status: "pending" | "used" | "revoked";
   /** ISO date or null - when set, copied onto the new company's renewal date. */
   renewsOn: string | null;
@@ -167,7 +169,7 @@ export interface ActivationCode {
 export interface ActivationCodeDraft {
   email: string;
   companyName: string;
-  plan: "Field" | "Program" | "Enterprise";
+  plan: CompanyPlan;
   renewsOn?: string | null;
   note?: string | null;
 }
@@ -176,7 +178,7 @@ export interface ActivationCodeDraft {
 export interface ActivatedWorkspace {
   companyId: string;
   companyName: string;
-  plan: "Field" | "Program" | "Enterprise";
+  plan: CompanyPlan;
 }
 
 export interface DashboardRepository {
@@ -200,6 +202,17 @@ export interface DashboardRepository {
     companyId: string,
     activation: "demo" | "activated" | "revoked",
   ): Promise<void>;
+  /**
+   * Self-checkout. Starts a Stripe Checkout session for a self-serve plan and
+   * returns the hosted Checkout URL to redirect the buyer to. Runs the
+   * `create-checkout` Edge Function, which is where the Stripe secret lives.
+   */
+  createCheckoutSession(plan: CompanyPlan): Promise<{ url: string }>;
+  /**
+   * Opens the Stripe customer billing portal for the caller's company and
+   * returns the portal URL. Runs the `billing-portal` Edge Function.
+   */
+  createBillingPortalSession(): Promise<{ url: string }>;
 }
 
 export const COMPLIANCE_LABELS: Record<ComplianceKey, string> = {

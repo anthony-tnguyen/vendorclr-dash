@@ -545,5 +545,28 @@ export function createSupabaseRepository(
         }),
       );
     },
+
+    async createCheckoutSession(plan): Promise<{ url: string }> {
+      const supabase = clientFactory();
+      // functions.invoke() attaches the caller's session JWT, which the
+      // create-checkout Edge Function (verify_jwt=true) validates and reads the
+      // user from. The Stripe secret never leaves the Edge Function.
+      const { data, error } = await supabase.functions.invoke("create-checkout", {
+        body: { plan },
+      });
+      if (error) throw new Error(error.message || "Could not start checkout.");
+      const url = (data as { url?: string } | null)?.url;
+      if (!url) throw new Error("Checkout did not return a URL.");
+      return { url };
+    },
+
+    async createBillingPortalSession(): Promise<{ url: string }> {
+      const supabase = clientFactory();
+      const { data, error } = await supabase.functions.invoke("billing-portal", { body: {} });
+      if (error) throw new Error(error.message || "Could not open the billing portal.");
+      const url = (data as { url?: string } | null)?.url;
+      if (!url) throw new Error("Billing portal did not return a URL.");
+      return { url };
+    },
   };
 }

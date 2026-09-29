@@ -1,3 +1,5 @@
+import type { PlanId } from "@/domain/billing/plans";
+
 import type { Database } from "./db-types";
 
 /**
@@ -33,7 +35,9 @@ type ViewRow<T extends keyof Database["public"]["Views"]> = Database["public"]["
  */
 type NonNullableRow<T> = { [K in keyof T]: NonNullable<T[K]> };
 
-export type CompanyPlan = "Field" | "Program" | "Enterprise";
+/** The plan vocabulary lives in the billing domain; this alias keeps the name
+ * supabaseRepository.ts already uses for its row casts. */
+export type CompanyPlan = PlanId;
 export type CompanyRole = "owner" | "risk_manager" | "project_engineer" | "read_only";
 
 export type PolicyType =

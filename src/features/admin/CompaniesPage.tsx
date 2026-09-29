@@ -3,6 +3,7 @@ import { AdminGuard } from "./AdminGuard";
 import { AppShell } from "@/components/shell/AppShell";
 import { EmptyState, ErrorState, LoadingState } from "@/components/states/AsyncState";
 import { getRepository } from "@/data/repository";
+import { planLabel } from "@/domain/billing/plans";
 
 export function CompaniesPage() {
   const repo = getRepository();
@@ -52,7 +53,7 @@ export function CompaniesPage() {
                     <th scope="row" className="px-3 py-3 font-medium">
                       {company.name}
                     </th>
-                    <td className="px-3 py-3 text-xs">{company.plan}</td>
+                    <td className="px-3 py-3 text-xs">{planLabel(company.plan)}</td>
                     <td className="numeric px-3 py-3 text-xs">{company.vendors}</td>
                     <td className="numeric px-3 py-3 text-xs">{company.seats}</td>
                     <td className="numeric px-3 py-3 text-xs">{company.complianceRate}%</td>

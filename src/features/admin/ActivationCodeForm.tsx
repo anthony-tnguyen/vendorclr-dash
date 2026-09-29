@@ -3,14 +3,13 @@ import { useState, type FormEvent } from "react";
 
 import type { ActivationCodeDraft } from "@/data/contracts";
 import { getRepository } from "@/data/repository";
-
-const PLANS = ["Field", "Program", "Enterprise"] as const;
+import { PLAN_IDS, PLANS, isPlanId } from "@/domain/billing/plans";
 
 type Plan = ActivationCodeDraft["plan"];
 
-/** A <select> can carry anything, so the plan is checked against the list. */
+/** A <select> can carry anything, so the plan is checked against the catalogue. */
 function planFrom(value: string): Plan {
-  return PLANS.find((plan) => plan === value) ?? "Field";
+  return isPlanId(value) ? value : "core";
 }
 
 /**
@@ -43,7 +42,7 @@ export function ActivationCodeForm({ onDone }: { onDone?: () => void }) {
     mutation.mutate({
       companyName: String(form.get("company-name") ?? "").trim(),
       email: String(form.get("email") ?? "").trim(),
-      plan: planFrom(String(form.get("plan") ?? "Field")),
+      plan: planFrom(String(form.get("plan") ?? "core")),
       renewsOn: renewsOn || null,
       note: String(form.get("note") ?? "").trim() || null,
     });
@@ -99,10 +98,10 @@ export function ActivationCodeForm({ onDone }: { onDone?: () => void }) {
           <label htmlFor="plan" className="block text-sm font-medium">
             Plan
           </label>
-          <select id="plan" name="plan" defaultValue="Field" className={inputClass}>
-            {PLANS.map((plan) => (
-              <option key={plan} value={plan}>
-                {plan}
+          <select id="plan" name="plan" defaultValue="core" className={inputClass}>
+            {PLAN_IDS.map((planId) => (
+              <option key={planId} value={planId}>
+                {PLANS[planId].label}
               </option>
             ))}
           </select>

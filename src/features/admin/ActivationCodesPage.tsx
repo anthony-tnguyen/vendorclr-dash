@@ -4,6 +4,7 @@ import { useState } from "react";
 import { AppShell } from "@/components/shell/AppShell";
 import { EmptyState, ErrorState, LoadingState } from "@/components/states/AsyncState";
 import { getRepository } from "@/data/repository";
+import { planLabel } from "@/domain/billing/plans";
 import { ActivationCodeForm } from "./ActivationCodeForm";
 import { AdminGuard } from "./AdminGuard";
 
@@ -119,7 +120,7 @@ export function ActivationCodesPage() {
                       </th>
                       <td className="px-3 py-3 text-xs">{code.email}</td>
                       <td className="numeric px-3 py-3 text-xs">{code.code}</td>
-                      <td className="px-3 py-3 text-xs">{code.plan}</td>
+                      <td className="px-3 py-3 text-xs">{planLabel(code.plan)}</td>
                       <td className="px-3 py-3 text-xs uppercase">{code.status}</td>
                       <td className="numeric px-3 py-3 text-xs">{code.createdOn}</td>
                       <td className="numeric px-3 py-3 text-xs">{when(code.usedOn)}</td>

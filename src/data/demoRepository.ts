@@ -332,7 +332,7 @@ const companies: Company[] = [
   {
     id: "co-11",
     name: "Halstead Builders",
-    plan: "Enterprise",
+    plan: "enterprise",
     vendors: 214,
     seats: 32,
     complianceRate: 91,
@@ -341,7 +341,7 @@ const companies: Company[] = [
   {
     id: "co-12",
     name: "Marrow Construction Group",
-    plan: "Program",
+    plan: "operations",
     vendors: 88,
     seats: 12,
     complianceRate: 84,
@@ -350,7 +350,7 @@ const companies: Company[] = [
   {
     id: "co-13",
     name: "Talbot Civil",
-    plan: "Field",
+    plan: "core",
     vendors: 31,
     seats: 5,
     complianceRate: 72,
@@ -359,7 +359,7 @@ const companies: Company[] = [
   {
     id: "co-14",
     name: "Ridgeway Interiors",
-    plan: "Field",
+    plan: "core",
     vendors: 19,
     seats: 4,
     complianceRate: 96,
@@ -495,7 +495,7 @@ const activationCodes: ActivationCode[] = [
     code: "K7M2QP9XRD",
     email: "founder@halstead.example",
     companyName: "Halstead Builders",
-    plan: "Program",
+    plan: "operations",
     status: "pending",
     renewsOn: "2027-03-01",
     note: "Design partner - annual.",
@@ -507,7 +507,7 @@ const activationCodes: ActivationCode[] = [
     code: "HPQ4WKCY8M",
     email: "ops@marrow.example",
     companyName: "Marrow Construction Group",
-    plan: "Field",
+    plan: "core",
     status: "used",
     renewsOn: null,
     note: null,
@@ -597,5 +597,11 @@ export function createDemoRepository(): DashboardRepository {
       ),
     setCompanyActivation: (): Promise<void> =>
       Promise.reject(new Error("Demo mode: there is no company here to activate or close.")),
+    createCheckoutSession: (): Promise<{ url: string }> =>
+      Promise.reject(
+        new Error("Demo mode: checkout is not available without a database and Stripe configured."),
+      ),
+    createBillingPortalSession: (): Promise<{ url: string }> =>
+      Promise.reject(new Error("Demo mode: there is no subscription here to manage.")),
   };
 }
