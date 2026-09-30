@@ -37,7 +37,8 @@ function subscriptionPeriodEnd(subscription: Stripe.Subscription): string | null
   // current_period_end moved onto the subscription item in recent API versions;
   // fall back to the (older) top-level field so this is robust either way.
   const itemEnd = subscription.items?.data?.[0]?.current_period_end;
-  const raw = itemEnd ?? (subscription as unknown as { current_period_end?: number }).current_period_end;
+  const raw =
+    itemEnd ?? (subscription as unknown as { current_period_end?: number }).current_period_end;
   return typeof raw === "number" ? new Date(raw * 1000).toISOString() : null;
 }
 
@@ -195,7 +196,10 @@ async function handleSubscriptionChange(
       action: "subscription_updated",
       target_type: "company",
       target_id: row.id,
-      detail: { subscription_status: status, cancel_at_period_end: subscription.cancel_at_period_end ?? false },
+      detail: {
+        subscription_status: status,
+        cancel_at_period_end: subscription.cancel_at_period_end ?? false,
+      },
     });
     logOperational({
       level: status === "canceled" || status === "unpaid" ? "warn" : "info",
@@ -215,7 +219,13 @@ Deno.serve(async (req: Request) => {
   const stripeSecret = Deno.env.get("STRIPE_SECRET_KEY")?.trim();
   const webhookSecret = Deno.env.get("STRIPE_WEBHOOK_SECRET")?.trim();
   if (!stripeSecret || !webhookSecret) {
-    logOperational({ level: "warn", event: "webhook_not_configured", requestId, route, outcome: "failure" });
+    logOperational({
+      level: "warn",
+      event: "webhook_not_configured",
+      requestId,
+      route,
+      outcome: "failure",
+    });
     return json({ error: "Webhook not configured" }, 401);
   }
 
@@ -240,7 +250,13 @@ Deno.serve(async (req: Request) => {
       Stripe.createSubtleCryptoProvider(),
     );
   } catch {
-    logOperational({ level: "warn", event: "webhook_signature_invalid", requestId, route, outcome: "failure" });
+    logOperational({
+      level: "warn",
+      event: "webhook_signature_invalid",
+      requestId,
+      route,
+      outcome: "failure",
+    });
     return json({ error: "Invalid signature" }, 400);
   }
 
@@ -260,7 +276,13 @@ Deno.serve(async (req: Request) => {
     )
     .select("id");
   if (gateError) {
-    logOperational({ level: "error", event: "event_record_failed", requestId, route, outcome: "failure" });
+    logOperational({
+      level: "error",
+      event: "event_record_failed",
+      requestId,
+      route,
+      outcome: "failure",
+    });
     return json({ error: "Could not record event" }, 500);
   }
   if (!gate || gate.length === 0) {
@@ -270,24 +292,42 @@ Deno.serve(async (req: Request) => {
   try {
     switch (event.type) {
       case "checkout.session.completed":
-        await handleCheckoutCompleted(stripe, supabase, event.data.object as Stripe.Checkout.Session, requestId);
+        await handleCheckoutCompleted(
+          stripe,
+          supabase,
+          event.data.object as Stripe.Checkout.Session,
+          requestId,
+        );
         break;
       case "customer.subscription.updated":
       case "customer.subscription.deleted":
-        await handleSubscriptionChange(supabase, event.data.object as Stripe.Subscription, requestId);
+        await handleSubscriptionChange(
+          supabase,
+          event.data.object as Stripe.Subscription,
+          requestId,
+        );
         break;
       default:
         // Recorded, nothing to do.
         break;
     }
-    await supabase.from("stripe_events").update({ processed_at: new Date().toISOString() }).eq("id", event.id);
+    await supabase
+      .from("stripe_events")
+      .update({ processed_at: new Date().toISOString() })
+      .eq("id", event.id);
   } catch (error) {
     // Record the failure and return 500 so Stripe retries with backoff.
     await supabase
       .from("stripe_events")
       .update({ error: error instanceof Error ? error.message : String(error) })
       .eq("id", event.id);
-    logOperational({ level: "error", event: "webhook_handler_failed", requestId, route, outcome: "failure" });
+    logOperational({
+      level: "error",
+      event: "webhook_handler_failed",
+      requestId,
+      route,
+      outcome: "failure",
+    });
     return json({ error: "Handler failed" }, 500);
   }
 
