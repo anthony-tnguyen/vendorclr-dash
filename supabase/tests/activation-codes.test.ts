@@ -30,7 +30,7 @@ async function issue(
   as: string,
   email: string,
   companyName: string,
-  plan = "Field",
+  plan = "core",
 ): Promise<{ id: string; code: string; status: string }> {
   const rows = await asUser<{ id: string; code: string; status: string }>(
     db,
@@ -80,7 +80,7 @@ describe("activation codes (20260918000200)", () => {
     await makeStaff(STAFF, "ops@vendorclr.test");
     await makeUser(BUYER, "rosa@halstead.test");
 
-    const code = await issue(STAFF, "rosa@halstead.test", "Halstead Builders", "Program");
+    const code = await issue(STAFF, "rosa@halstead.test", "Halstead Builders", "operations");
     expect(code.status).toBe("pending");
     // The generated alphabet drops I, L, O, U, 0 and 1 so a code read over the
     // phone cannot be mis-typed into a different one.
@@ -139,7 +139,7 @@ describe("activation codes (20260918000200)", () => {
     );
     expect(opened[0]).toMatchObject({
       name: "Halstead Builders",
-      plan: "Field",
+      plan: "core",
       activation_status: "activated",
     });
 

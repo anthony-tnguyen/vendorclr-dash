@@ -674,7 +674,12 @@ export function createSupabaseRepository(
       if (patch.program !== undefined) row["program"] = patch.program;
       if (patch.projects !== undefined) row["projects"] = patch.projects;
       if (patch.requirements !== undefined) row["requirements"] = patch.requirements;
-      unwrap(await supabase.from("company_onboarding").upsert(row, { onConflict: "company_id" }));
+      // A write with no `.select()` returns `data: null`, so check `error`
+      // directly rather than unwrap() (which throws on null data even on success).
+      const { error } = await supabase
+        .from("company_onboarding")
+        .upsert(row, { onConflict: "company_id" });
+      if (error) throw new Error(error.message);
     },
 
     async submitOnboarding(): Promise<void> {
