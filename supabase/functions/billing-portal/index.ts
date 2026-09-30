@@ -9,9 +9,14 @@ import { logOperational, newRequestId } from "./operationalLog.ts";
 /**
  * Returns a Stripe billing-portal URL for the caller's company, so an owner can
  * update the card, see invoices or cancel. Deployed with verify_jwt=true; the
- * caller is read from their JWT and mapped to their company's stripe_customer_id
- * with the service role. Refuses (400) a company that has no Stripe customer,
- * e.g. an activation-code / enterprise workspace with no self-checkout subscription.
+ * caller is read from their access token (sent as Bearer) and mapped to their
+ * company's stripe_customer_id with the service role.
+ *
+ * Authorization: billing is owner-only. A non-owner member (risk_manager,
+ * project_engineer, read_only) is refused (403) — managing the card and
+ * cancelling the subscription is not something every teammate may do. Refuses
+ * (400) a company that has no Stripe customer, e.g. an activation-code /
+ * enterprise workspace with no self-checkout subscription.
  */
 
 const corsHeaders = {
@@ -27,6 +32,12 @@ const json = (body: unknown, status = 200) =>
   });
 
 const STRIPE_API_VERSION = "2026-06-24.dahlia";
+
+// Mirror of canManageBilling() in src/domain/billing/webhookRules.ts — only an
+// owner may manage billing. Keep in sync (the Deno function cannot import src).
+function canManageBilling(role: string | null | undefined): boolean {
+  return role === "owner";
+}
 
 Deno.serve(async (req: Request) => {
   const requestId = newRequestId();
@@ -53,6 +64,7 @@ Deno.serve(async (req: Request) => {
   const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
   const authHeader = req.headers.get("Authorization") ?? "";
+  const token = authHeader.replace(/^Bearer\s+/i, "").trim();
   const authed = createClient(supabaseUrl, anonKey, {
     global: { headers: { Authorization: authHeader } },
     auth: { persistSession: false, autoRefreshToken: false },
@@ -60,7 +72,7 @@ Deno.serve(async (req: Request) => {
   const {
     data: { user },
     error: userError,
-  } = await authed.auth.getUser(authHeader.replace(/^Bearer\s+/i, "").trim());
+  } = await authed.auth.getUser(token);
   if (userError || !user) {
     return json({ error: "Not authenticated." }, 401);
   }
@@ -68,20 +80,55 @@ Deno.serve(async (req: Request) => {
   const admin = createClient(supabaseUrl, serviceKey, {
     auth: { persistSession: false, autoRefreshToken: false },
   });
-  const { data: membership } = await admin
+  const { data: membership, error: membershipError } = await admin
     .from("company_members")
-    .select("company_id")
+    .select("company_id, role")
     .eq("user_id", user.id)
     .maybeSingle();
+  if (membershipError) {
+    logOperational({
+      level: "error",
+      event: "portal_membership_lookup_failed",
+      requestId,
+      actorId: user.id,
+      route,
+      outcome: "failure",
+    });
+    return json({ error: "Could not open the billing portal." }, 500);
+  }
   if (!membership) {
     return json({ error: "This account has no workspace." }, 400);
   }
+  if (!canManageBilling(membership.role)) {
+    logOperational({
+      level: "warn",
+      event: "portal_forbidden_non_owner",
+      requestId,
+      companyId: membership.company_id,
+      actorId: user.id,
+      route,
+      outcome: "failure",
+    });
+    return json({ error: "Only the workspace owner can manage billing." }, 403);
+  }
 
-  const { data: company } = await admin
+  const { data: company, error: companyError } = await admin
     .from("companies")
     .select("stripe_customer_id")
     .eq("id", membership.company_id)
     .maybeSingle();
+  if (companyError) {
+    logOperational({
+      level: "error",
+      event: "portal_company_lookup_failed",
+      requestId,
+      companyId: membership.company_id,
+      actorId: user.id,
+      route,
+      outcome: "failure",
+    });
+    return json({ error: "Could not open the billing portal." }, 500);
+  }
   const customerId = company?.stripe_customer_id;
   if (!customerId) {
     return json({ error: "This workspace has no self-checkout subscription to manage." }, 400);

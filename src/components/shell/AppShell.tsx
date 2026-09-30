@@ -162,8 +162,17 @@ export interface AppShellProps {
 }
 
 export function AppShell({ title, subtitle, actions, children }: AppShellProps) {
-  const { personName, companyName, role, mode, status, activation, serviceStatus, isStaff, signOut } =
-    useSession();
+  const {
+    personName,
+    companyName,
+    role,
+    mode,
+    status,
+    activation,
+    serviceStatus,
+    isStaff,
+    signOut,
+  } = useSession();
   const navigate = useNavigate();
   // The router's own location, not window.location - the latter lags behind a
   // client-side navigation and would send the wrong page back to sign-in.
