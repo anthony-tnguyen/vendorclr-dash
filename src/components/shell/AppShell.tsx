@@ -303,10 +303,18 @@ export function AppShell({ title, subtitle, actions, children }: AppShellProps) 
               </div>
               <div className="flex flex-wrap items-center gap-2">
                 {actions}
-                {mode === "live" && status === "authenticated" ? (
+                {mode === "demo" || (mode === "live" && status === "authenticated") ? (
                   <button
                     type="button"
-                    onClick={() => void signOut()}
+                    onClick={() => {
+                      // Demo mode has no session to end; "signing out" of the
+                      // sandbox returns the visitor to the sign-in screen.
+                      if (mode === "demo") {
+                        void navigate({ to: "/login", replace: true });
+                        return;
+                      }
+                      void signOut();
+                    }}
                     className="focusable rounded-sm border border-input px-3 py-1.5 text-xs font-semibold text-foreground"
                   >
                     Sign out
