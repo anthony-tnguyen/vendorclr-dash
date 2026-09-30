@@ -33,7 +33,7 @@ begin
   delete from public.companies where name = 'Halstead Builders';
 
   insert into public.companies (name, plan, subscription_renews_on)
-  values ('Halstead Builders', 'Program', '2027-03-01')
+  values ('Halstead Builders', 'operations', '2027-03-01')
   returning id into demo_company;
 
   insert into public.company_members (company_id, user_id, role, scope, last_active_at)
