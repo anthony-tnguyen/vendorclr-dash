@@ -162,7 +162,8 @@ export interface AppShellProps {
 }
 
 export function AppShell({ title, subtitle, actions, children }: AppShellProps) {
-  const { personName, companyName, role, mode, status, activation, isStaff } = useSession();
+  const { personName, companyName, role, mode, status, activation, serviceStatus, isStaff } =
+    useSession();
   const navigate = useNavigate();
   // The router's own location, not window.location - the latter lags behind a
   // client-side navigation and would send the wrong page back to sign-in.
@@ -187,6 +188,22 @@ export function AppShell({ title, subtitle, actions, children }: AppShellProps) 
   const signedOut = mode === "live" && status === "anonymous";
   const needsActivation =
     mode === "live" && status === "authenticated" && !isStaff && activation !== "activated";
+  // An activated (paid) account whose managed-service setup is not yet live
+  // belongs in the onboarding wizard, not the console. Staff are never gated;
+  // 'live' (and pre-existing/activation-code companies, which are 'live') pass.
+  // The vendor importers are part of onboarding's Vendors step, so an onboarding
+  // account must be allowed to reach them even though they live in the gated
+  // console chrome; every other console page still bounces to the wizard.
+  const onOnboardingImporter =
+    here.includes("/dashboard/vendors/coi-import") || here.includes("/dashboard/vendors/import");
+  const needsOnboarding =
+    mode === "live" &&
+    status === "authenticated" &&
+    !isStaff &&
+    activation === "activated" &&
+    serviceStatus !== null &&
+    serviceStatus !== "live" &&
+    !onOnboardingImporter;
 
   // The destination is captured on first render and never recomputed: `here`
   // changes the moment the redirect lands, and re-running on it would send the
@@ -204,10 +221,14 @@ export function AppShell({ title, subtitle, actions, children }: AppShellProps) 
       });
       return;
     }
-    if (needsActivation) void navigate({ to: "/demo", replace: true });
-  }, [signedOut, needsActivation, navigate]);
+    if (needsActivation) {
+      void navigate({ to: "/demo", replace: true });
+      return;
+    }
+    if (needsOnboarding) void navigate({ to: "/onboarding", replace: true });
+  }, [signedOut, needsActivation, needsOnboarding, navigate]);
 
-  if (status === "loading" || signedOut || needsActivation) {
+  if (status === "loading" || signedOut || needsActivation || needsOnboarding) {
     return (
       <div className="min-h-screen bg-background px-4 py-6">
         <div className="mx-auto w-full max-w-3xl">
@@ -217,7 +238,9 @@ export function AppShell({ title, subtitle, actions, children }: AppShellProps) 
                 ? "Opening the sign-in screen"
                 : needsActivation
                   ? "Opening the demo console"
-                  : "Loading your workspace"
+                  : needsOnboarding
+                    ? "Opening your onboarding"
+                    : "Loading your workspace"
             }
             rows={5}
           />

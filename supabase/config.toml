@@ -411,3 +411,17 @@ enabled = true
 # declarative_schema_path = "./schemas"
 # JSON string passed through to pg-delta SQL formatting.
 # format_options = "{\"keywordCase\":\"upper\",\"indent\":2,\"maxWidth\":80,\"commaStyle\":\"trailing\"}"
+
+# Stripe self-checkout Edge Functions. The webhook is public (Stripe sends no
+# Supabase JWT; it is authenticated by its Stripe signature instead); the other
+# two require a signed-in caller. Secrets (STRIPE_SECRET_KEY,
+# STRIPE_WEBHOOK_SECRET, APP_URL) are set on the hosted project, never committed
+# — see docs/operations/stripe-checkout.md.
+[functions.stripe-webhook]
+verify_jwt = false
+
+[functions.create-checkout]
+verify_jwt = true
+
+[functions.billing-portal]
+verify_jwt = true

@@ -234,8 +234,22 @@ export function SignupPage() {
   // Set when signup was reached from a flow like accept-invite that needs to
   // resume after account creation. Already validated as a same-origin
   // relative path by the route's validateSearch.
-  const search = useSearch({ strict: false }) as { redirect?: string };
+  const search = useSearch({ strict: false }) as { redirect?: string; plan?: string };
+  const planParam =
+    search.plan && ["core", "operations", "scale"].includes(search.plan) ? search.plan : null;
+  // Where a brand-new account lands. An explicit redirect (e.g. accept-invite)
+  // wins; otherwise a plan chosen on the marketing site sends them straight to
+  // checkout, and the default is the demo screen.
   const destination = (search.redirect ?? "/demo") as "/demo";
+  const destinationUrl = search.redirect ?? (planParam ? `/checkout?plan=${planParam}` : "/demo");
+
+  async function goToDestination() {
+    if (!search.redirect && planParam) {
+      await navigate({ to: "/checkout", search: { plan: planParam } });
+    } else {
+      await navigate({ to: destination });
+    }
+  }
 
   const { notice, error, pending, onSubmit } = useAuthForm(async (form) => {
     // Sign-up is open: an account is created with no company attached, and the
@@ -259,13 +273,13 @@ export function SignupPage() {
         // resetPasswordForEmail() below, so the link always lands back on
         // whichever origin the signup actually happened from, and on
         // `destination` rather than always /demo.
-        emailRedirectTo: `${window.location.origin}${destination}`,
+        emailRedirectTo: `${window.location.origin}${destinationUrl}`,
       },
     });
     if (signUpError) throw new Error(signUpError.message);
 
     if (data.session) {
-      await navigate({ to: destination });
+      await goToDestination();
       return "Account created.";
     }
     return "Check your email to confirm the account, then sign in.";

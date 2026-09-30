@@ -5,6 +5,8 @@
  * repository. Nothing is persisted, emailed, uploaded, reviewed or exported.
  */
 
+import type { CompanyPlan, CompanyServiceStatus } from "./dbTypeAliases";
+
 export type DemoRole = "customer" | "admin";
 
 export type ComplianceKey =
@@ -94,7 +96,7 @@ export interface ReportRow {
 export interface Company {
   id: string;
   name: string;
-  plan: "Field" | "Program" | "Enterprise";
+  plan: CompanyPlan;
   vendors: number;
   seats: number;
   complianceRate: number;
@@ -154,7 +156,7 @@ export interface ActivationCode {
   code: string;
   email: string;
   companyName: string;
-  plan: "Field" | "Program" | "Enterprise";
+  plan: CompanyPlan;
   status: "pending" | "used" | "revoked";
   /** ISO date or null - when set, copied onto the new company's renewal date. */
   renewsOn: string | null;
@@ -167,7 +169,7 @@ export interface ActivationCode {
 export interface ActivationCodeDraft {
   email: string;
   companyName: string;
-  plan: "Field" | "Program" | "Enterprise";
+  plan: CompanyPlan;
   renewsOn?: string | null;
   note?: string | null;
 }
@@ -176,7 +178,64 @@ export interface ActivationCodeDraft {
 export interface ActivatedWorkspace {
   companyId: string;
   companyName: string;
-  plan: "Field" | "Program" | "Enterprise";
+  plan: CompanyPlan;
+}
+
+/**
+ * Post-checkout onboarding wizard state (company_onboarding). Steps 1-3 and 5
+ * are captured as free-form objects the VendorClr team reviews; step 4 (vendors)
+ * is real data created through the CSV / COI importers. The gate on the console
+ * is companies.service_status, exposed through the session, not stored here.
+ */
+export interface OnboardingState {
+  currentStep: number;
+  companyInfo: Record<string, unknown>;
+  program: Record<string, unknown>;
+  projects: Record<string, unknown>;
+  requirements: Record<string, unknown>;
+  submittedAt: string | null;
+  reviewedAt: string | null;
+}
+
+export interface OnboardingPatch {
+  currentStep?: number;
+  companyInfo?: Record<string, unknown>;
+  program?: Record<string, unknown>;
+  projects?: Record<string, unknown>;
+  requirements?: Record<string, unknown>;
+}
+
+/** Active-vendor usage against the plan ceiling, for the utilization notice. */
+export interface VendorUsage {
+  activeVendors: number;
+  /** null = unlimited (Enterprise). */
+  maxActiveVendors: number | null;
+  /** 0..1; 0 when the plan has no ceiling. */
+  utilization: number;
+}
+
+/**
+ * A company still moving through onboarding, as VendorClr staff see it for the
+ * Step 6 review: the wizard's submitted answers plus enough context (plan,
+ * active-vendor count, where they are) to validate the setup and launch. Read
+ * only by staff (RLS returns nothing to anyone who is not VendorClr staff).
+ */
+export interface OnboardingReview {
+  companyId: string;
+  companyName: string;
+  plan: CompanyPlan;
+  serviceStatus: CompanyServiceStatus;
+  currentStep: number;
+  companyInfo: Record<string, unknown>;
+  program: Record<string, unknown>;
+  projects: Record<string, unknown>;
+  requirements: Record<string, unknown>;
+  /** Non-archived vendors this company has created so far. */
+  activeVendors: number;
+  /** Set once the customer finishes the wizard (service_status -> in_review). */
+  submittedAt: string | null;
+  reviewedAt: string | null;
+  createdAt: string;
 }
 
 export interface DashboardRepository {
@@ -199,6 +258,35 @@ export interface DashboardRepository {
   setCompanyActivation(
     companyId: string,
     activation: "demo" | "activated" | "revoked",
+  ): Promise<void>;
+  /**
+   * Self-checkout. Starts a Stripe Checkout session for a self-serve plan and
+   * returns the hosted Checkout URL to redirect the buyer to. Runs the
+   * `create-checkout` Edge Function, which is where the Stripe secret lives.
+   */
+  createCheckoutSession(plan: CompanyPlan): Promise<{ url: string }>;
+  /**
+   * Opens the Stripe customer billing portal for the caller's company and
+   * returns the portal URL. Runs the `billing-portal` Edge Function.
+   */
+  createBillingPortalSession(): Promise<{ url: string }>;
+  /** The caller's onboarding wizard state, or null if no row exists yet. */
+  getOnboarding(): Promise<OnboardingState | null>;
+  /** Upsert the wizard's progress and answers (only the provided fields change). */
+  saveOnboarding(patch: OnboardingPatch): Promise<void>;
+  /** Mark the wizard finished: moves the company from onboarding to in_review. */
+  submitOnboarding(): Promise<void>;
+  /** Active-vendor count vs the plan ceiling, for the utilization notice. */
+  getVendorUsage(): Promise<VendorUsage>;
+  /**
+   * Staff-only: companies in onboarding / in_review, with the wizard answers
+   * for the Step 6 review. RLS returns nothing to a non-staff caller.
+   */
+  listOnboardingReviews(): Promise<OnboardingReview[]>;
+  /** Staff-only: move a company's managed-service status (e.g. launch to live). */
+  setCompanyServiceStatus(
+    companyId: string,
+    status: "onboarding" | "in_review" | "live",
   ): Promise<void>;
 }
 

@@ -7,11 +7,15 @@ import type {
   ComplianceItem,
   DashboardRepository,
   Lead,
+  OnboardingPatch,
+  OnboardingReview,
+  OnboardingState,
   QueueItem,
   ReportRow,
   TaskItem,
   Vendor,
   VendorDraft,
+  VendorUsage,
 } from "./contracts";
 
 /**
@@ -332,7 +336,7 @@ const companies: Company[] = [
   {
     id: "co-11",
     name: "Halstead Builders",
-    plan: "Enterprise",
+    plan: "enterprise",
     vendors: 214,
     seats: 32,
     complianceRate: 91,
@@ -341,7 +345,7 @@ const companies: Company[] = [
   {
     id: "co-12",
     name: "Marrow Construction Group",
-    plan: "Program",
+    plan: "operations",
     vendors: 88,
     seats: 12,
     complianceRate: 84,
@@ -350,7 +354,7 @@ const companies: Company[] = [
   {
     id: "co-13",
     name: "Talbot Civil",
-    plan: "Field",
+    plan: "core",
     vendors: 31,
     seats: 5,
     complianceRate: 72,
@@ -359,11 +363,73 @@ const companies: Company[] = [
   {
     id: "co-14",
     name: "Ridgeway Interiors",
-    plan: "Field",
+    plan: "core",
     vendors: 19,
     seats: 4,
     complianceRate: 96,
     renewalOn: "2027-01-20",
+  },
+];
+
+// Two companies mid-onboarding for the staff Step 6 review screen: one that has
+// submitted (in_review, waiting on VendorClr) and one still filling the wizard.
+const onboardingReviews: OnboardingReview[] = [
+  {
+    companyId: "co-15",
+    companyName: "Northgate Construction",
+    plan: "operations",
+    serviceStatus: "in_review",
+    currentStep: 6,
+    companyInfo: {
+      companyName: "Northgate Construction",
+      primaryContact: "Priya Nair",
+      industry: "Commercial general contractor",
+      location: "Austin, TX",
+      approxVendors: "140",
+    },
+    program: {
+      vendorTypes: "Concrete, electrical, mechanical, earthwork subcontractors",
+      existingRequirements: "$1M GL each occurrence, $2M aggregate, AI + WOS on all trades",
+      currentTracking: "Spreadsheet the PM team updates by hand",
+      painPoints: "Chasing renewals and never knowing who is actually compliant",
+    },
+    projects: {
+      existingProjects: "Mueller Block 12\nDomain Tower C",
+      projectRequirements: "Umbrella $5M on the tower job",
+      owners: "Priya Nair, Marcus Webb",
+    },
+    requirements: {
+      coverages: ["General Liability", "Workers' Compensation", "Additional Insured"],
+      other: "Primary & noncontributory wording required",
+    },
+    activeVendors: 96,
+    submittedAt: "2026-09-27T15:20:00.000Z",
+    reviewedAt: null,
+    createdAt: "2026-09-25T18:00:00.000Z",
+  },
+  {
+    companyId: "co-16",
+    companyName: "Beacon Facilities Group",
+    plan: "core",
+    serviceStatus: "onboarding",
+    currentStep: 3,
+    companyInfo: {
+      companyName: "Beacon Facilities Group",
+      primaryContact: "Devon Ellis",
+      industry: "Facilities management",
+      location: "Denver, CO",
+      approxVendors: "40",
+    },
+    program: {
+      vendorTypes: "Janitorial, HVAC service, landscaping",
+      painPoints: "No central place for certificates",
+    },
+    projects: {},
+    requirements: {},
+    activeVendors: 12,
+    submittedAt: null,
+    reviewedAt: null,
+    createdAt: "2026-09-28T13:00:00.000Z",
   },
 ];
 
@@ -495,7 +561,7 @@ const activationCodes: ActivationCode[] = [
     code: "K7M2QP9XRD",
     email: "founder@halstead.example",
     companyName: "Halstead Builders",
-    plan: "Program",
+    plan: "operations",
     status: "pending",
     renewsOn: "2027-03-01",
     note: "Design partner - annual.",
@@ -507,7 +573,7 @@ const activationCodes: ActivationCode[] = [
     code: "HPQ4WKCY8M",
     email: "ops@marrow.example",
     companyName: "Marrow Construction Group",
-    plan: "Field",
+    plan: "core",
     status: "used",
     renewsOn: null,
     note: null,
@@ -522,6 +588,15 @@ const delay = <T>(value: T): Promise<T> =>
 export function createDemoRepository(): DashboardRepository {
   const vendorStore = vendors.map((v) => ({ ...v }));
   const codeStore = activationCodes.map((r) => ({ ...r }));
+  let onboardingState: OnboardingState = {
+    currentStep: 1,
+    companyInfo: {},
+    program: {},
+    projects: {},
+    requirements: {},
+    submittedAt: null,
+    reviewedAt: null,
+  };
 
   return {
     listVendors: () => delay(vendorStore.map((v) => ({ ...v }))),
@@ -597,5 +672,39 @@ export function createDemoRepository(): DashboardRepository {
       ),
     setCompanyActivation: (): Promise<void> =>
       Promise.reject(new Error("Demo mode: there is no company here to activate or close.")),
+    createCheckoutSession: (): Promise<{ url: string }> =>
+      Promise.reject(
+        new Error("Demo mode: checkout is not available without a database and Stripe configured."),
+      ),
+    createBillingPortalSession: (): Promise<{ url: string }> =>
+      Promise.reject(new Error("Demo mode: there is no subscription here to manage.")),
+    getOnboarding: () => delay({ ...onboardingState }),
+    saveOnboarding: (patch: OnboardingPatch) => {
+      onboardingState = {
+        ...onboardingState,
+        ...(patch.currentStep !== undefined ? { currentStep: patch.currentStep } : {}),
+        ...(patch.companyInfo !== undefined ? { companyInfo: patch.companyInfo } : {}),
+        ...(patch.program !== undefined ? { program: patch.program } : {}),
+        ...(patch.projects !== undefined ? { projects: patch.projects } : {}),
+        ...(patch.requirements !== undefined ? { requirements: patch.requirements } : {}),
+      };
+      return delay(undefined);
+    },
+    submitOnboarding: () => {
+      onboardingState = { ...onboardingState, submittedAt: new Date().toISOString() };
+      return delay(undefined);
+    },
+    getVendorUsage: (): Promise<VendorUsage> => {
+      const maxActiveVendors = 75;
+      const activeVendors = vendorStore.length;
+      return delay({
+        activeVendors,
+        maxActiveVendors,
+        utilization: Number((activeVendors / maxActiveVendors).toFixed(4)),
+      });
+    },
+    listOnboardingReviews: () => delay(onboardingReviews.map((r) => ({ ...r }))),
+    setCompanyServiceStatus: (): Promise<void> =>
+      Promise.reject(new Error("Demo mode: there is no company here to launch.")),
   };
 }

@@ -10,18 +10,24 @@ import type {
   CoverageLimit,
   DashboardRepository,
   Lead,
+  OnboardingPatch,
+  OnboardingReview,
+  OnboardingState,
   QueueItem,
   ReportRow,
   TaskItem,
   Vendor,
   VendorDraft,
   VendorTrade,
+  VendorUsage,
 } from "./contracts";
 import type {
   ActivationCodeRow,
   AdminCompanyStatsView,
+  CompanyPlan,
   CompanyReportRowView,
   CompanyRole,
+  CompanyServiceStatus,
   ComplianceRequirementRow,
   LeadRow,
   RedeemedCompanyRow,
@@ -180,6 +186,17 @@ function toActivationCode(row: ActivationCodeRow): ActivationCode {
     createdOn: row.created_at.slice(0, 10),
     usedOn: row.used_at,
   };
+}
+
+/** The company_onboarding columns embedded into the staff review query. */
+interface OnboardingEmbed {
+  current_step: number;
+  company_info: Record<string, unknown> | null;
+  program: Record<string, unknown> | null;
+  projects: Record<string, unknown> | null;
+  requirements: Record<string, unknown> | null;
+  submitted_at: string | null;
+  reviewed_at: string | null;
 }
 
 export function createSupabaseRepository(
@@ -542,6 +559,166 @@ export function createSupabaseRepository(
         await supabase.rpc("set_company_activation", {
           target_company: companyId,
           next_status: activation,
+        }),
+      );
+    },
+
+    async createCheckoutSession(plan): Promise<{ url: string }> {
+      const supabase = clientFactory();
+      // functions.invoke() attaches the caller's session JWT, which the
+      // create-checkout Edge Function (verify_jwt=true) validates and reads the
+      // user from. The Stripe secret never leaves the Edge Function.
+      const { data, error } = await supabase.functions.invoke("create-checkout", {
+        body: { plan },
+      });
+      if (error) throw new Error(error.message || "Could not start checkout.");
+      const url = (data as { url?: string } | null)?.url;
+      if (!url) throw new Error("Checkout did not return a URL.");
+      return { url };
+    },
+
+    async createBillingPortalSession(): Promise<{ url: string }> {
+      const supabase = clientFactory();
+      const { data, error } = await supabase.functions.invoke("billing-portal", { body: {} });
+      if (error) throw new Error(error.message || "Could not open the billing portal.");
+      const url = (data as { url?: string } | null)?.url;
+      if (!url) throw new Error("Billing portal did not return a URL.");
+      return { url };
+    },
+
+    async getOnboarding(): Promise<OnboardingState | null> {
+      const supabase = clientFactory();
+      const companyId = await resolveCompanyId();
+      const { data, error } = await supabase
+        .from("company_onboarding")
+        .select(
+          "current_step, company_info, program, projects, requirements, submitted_at, reviewed_at",
+        )
+        .eq("company_id", companyId)
+        .maybeSingle();
+      if (error) throw new Error(error.message);
+      if (!data) return null;
+      const row = data as {
+        current_step: number;
+        company_info: Record<string, unknown> | null;
+        program: Record<string, unknown> | null;
+        projects: Record<string, unknown> | null;
+        requirements: Record<string, unknown> | null;
+        submitted_at: string | null;
+        reviewed_at: string | null;
+      };
+      return {
+        currentStep: row.current_step,
+        companyInfo: row.company_info ?? {},
+        program: row.program ?? {},
+        projects: row.projects ?? {},
+        requirements: row.requirements ?? {},
+        submittedAt: row.submitted_at,
+        reviewedAt: row.reviewed_at,
+      };
+    },
+
+    async saveOnboarding(patch: OnboardingPatch): Promise<void> {
+      const supabase = clientFactory();
+      const companyId = await resolveCompanyId();
+      const row: Record<string, unknown> = { company_id: companyId };
+      if (patch.currentStep !== undefined) row["current_step"] = patch.currentStep;
+      if (patch.companyInfo !== undefined) row["company_info"] = patch.companyInfo;
+      if (patch.program !== undefined) row["program"] = patch.program;
+      if (patch.projects !== undefined) row["projects"] = patch.projects;
+      if (patch.requirements !== undefined) row["requirements"] = patch.requirements;
+      unwrap(await supabase.from("company_onboarding").upsert(row, { onConflict: "company_id" }));
+    },
+
+    async submitOnboarding(): Promise<void> {
+      const supabase = clientFactory();
+      const companyId = await resolveCompanyId();
+      unwrap(await supabase.rpc("submit_company_onboarding", { target_company: companyId }));
+    },
+
+    async getVendorUsage(): Promise<VendorUsage> {
+      const supabase = clientFactory();
+      const companyId = await resolveCompanyId();
+      const rows = unwrap(
+        await supabase.rpc("company_vendor_usage", { target_company: companyId }),
+      ) as
+        | Array<{ active_vendors: number; max_active_vendors: number | null; utilization: number }>
+        | { active_vendors: number; max_active_vendors: number | null; utilization: number }
+        | null;
+      // A TABLE-returning function comes back as an array; be tolerant of either.
+      const row = Array.isArray(rows) ? rows[0] : rows;
+      return {
+        activeVendors: row?.active_vendors ?? 0,
+        maxActiveVendors: row?.max_active_vendors ?? null,
+        utilization: Number(row?.utilization ?? 0),
+      };
+    },
+
+    async listOnboardingReviews(): Promise<OnboardingReview[]> {
+      const supabase = clientFactory();
+      // Staff-only in effect: companies RLS returns other companies' rows only
+      // to is_platform_admin(), and company_onboarding is embedded through the
+      // same gate. A non-staff caller sees at most their own row (which is not
+      // what this screen is for) - the AdminGuard hides it from them anyway.
+      const rows = unwrap(
+        await supabase
+          .from("companies")
+          .select(
+            "id, name, plan, service_status, created_at, company_onboarding ( current_step, company_info, program, projects, requirements, submitted_at, reviewed_at )",
+          )
+          .in("service_status", ["onboarding", "in_review"])
+          .order("created_at", { ascending: true }),
+      ) as Array<{
+        id: string;
+        name: string;
+        plan: CompanyPlan;
+        service_status: CompanyServiceStatus;
+        created_at: string;
+        company_onboarding: OnboardingEmbed | OnboardingEmbed[] | null;
+      }>;
+
+      // Active-vendor counts come from the admin stats view (vendor_count is
+      // non-archived vendors) rather than N calls to company_vendor_usage().
+      const ids = rows.map((row) => row.id);
+      const vendorCountById = new Map<string, number>();
+      if (ids.length > 0) {
+        const stats = unwrap(
+          await supabase.from("admin_company_stats").select("id, vendor_count").in("id", ids),
+        ) as Array<{ id: string; vendor_count: number }>;
+        for (const stat of stats) vendorCountById.set(stat.id, stat.vendor_count);
+      }
+
+      return rows.map((row) => {
+        const ob = Array.isArray(row.company_onboarding)
+          ? (row.company_onboarding[0] ?? null)
+          : row.company_onboarding;
+        return {
+          companyId: row.id,
+          companyName: row.name,
+          plan: row.plan,
+          serviceStatus: row.service_status,
+          currentStep: ob?.current_step ?? 1,
+          companyInfo: ob?.company_info ?? {},
+          program: ob?.program ?? {},
+          projects: ob?.projects ?? {},
+          requirements: ob?.requirements ?? {},
+          activeVendors: vendorCountById.get(row.id) ?? 0,
+          submittedAt: ob?.submitted_at ?? null,
+          reviewedAt: ob?.reviewed_at ?? null,
+          createdAt: row.created_at,
+        };
+      });
+    },
+
+    async setCompanyServiceStatus(
+      companyId: string,
+      status: "onboarding" | "in_review" | "live",
+    ): Promise<void> {
+      const supabase = clientFactory();
+      unwrap(
+        await supabase.rpc("set_company_service_status", {
+          target_company: companyId,
+          next_status: status,
         }),
       );
     },

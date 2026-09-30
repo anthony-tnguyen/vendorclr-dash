@@ -12,6 +12,10 @@ export const routes = {
   resetPassword: "/reset-password",
   /** Read-only sample console for accounts that have not been activated yet. */
   demo: "/demo",
+  /** Plan selection + Stripe self-checkout for a signed-in account with no workspace. */
+  checkout: "/checkout",
+  /** Post-checkout onboarding wizard, shown until service_status reaches 'live'. */
+  onboarding: "/onboarding",
   /** Public link a teammate receives by email. Not in customerNav - nothing in-app links to it. */
   acceptInvite: "/accept-invite/$token",
   dashboard: "/dashboard",
@@ -19,6 +23,8 @@ export const routes = {
   vendorDetail: "/dashboard/vendors/$vendorId",
   /** Bulk CSV onboarding. Reached from the Vendors page, not the sidebar. */
   vendorImport: "/dashboard/vendors/import",
+  /** COI-driven vendor intake. Reached from the Vendors page and onboarding, not the sidebar. */
+  vendorCoiImport: "/dashboard/vendors/coi-import",
   tasks: "/dashboard/tasks",
   reports: "/dashboard/reports",
   projects: "/dashboard/projects",
@@ -28,6 +34,7 @@ export const routes = {
   team: "/dashboard/team",
   adminOverview: "/dashboard/admin",
   adminCompanies: "/dashboard/admin/companies",
+  adminOnboarding: "/dashboard/admin/onboarding",
   adminCompliance: "/dashboard/admin/compliance",
   adminLeads: "/dashboard/admin/leads",
   adminAccess: "/dashboard/admin/access",
@@ -59,6 +66,11 @@ export const customerNav = [
 export const adminNav = [
   { label: "Review queue", to: routes.adminOverview, description: "Priority document decisions" },
   { label: "Companies", to: routes.adminCompanies, description: "Customer accounts" },
+  {
+    label: "Onboarding review",
+    to: routes.adminOnboarding,
+    description: "Validate new companies and launch their workspace",
+  },
   {
     label: "Compliance queue",
     to: routes.adminCompliance,

@@ -10,8 +10,10 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as CheckoutRouteImport } from './routes/checkout'
 import { Route as DemoRouteImport } from './routes/demo'
 import { Route as LoginRouteImport } from './routes/login'
+import { Route as OnboardingRouteImport } from './routes/onboarding'
 import { Route as PrivacyRouteImport } from './routes/privacy'
 import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as SignupRouteImport } from './routes/signup'
@@ -32,11 +34,13 @@ import { Route as DashboardAdminAccessRouteImport } from './routes/dashboard.adm
 import { Route as DashboardAdminActivationRouteImport } from './routes/dashboard.admin.activation'
 import { Route as DashboardAdminCompaniesRouteImport } from './routes/dashboard.admin.companies'
 import { Route as DashboardAdminLeadsRouteImport } from './routes/dashboard.admin.leads'
+import { Route as DashboardAdminOnboardingRouteImport } from './routes/dashboard.admin.onboarding'
 import { Route as DashboardAdminOperationsRouteImport } from './routes/dashboard.admin.operations'
 import { Route as DashboardProjectsIndexRouteImport } from './routes/dashboard.projects.index'
 import { Route as DashboardProjectsProjectIdRouteImport } from './routes/dashboard.projects.$projectId'
 import { Route as DashboardVendorsIndexRouteImport } from './routes/dashboard.vendors.index'
 import { Route as DashboardVendorsVendorIdRouteImport } from './routes/dashboard.vendors.$vendorId'
+import { Route as DashboardVendorsCoiImportRouteImport } from './routes/dashboard.vendors.coi-import'
 import { Route as DashboardVendorsImportRouteImport } from './routes/dashboard.vendors.import'
 import { Route as DashboardAdminComplianceIndexRouteImport } from './routes/dashboard.admin.compliance.index'
 import { Route as DashboardAdminComplianceQueueItemIdRouteImport } from './routes/dashboard.admin.compliance.$queueItemId'
@@ -44,6 +48,11 @@ import { Route as DashboardAdminComplianceQueueItemIdRouteImport } from './route
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CheckoutRoute = CheckoutRouteImport.update({
+  id: '/checkout',
+  path: '/checkout',
   getParentRoute: () => rootRouteImport,
 } as any)
 const DemoRoute = DemoRouteImport.update({
@@ -54,6 +63,11 @@ const DemoRoute = DemoRouteImport.update({
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
   path: '/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const OnboardingRoute = OnboardingRouteImport.update({
+  id: '/onboarding',
+  path: '/onboarding',
   getParentRoute: () => rootRouteImport,
 } as any)
 const PrivacyRoute = PrivacyRouteImport.update({
@@ -158,6 +172,12 @@ const DashboardAdminLeadsRoute = DashboardAdminLeadsRouteImport.update({
   path: '/dashboard/admin/leads',
   getParentRoute: () => rootRouteImport,
 } as any)
+const DashboardAdminOnboardingRoute =
+  DashboardAdminOnboardingRouteImport.update({
+    id: '/dashboard/admin/onboarding',
+    path: '/dashboard/admin/onboarding',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const DashboardAdminOperationsRoute =
   DashboardAdminOperationsRouteImport.update({
     id: '/dashboard/admin/operations',
@@ -186,6 +206,12 @@ const DashboardVendorsVendorIdRoute =
     path: '/dashboard/vendors/$vendorId',
     getParentRoute: () => rootRouteImport,
   } as any)
+const DashboardVendorsCoiImportRoute =
+  DashboardVendorsCoiImportRouteImport.update({
+    id: '/dashboard/vendors/coi-import',
+    path: '/dashboard/vendors/coi-import',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const DashboardVendorsImportRoute = DashboardVendorsImportRouteImport.update({
   id: '/dashboard/vendors/import',
   path: '/dashboard/vendors/import',
@@ -206,8 +232,10 @@ const DashboardAdminComplianceQueueItemIdRoute =
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/checkout': typeof CheckoutRoute
   '/demo': typeof DemoRoute
   '/login': typeof LoginRoute
+  '/onboarding': typeof OnboardingRoute
   '/privacy': typeof PrivacyRoute
   '/reset-password': typeof ResetPasswordRoute
   '/signup': typeof SignupRoute
@@ -227,9 +255,11 @@ export interface FileRoutesByFullPath {
   '/dashboard/admin/activation': typeof DashboardAdminActivationRoute
   '/dashboard/admin/companies': typeof DashboardAdminCompaniesRoute
   '/dashboard/admin/leads': typeof DashboardAdminLeadsRoute
+  '/dashboard/admin/onboarding': typeof DashboardAdminOnboardingRoute
   '/dashboard/admin/operations': typeof DashboardAdminOperationsRoute
   '/dashboard/projects/$projectId': typeof DashboardProjectsProjectIdRoute
   '/dashboard/vendors/$vendorId': typeof DashboardVendorsVendorIdRoute
+  '/dashboard/vendors/coi-import': typeof DashboardVendorsCoiImportRoute
   '/dashboard/vendors/import': typeof DashboardVendorsImportRoute
   '/dashboard/admin/': typeof DashboardAdminIndexRoute
   '/dashboard/projects/': typeof DashboardProjectsIndexRoute
@@ -239,8 +269,10 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/checkout': typeof CheckoutRoute
   '/demo': typeof DemoRoute
   '/login': typeof LoginRoute
+  '/onboarding': typeof OnboardingRoute
   '/privacy': typeof PrivacyRoute
   '/reset-password': typeof ResetPasswordRoute
   '/signup': typeof SignupRoute
@@ -260,9 +292,11 @@ export interface FileRoutesByTo {
   '/dashboard/admin/activation': typeof DashboardAdminActivationRoute
   '/dashboard/admin/companies': typeof DashboardAdminCompaniesRoute
   '/dashboard/admin/leads': typeof DashboardAdminLeadsRoute
+  '/dashboard/admin/onboarding': typeof DashboardAdminOnboardingRoute
   '/dashboard/admin/operations': typeof DashboardAdminOperationsRoute
   '/dashboard/projects/$projectId': typeof DashboardProjectsProjectIdRoute
   '/dashboard/vendors/$vendorId': typeof DashboardVendorsVendorIdRoute
+  '/dashboard/vendors/coi-import': typeof DashboardVendorsCoiImportRoute
   '/dashboard/vendors/import': typeof DashboardVendorsImportRoute
   '/dashboard/admin': typeof DashboardAdminIndexRoute
   '/dashboard/projects': typeof DashboardProjectsIndexRoute
@@ -273,8 +307,10 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/checkout': typeof CheckoutRoute
   '/demo': typeof DemoRoute
   '/login': typeof LoginRoute
+  '/onboarding': typeof OnboardingRoute
   '/privacy': typeof PrivacyRoute
   '/reset-password': typeof ResetPasswordRoute
   '/signup': typeof SignupRoute
@@ -294,9 +330,11 @@ export interface FileRoutesById {
   '/dashboard/admin/activation': typeof DashboardAdminActivationRoute
   '/dashboard/admin/companies': typeof DashboardAdminCompaniesRoute
   '/dashboard/admin/leads': typeof DashboardAdminLeadsRoute
+  '/dashboard/admin/onboarding': typeof DashboardAdminOnboardingRoute
   '/dashboard/admin/operations': typeof DashboardAdminOperationsRoute
   '/dashboard/projects/$projectId': typeof DashboardProjectsProjectIdRoute
   '/dashboard/vendors/$vendorId': typeof DashboardVendorsVendorIdRoute
+  '/dashboard/vendors/coi-import': typeof DashboardVendorsCoiImportRoute
   '/dashboard/vendors/import': typeof DashboardVendorsImportRoute
   '/dashboard/admin/': typeof DashboardAdminIndexRoute
   '/dashboard/projects/': typeof DashboardProjectsIndexRoute
@@ -308,8 +346,10 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/checkout'
     | '/demo'
     | '/login'
+    | '/onboarding'
     | '/privacy'
     | '/reset-password'
     | '/signup'
@@ -329,9 +369,11 @@ export interface FileRouteTypes {
     | '/dashboard/admin/activation'
     | '/dashboard/admin/companies'
     | '/dashboard/admin/leads'
+    | '/dashboard/admin/onboarding'
     | '/dashboard/admin/operations'
     | '/dashboard/projects/$projectId'
     | '/dashboard/vendors/$vendorId'
+    | '/dashboard/vendors/coi-import'
     | '/dashboard/vendors/import'
     | '/dashboard/admin/'
     | '/dashboard/projects/'
@@ -341,8 +383,10 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/checkout'
     | '/demo'
     | '/login'
+    | '/onboarding'
     | '/privacy'
     | '/reset-password'
     | '/signup'
@@ -362,9 +406,11 @@ export interface FileRouteTypes {
     | '/dashboard/admin/activation'
     | '/dashboard/admin/companies'
     | '/dashboard/admin/leads'
+    | '/dashboard/admin/onboarding'
     | '/dashboard/admin/operations'
     | '/dashboard/projects/$projectId'
     | '/dashboard/vendors/$vendorId'
+    | '/dashboard/vendors/coi-import'
     | '/dashboard/vendors/import'
     | '/dashboard/admin'
     | '/dashboard/projects'
@@ -374,8 +420,10 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/'
+    | '/checkout'
     | '/demo'
     | '/login'
+    | '/onboarding'
     | '/privacy'
     | '/reset-password'
     | '/signup'
@@ -395,9 +443,11 @@ export interface FileRouteTypes {
     | '/dashboard/admin/activation'
     | '/dashboard/admin/companies'
     | '/dashboard/admin/leads'
+    | '/dashboard/admin/onboarding'
     | '/dashboard/admin/operations'
     | '/dashboard/projects/$projectId'
     | '/dashboard/vendors/$vendorId'
+    | '/dashboard/vendors/coi-import'
     | '/dashboard/vendors/import'
     | '/dashboard/admin/'
     | '/dashboard/projects/'
@@ -408,8 +458,10 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  CheckoutRoute: typeof CheckoutRoute
   DemoRoute: typeof DemoRoute
   LoginRoute: typeof LoginRoute
+  OnboardingRoute: typeof OnboardingRoute
   PrivacyRoute: typeof PrivacyRoute
   ResetPasswordRoute: typeof ResetPasswordRoute
   SignupRoute: typeof SignupRoute
@@ -429,9 +481,11 @@ export interface RootRouteChildren {
   DashboardAdminActivationRoute: typeof DashboardAdminActivationRoute
   DashboardAdminCompaniesRoute: typeof DashboardAdminCompaniesRoute
   DashboardAdminLeadsRoute: typeof DashboardAdminLeadsRoute
+  DashboardAdminOnboardingRoute: typeof DashboardAdminOnboardingRoute
   DashboardAdminOperationsRoute: typeof DashboardAdminOperationsRoute
   DashboardProjectsProjectIdRoute: typeof DashboardProjectsProjectIdRoute
   DashboardVendorsVendorIdRoute: typeof DashboardVendorsVendorIdRoute
+  DashboardVendorsCoiImportRoute: typeof DashboardVendorsCoiImportRoute
   DashboardVendorsImportRoute: typeof DashboardVendorsImportRoute
   DashboardAdminIndexRoute: typeof DashboardAdminIndexRoute
   DashboardProjectsIndexRoute: typeof DashboardProjectsIndexRoute
@@ -449,6 +503,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/checkout': {
+      id: '/checkout'
+      path: '/checkout'
+      fullPath: '/checkout'
+      preLoaderRoute: typeof CheckoutRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/demo': {
       id: '/demo'
       path: '/demo'
@@ -461,6 +522,13 @@ declare module '@tanstack/react-router' {
       path: '/login'
       fullPath: '/login'
       preLoaderRoute: typeof LoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/onboarding': {
+      id: '/onboarding'
+      path: '/onboarding'
+      fullPath: '/onboarding'
+      preLoaderRoute: typeof OnboardingRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/privacy': {
@@ -603,6 +671,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DashboardAdminLeadsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/dashboard/admin/onboarding': {
+      id: '/dashboard/admin/onboarding'
+      path: '/dashboard/admin/onboarding'
+      fullPath: '/dashboard/admin/onboarding'
+      preLoaderRoute: typeof DashboardAdminOnboardingRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/dashboard/admin/operations': {
       id: '/dashboard/admin/operations'
       path: '/dashboard/admin/operations'
@@ -638,6 +713,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DashboardVendorsVendorIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/dashboard/vendors/coi-import': {
+      id: '/dashboard/vendors/coi-import'
+      path: '/dashboard/vendors/coi-import'
+      fullPath: '/dashboard/vendors/coi-import'
+      preLoaderRoute: typeof DashboardVendorsCoiImportRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/dashboard/vendors/import': {
       id: '/dashboard/vendors/import'
       path: '/dashboard/vendors/import'
@@ -664,8 +746,10 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  CheckoutRoute: CheckoutRoute,
   DemoRoute: DemoRoute,
   LoginRoute: LoginRoute,
+  OnboardingRoute: OnboardingRoute,
   PrivacyRoute: PrivacyRoute,
   ResetPasswordRoute: ResetPasswordRoute,
   SignupRoute: SignupRoute,
@@ -685,9 +769,11 @@ const rootRouteChildren: RootRouteChildren = {
   DashboardAdminActivationRoute: DashboardAdminActivationRoute,
   DashboardAdminCompaniesRoute: DashboardAdminCompaniesRoute,
   DashboardAdminLeadsRoute: DashboardAdminLeadsRoute,
+  DashboardAdminOnboardingRoute: DashboardAdminOnboardingRoute,
   DashboardAdminOperationsRoute: DashboardAdminOperationsRoute,
   DashboardProjectsProjectIdRoute: DashboardProjectsProjectIdRoute,
   DashboardVendorsVendorIdRoute: DashboardVendorsVendorIdRoute,
+  DashboardVendorsCoiImportRoute: DashboardVendorsCoiImportRoute,
   DashboardVendorsImportRoute: DashboardVendorsImportRoute,
   DashboardAdminIndexRoute: DashboardAdminIndexRoute,
   DashboardProjectsIndexRoute: DashboardProjectsIndexRoute,
