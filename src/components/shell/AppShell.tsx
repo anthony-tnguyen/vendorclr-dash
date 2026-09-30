@@ -303,6 +303,15 @@ export function AppShell({ title, subtitle, actions, children }: AppShellProps) 
               </div>
               <div className="flex flex-wrap items-center gap-2">
                 {actions}
+                {mode === "live" && status === "authenticated" ? (
+                  <button
+                    type="button"
+                    onClick={() => void signOut()}
+                    className="focusable rounded-sm border border-input px-3 py-1.5 text-xs font-semibold text-foreground"
+                  >
+                    Sign out
+                  </button>
+                ) : null}
                 <div className="rounded-sm border border-border px-2 py-1 text-right">
                   <p className="text-xs font-semibold text-foreground">{personName}</p>
                   <p className="text-[11px] text-muted-foreground">{companyName}</p>
