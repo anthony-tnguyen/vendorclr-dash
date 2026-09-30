@@ -188,6 +188,19 @@ function toActivationCode(row: ActivationCodeRow): ActivationCode {
   };
 }
 
+/**
+ * The caller's access token as an Authorization header, or null when there is
+ * no session. Passed explicitly to functions.invoke() because the @supabase/ssr
+ * browser client does not reliably forward the logged-in user's JWT on its own.
+ */
+async function bearerHeader(supabase: VendorClrClient): Promise<{ Authorization: string } | null> {
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+  const token = session?.access_token;
+  return token ? { Authorization: `Bearer ${token}` } : null;
+}
+
 /** The company_onboarding columns embedded into the staff review query. */
 interface OnboardingEmbed {
   current_step: number;
@@ -565,11 +578,15 @@ export function createSupabaseRepository(
 
     async createCheckoutSession(plan): Promise<{ url: string }> {
       const supabase = clientFactory();
-      // functions.invoke() attaches the caller's session JWT, which the
-      // create-checkout Edge Function (verify_jwt=true) validates and reads the
-      // user from. The Stripe secret never leaves the Edge Function.
+      // Pass the caller's access token to the Edge Function explicitly. With the
+      // @supabase/ssr browser client, functions.invoke() does not reliably attach
+      // the logged-in user's JWT (it can fall back to the anon key), which makes
+      // the create-checkout function's getUser() see no user and return 401. The
+      // Stripe secret never leaves the Edge Function.
+      const authHeader = await bearerHeader(supabase);
       const { data, error } = await supabase.functions.invoke("create-checkout", {
         body: { plan },
+        ...(authHeader ? { headers: authHeader } : {}),
       });
       if (error) throw new Error(error.message || "Could not start checkout.");
       const url = (data as { url?: string } | null)?.url;
@@ -579,7 +596,11 @@ export function createSupabaseRepository(
 
     async createBillingPortalSession(): Promise<{ url: string }> {
       const supabase = clientFactory();
-      const { data, error } = await supabase.functions.invoke("billing-portal", { body: {} });
+      const authHeader = await bearerHeader(supabase);
+      const { data, error } = await supabase.functions.invoke("billing-portal", {
+        body: {},
+        ...(authHeader ? { headers: authHeader } : {}),
+      });
       if (error) throw new Error(error.message || "Could not open the billing portal.");
       const url = (data as { url?: string } | null)?.url;
       if (!url) throw new Error("Billing portal did not return a URL.");
