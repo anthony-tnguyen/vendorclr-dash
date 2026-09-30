@@ -87,7 +87,7 @@ Deno.serve(async (req: Request) => {
   const {
     data: { user },
     error: userError,
-  } = await authed.auth.getUser();
+  } = await authed.auth.getUser(authHeader.replace(/^Bearer\s+/i, "").trim());
   if (userError || !user) {
     return json({ error: "Not authenticated." }, 401);
   }
