@@ -11,16 +11,20 @@ import { logOperational, newRequestId } from "./operationalLog.ts";
 
 /**
  * Starts a Stripe Checkout Session for a self-serve subscription and returns
- * its hosted URL. Called by the app through supabase.functions.invoke, which
- * attaches the caller's session JWT; deployed with verify_jwt=true so the
- * platform rejects anonymous calls before this runs, and the caller's identity
- * is read from that JWT here.
+ * its hosted URL. Called by the app, which sends the caller's access token as a
+ * Bearer Authorization header; deployed with verify_jwt=true so the platform
+ * rejects anonymous calls before this runs, and the caller's identity is read
+ * from that token here.
  *
  * Account-first checkout: the buyer already has a Supabase account when this
  * runs, so client_reference_id / subscription metadata carry their user id and
  * the webhook (stripe-webhook) can attach the new company to exactly that
  * account. One workspace per account: a caller who already belongs to a company
  * is refused (409) rather than billed for a second one.
+ *
+ * Idempotent: a stable idempotency key (user + plan + hour) is passed to
+ * Stripe, so a double submit or quick retry returns the same Checkout Session
+ * instead of creating a second session / subscription.
  *
  * The Stripe secret lives only here (STRIPE_SECRET_KEY, a restricted key is
  * recommended). Like the other secret-gated endpoints in this project, an unset
@@ -78,8 +82,9 @@ Deno.serve(async (req: Request) => {
   const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
   const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
-  // Identify the caller from their JWT.
+  // Identify the caller from their access token (sent as Bearer by the app).
   const authHeader = req.headers.get("Authorization") ?? "";
+  const token = authHeader.replace(/^Bearer\s+/i, "").trim();
   const authed = createClient(supabaseUrl, anonKey, {
     global: { headers: { Authorization: authHeader } },
     auth: { persistSession: false, autoRefreshToken: false },
@@ -87,7 +92,7 @@ Deno.serve(async (req: Request) => {
   const {
     data: { user },
     error: userError,
-  } = await authed.auth.getUser(authHeader.replace(/^Bearer\s+/i, "").trim());
+  } = await authed.auth.getUser(token);
   if (userError || !user) {
     return json({ error: "Not authenticated." }, 401);
   }
@@ -148,29 +153,52 @@ Deno.serve(async (req: Request) => {
     return json({ error: "This plan is not available right now." }, 500);
   }
 
-  const session = await stripe.checkout.sessions.create({
-    mode: "subscription",
-    line_items: [{ price: price.id, quantity: 1 }],
-    client_reference_id: user.id,
-    customer_email: user.email,
-    // Discounts (access codes, founding-customer offers, etc.) at checkout
-    // without ever showing crossed-out public pricing.
-    allow_promotion_codes: true,
-    billing_address_collection: "auto",
-    // Capture the company name at pay time so the workspace has a real name the
-    // moment it is created; onboarding Step 1 can refine it.
-    custom_fields: [
+  // Stable idempotency key so a double-click / quick retry returns the same
+  // Checkout Session instead of creating a second session or subscription. The
+  // hour bucket lets a genuinely new attempt later start a fresh session once
+  // the previous one has expired.
+  const hourBucket = new Date().toISOString().slice(0, 13);
+  const idempotencyKey = `checkout:${user.id}:${plan}:${hourBucket}`;
+
+  let session: Stripe.Checkout.Session;
+  try {
+    session = await stripe.checkout.sessions.create(
       {
-        key: "company_name",
-        label: { type: "custom", custom: "Company name" },
-        type: "text",
+        mode: "subscription",
+        line_items: [{ price: price.id, quantity: 1 }],
+        client_reference_id: user.id,
+        customer_email: user.email,
+        // Discounts (access codes, founding-customer offers, etc.) at checkout
+        // without ever showing crossed-out public pricing.
+        allow_promotion_codes: true,
+        billing_address_collection: "auto",
+        // Capture the company name at pay time so the workspace has a real name
+        // the moment it is created; onboarding Step 1 can refine it.
+        custom_fields: [
+          {
+            key: "company_name",
+            label: { type: "custom", custom: "Company name" },
+            type: "text",
+          },
+        ],
+        subscription_data: { metadata: { user_id: user.id, plan } },
+        metadata: { user_id: user.id, plan },
+        success_url: `${appUrl}/onboarding?checkout=success&session_id={CHECKOUT_SESSION_ID}`,
+        cancel_url: `${appUrl}/checkout?canceled=1`,
       },
-    ],
-    subscription_data: { metadata: { user_id: user.id, plan } },
-    metadata: { user_id: user.id, plan },
-    success_url: `${appUrl}/onboarding?checkout=success&session_id={CHECKOUT_SESSION_ID}`,
-    cancel_url: `${appUrl}/checkout?canceled=1`,
-  });
+      { idempotencyKey },
+    );
+  } catch (_error) {
+    logOperational({
+      level: "error",
+      event: "checkout_session_create_failed",
+      requestId,
+      actorId: user.id,
+      route,
+      outcome: "failure",
+    });
+    return json({ error: "Could not start checkout. Please try again." }, 502);
+  }
 
   logOperational({
     level: "info",

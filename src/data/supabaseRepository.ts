@@ -36,6 +36,7 @@ import type {
   VendorRow,
 } from "./dbTypeAliases";
 import { getSupabaseClient, type VendorClrClient } from "@/lib/supabase/client";
+import { readSupabaseEnv } from "@/lib/supabase/env";
 
 /**
  * Supabase-backed DashboardRepository.
@@ -189,16 +190,54 @@ function toActivationCode(row: ActivationCodeRow): ActivationCode {
 }
 
 /**
- * The caller's access token as an Authorization header, or null when there is
- * no session. Passed explicitly to functions.invoke() because the @supabase/ssr
- * browser client does not reliably forward the logged-in user's JWT on its own.
+ * Calls a Supabase Edge Function with the caller's access token attached
+ * explicitly.
+ *
+ * We do NOT use supabase.functions.invoke(): with the @supabase/ssr browser
+ * client and the new publishable API key, invoke() does not reliably forward the
+ * logged-in user's JWT (it was observed sending only the `apikey` header and no
+ * `Authorization`, so the function's getUser() saw no user and returned 401).
+ * A direct fetch removes that ambiguity — we read the current session, require
+ * it, and set Authorization ourselves. No session throws a clear "sign in"
+ * error rather than surfacing an opaque 401.
  */
-async function bearerHeader(supabase: VendorClrClient): Promise<{ Authorization: string } | null> {
+async function invokeEdgeFunction<T>(
+  supabase: VendorClrClient,
+  name: string,
+  body: Record<string, unknown>,
+): Promise<T> {
+  const env = readSupabaseEnv();
+  if (!env) throw new Error("Supabase is not configured.");
   const {
     data: { session },
   } = await supabase.auth.getSession();
   const token = session?.access_token;
-  return token ? { Authorization: `Bearer ${token}` } : null;
+  if (!token) {
+    throw new Error("Your session has expired. Please sign in again and retry.");
+  }
+
+  const res = await fetch(`${env.url}/functions/v1/${name}`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      apikey: env.anonKey,
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(body),
+  });
+
+  const raw = await res.text();
+  let parsed: unknown = null;
+  try {
+    parsed = raw ? JSON.parse(raw) : null;
+  } catch {
+    parsed = null;
+  }
+  if (!res.ok) {
+    const message = (parsed as { error?: string } | null)?.error;
+    throw new Error(message || `Request failed (${res.status}).`);
+  }
+  return parsed as T;
 }
 
 /** The company_onboarding columns embedded into the staff review query. */
@@ -578,33 +617,20 @@ export function createSupabaseRepository(
 
     async createCheckoutSession(plan): Promise<{ url: string }> {
       const supabase = clientFactory();
-      // Pass the caller's access token to the Edge Function explicitly. With the
-      // @supabase/ssr browser client, functions.invoke() does not reliably attach
-      // the logged-in user's JWT (it can fall back to the anon key), which makes
-      // the create-checkout function's getUser() see no user and return 401. The
-      // Stripe secret never leaves the Edge Function.
-      const authHeader = await bearerHeader(supabase);
-      const { data, error } = await supabase.functions.invoke("create-checkout", {
-        body: { plan },
-        ...(authHeader ? { headers: authHeader } : {}),
+      // The Stripe secret never leaves the create-checkout Edge Function; this
+      // only forwards the caller's access token so the function can identify them.
+      const data = await invokeEdgeFunction<{ url?: string }>(supabase, "create-checkout", {
+        plan,
       });
-      if (error) throw new Error(error.message || "Could not start checkout.");
-      const url = (data as { url?: string } | null)?.url;
-      if (!url) throw new Error("Checkout did not return a URL.");
-      return { url };
+      if (!data?.url) throw new Error("Checkout did not return a URL.");
+      return { url: data.url };
     },
 
     async createBillingPortalSession(): Promise<{ url: string }> {
       const supabase = clientFactory();
-      const authHeader = await bearerHeader(supabase);
-      const { data, error } = await supabase.functions.invoke("billing-portal", {
-        body: {},
-        ...(authHeader ? { headers: authHeader } : {}),
-      });
-      if (error) throw new Error(error.message || "Could not open the billing portal.");
-      const url = (data as { url?: string } | null)?.url;
-      if (!url) throw new Error("Billing portal did not return a URL.");
-      return { url };
+      const data = await invokeEdgeFunction<{ url?: string }>(supabase, "billing-portal", {});
+      if (!data?.url) throw new Error("Billing portal did not return a URL.");
+      return { url: data.url };
     },
 
     async getOnboarding(): Promise<OnboardingState | null> {
