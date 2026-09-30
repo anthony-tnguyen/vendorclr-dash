@@ -38,7 +38,13 @@ Deno.serve(async (req: Request) => {
   const stripeSecret = Deno.env.get("STRIPE_SECRET_KEY")?.trim();
   const appUrl = Deno.env.get("APP_URL")?.trim().replace(/\/+$/, "");
   if (!stripeSecret || !appUrl) {
-    logOperational({ level: "warn", event: "portal_not_configured", requestId, route, outcome: "failure" });
+    logOperational({
+      level: "warn",
+      event: "portal_not_configured",
+      requestId,
+      route,
+      outcome: "failure",
+    });
     return json({ error: "Billing portal is not configured." }, 503);
   }
 
@@ -90,6 +96,14 @@ Deno.serve(async (req: Request) => {
     return_url: `${appUrl}/dashboard/settings`,
   });
 
-  logOperational({ level: "info", event: "billing_portal_opened", requestId, companyId: membership.company_id, actorId: user.id, route, outcome: "success" });
+  logOperational({
+    level: "info",
+    event: "billing_portal_opened",
+    requestId,
+    companyId: membership.company_id,
+    actorId: user.id,
+    route,
+    outcome: "success",
+  });
   return json({ url: session.url });
 });

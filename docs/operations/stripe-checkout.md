@@ -7,13 +7,13 @@ sales-assisted (activation codes), so it has no Stripe price and no checkout.
 
 ## Moving parts
 
-| Piece | Where | Notes |
-| --- | --- | --- |
-| Products & prices | Stripe (sandbox + live) | One product per plan; monthly price per plan, addressed by **lookup key** `vendorclr_<plan>_monthly`. |
-| `create-checkout` | `supabase/functions/create-checkout` | `verify_jwt=true`. Creates a subscription Checkout Session for the signed-in caller. |
-| `stripe-webhook` | `supabase/functions/stripe-webhook` | `verify_jwt=false`, Stripe-signature verified. Creates the company + owner + onboarding row; keeps subscription status in sync. |
-| `billing-portal` | `supabase/functions/billing-portal` | `verify_jwt=true`. Returns a Stripe billing-portal URL for the caller's company. |
-| Schema | `20260929000100_self_checkout_billing_and_onboarding.sql` | `plan_limits`, billing columns + `service_status` on `companies`, `stripe_events`, `company_onboarding`. |
+| Piece             | Where                                                     | Notes                                                                                                                           |
+| ----------------- | --------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| Products & prices | Stripe (sandbox + live)                                   | One product per plan; monthly price per plan, addressed by **lookup key** `vendorclr_<plan>_monthly`.                           |
+| `create-checkout` | `supabase/functions/create-checkout`                      | `verify_jwt=true`. Creates a subscription Checkout Session for the signed-in caller.                                            |
+| `stripe-webhook`  | `supabase/functions/stripe-webhook`                       | `verify_jwt=false`, Stripe-signature verified. Creates the company + owner + onboarding row; keeps subscription status in sync. |
+| `billing-portal`  | `supabase/functions/billing-portal`                       | `verify_jwt=true`. Returns a Stripe billing-portal URL for the caller's company.                                                |
+| Schema            | `20260929000100_self_checkout_billing_and_onboarding.sql` | `plan_limits`, billing columns + `service_status` on `companies`, `stripe_events`, `company_onboarding`.                        |
 
 The plan catalogue in the app is `src/domain/billing/plans.ts` — plan ids,
 prices, lookup keys, limits. Keep it in sync with the Stripe prices and the
@@ -21,11 +21,11 @@ prices, lookup keys, limits. Keep it in sync with the Stripe prices and the
 
 ## Stripe prices (sandbox, created 2026-09-29)
 
-| Plan | Lookup key | Price | Sandbox price id |
-| --- | --- | --- | --- |
-| Core | `vendorclr_core_monthly` | $149/mo | `price_1UKxdjBJKzz24nkojAHlLDK9` |
+| Plan       | Lookup key                     | Price   | Sandbox price id                 |
+| ---------- | ------------------------------ | ------- | -------------------------------- |
+| Core       | `vendorclr_core_monthly`       | $149/mo | `price_1UKxdjBJKzz24nkojAHlLDK9` |
 | Operations | `vendorclr_operations_monthly` | $349/mo | `price_1UKxdmBJKzz24nkovgZHQ16Q` |
-| Scale | `vendorclr_scale_monthly` | $449/mo | `price_1UKxdoBJKzz24nko9e1YcOg4` |
+| Scale      | `vendorclr_scale_monthly`      | $449/mo | `price_1UKxdoBJKzz24nko9e1YcOg4` |
 
 Live prices are mirrored under the same lookup keys before go-live, so no code
 or price id changes between environments.

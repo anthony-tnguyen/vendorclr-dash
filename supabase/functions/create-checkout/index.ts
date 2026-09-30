@@ -54,11 +54,23 @@ Deno.serve(async (req: Request) => {
   const stripeSecret = Deno.env.get("STRIPE_SECRET_KEY")?.trim();
   const appUrl = Deno.env.get("APP_URL")?.trim().replace(/\/+$/, "");
   if (!stripeSecret) {
-    logOperational({ level: "warn", event: "checkout_not_configured", requestId, route, outcome: "failure" });
+    logOperational({
+      level: "warn",
+      event: "checkout_not_configured",
+      requestId,
+      route,
+      outcome: "failure",
+    });
     return json({ error: "Checkout is not configured." }, 503);
   }
   if (!appUrl) {
-    logOperational({ level: "warn", event: "app_url_not_configured", requestId, route, outcome: "failure" });
+    logOperational({
+      level: "warn",
+      event: "app_url_not_configured",
+      requestId,
+      route,
+      outcome: "failure",
+    });
     return json({ error: "Checkout is not configured." }, 503);
   }
 
@@ -102,7 +114,13 @@ Deno.serve(async (req: Request) => {
     .eq("user_id", user.id)
     .maybeSingle();
   if (membershipError) {
-    logOperational({ level: "error", event: "membership_lookup_failed", requestId, route, outcome: "failure" });
+    logOperational({
+      level: "error",
+      event: "membership_lookup_failed",
+      requestId,
+      route,
+      outcome: "failure",
+    });
     return json({ error: "Could not start checkout." }, 500);
   }
   if (existingMembership) {
@@ -120,7 +138,13 @@ Deno.serve(async (req: Request) => {
   const prices = await stripe.prices.list({ lookup_keys: [lookupKey], active: true, limit: 1 });
   const price = prices.data[0];
   if (!price) {
-    logOperational({ level: "error", event: "price_not_found", requestId, route, outcome: "failure" });
+    logOperational({
+      level: "error",
+      event: "price_not_found",
+      requestId,
+      route,
+      outcome: "failure",
+    });
     return json({ error: "This plan is not available right now." }, 500);
   }
 
@@ -148,6 +172,13 @@ Deno.serve(async (req: Request) => {
     cancel_url: `${appUrl}/checkout?canceled=1`,
   });
 
-  logOperational({ level: "info", event: "checkout_session_created", requestId, actorId: user.id, route, outcome: "success" });
+  logOperational({
+    level: "info",
+    event: "checkout_session_created",
+    requestId,
+    actorId: user.id,
+    route,
+    outcome: "success",
+  });
   return json({ url: session.url });
 });
