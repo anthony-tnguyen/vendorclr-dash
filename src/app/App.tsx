@@ -270,7 +270,11 @@ function useLiveSessionValue(): Session {
   );
 
   const signOut = useCallback(async () => {
-    await getSupabaseClient().auth.signOut();
+    // Supabase returns the failure in `error` rather than throwing. Surface it so
+    // callers (useSignOut) can show it instead of silently leaving the user
+    // "signed in" on a page that no longer has a valid session.
+    const { error } = await getSupabaseClient().auth.signOut();
+    if (error) throw new Error(error.message || "Could not sign out. Try again.");
   }, []);
 
   return useMemo(

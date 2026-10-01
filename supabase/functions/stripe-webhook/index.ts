@@ -158,7 +158,9 @@ async function handleCheckoutCompleted(
   const { error: onboardingError } = await supabase.from("company_onboarding").insert({
     company_id: company.id,
     current_step: 1,
-    company_info: { name: companyName },
+    // The wizard reads and writes `companyName`; seed that key (not `name`) so the
+    // checkout-supplied company name prefills the first step instead of being lost.
+    company_info: { companyName },
   });
   if (onboardingError) throw onboardingError;
 

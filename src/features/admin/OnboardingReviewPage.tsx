@@ -108,6 +108,12 @@ function ReviewCard({
   onLaunch: (companyId: string) => void;
   launching: boolean;
 }) {
+  // A workspace may only be launched once the customer has finished the wizard:
+  // service_status 'in_review' with a submitted_at. The RPC enforces the same
+  // precondition server-side; this disables the control so staff never fire a
+  // request the database will reject. A company still 'in progress' is not
+  // launchable from here.
+  const launchReady = review.serviceStatus === "in_review" && Boolean(review.submittedAt);
   return (
     <article className="space-y-4 rounded-md border border-border bg-card p-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -121,14 +127,24 @@ function ReviewCard({
             {review.currentStep} · submitted {formatDate(review.submittedAt)}
           </p>
         </div>
-        <button
-          type="button"
-          onClick={() => onLaunch(review.companyId)}
-          disabled={launching}
-          className="focusable rounded-sm bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-60"
-        >
-          {launching ? "Launching…" : "Launch — set live"}
-        </button>
+        <div className="flex flex-col items-end gap-1">
+          <button
+            type="button"
+            onClick={() => onLaunch(review.companyId)}
+            disabled={launching || !launchReady}
+            title={
+              launchReady
+                ? undefined
+                : "Only companies that have submitted the wizard (awaiting review) can be launched."
+            }
+            className="focusable rounded-sm bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-60"
+          >
+            {launching ? "Launching…" : "Launch — set live"}
+          </button>
+          {!launchReady ? (
+            <p className="text-[11px] text-muted-foreground">Waiting on the customer to submit</p>
+          ) : null}
+        </div>
       </div>
 
       <div className="grid gap-4 border-t border-border pt-4 sm:grid-cols-2">

@@ -2,6 +2,7 @@ import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { useSession } from "@/app/App";
+import { useSignOut } from "@/app/useSignOut";
 import { adminNav, customerNav } from "@/app/router";
 import { LoadingState } from "@/components/states/AsyncState";
 import { LegalLinks } from "@/features/legal/LegalPages";
@@ -97,7 +98,8 @@ function SessionPanel() {
 }
 
 function SignedInPanel() {
-  const { personName, companyName, signOut } = useSession();
+  const { personName, companyName } = useSession();
+  const { signOut, error: signOutError } = useSignOut();
 
   return (
     <div className="rounded-sm border border-sidebar-border p-3">
@@ -105,11 +107,16 @@ function SignedInPanel() {
       <p className="truncate text-[11px] text-sidebar-foreground/70">{companyName}</p>
       <button
         type="button"
-        onClick={() => void signOut()}
+        onClick={signOut}
         className="focusable mt-2 w-full rounded-sm border border-sidebar-border px-2 py-1.5 text-xs font-semibold text-sidebar-foreground"
       >
         Sign out
       </button>
+      {signOutError ? (
+        <p role="alert" className="mt-2 text-[11px] font-semibold text-destructive">
+          {signOutError}
+        </p>
+      ) : null}
     </div>
   );
 }
@@ -162,17 +169,9 @@ export interface AppShellProps {
 }
 
 export function AppShell({ title, subtitle, actions, children }: AppShellProps) {
-  const {
-    personName,
-    companyName,
-    role,
-    mode,
-    status,
-    activation,
-    serviceStatus,
-    isStaff,
-    signOut,
-  } = useSession();
+  const { personName, companyName, role, mode, status, activation, serviceStatus, isStaff } =
+    useSession();
+  const { signOut } = useSignOut();
   const navigate = useNavigate();
   // The router's own location, not window.location - the latter lags behind a
   // client-side navigation and would send the wrong page back to sign-in.
@@ -315,15 +314,9 @@ export function AppShell({ title, subtitle, actions, children }: AppShellProps) 
                 {mode === "demo" || (mode === "live" && status === "authenticated") ? (
                   <button
                     type="button"
-                    onClick={() => {
-                      // Demo mode has no session to end; "signing out" of the
-                      // sandbox returns the visitor to the sign-in screen.
-                      if (mode === "demo") {
-                        void navigate({ to: "/login", replace: true });
-                        return;
-                      }
-                      void signOut();
-                    }}
+                    // useSignOut ends the session (a no-op in the demo sandbox),
+                    // clears cached queries and returns to the sign-in screen.
+                    onClick={signOut}
                     className="focusable rounded-sm border border-input px-3 py-1.5 text-xs font-semibold text-foreground"
                   >
                     Sign out

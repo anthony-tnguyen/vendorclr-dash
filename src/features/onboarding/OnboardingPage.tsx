@@ -4,9 +4,16 @@ import { Link } from "@tanstack/react-router";
 
 import { useSession } from "@/app/App";
 import { routes } from "@/app/router";
+import { useSignOut } from "@/app/useSignOut";
+import { RequireAuth } from "@/components/auth/RequireAuth";
 import { ErrorState, LoadingState } from "@/components/states/AsyncState";
 import type { OnboardingPatch, OnboardingState } from "@/data/contracts";
 import { getRepository, isBackendConfigured } from "@/data/repository";
+import {
+  normalizeCompanyInfo,
+  sectionForStep,
+  type Section,
+} from "@/features/onboarding/onboardingSections";
 import { cn } from "@/lib/utils";
 
 /**
@@ -40,8 +47,6 @@ const COVERAGE_OPTIONS = [
   "Primary & Noncontributory",
 ];
 
-type Section = Record<string, unknown>;
-
 function text(section: Section, key: string): string {
   const value = section[key];
   return typeof value === "string" ? value : "";
@@ -56,7 +61,15 @@ const inputClass =
   "focusable mt-1 w-full rounded-sm border border-input bg-background px-3 py-2 text-sm text-foreground";
 const labelClass = "block text-sm font-medium text-foreground";
 
-function Header({ personName, onSignOut }: { personName: string; onSignOut: () => void }) {
+function Header({
+  personName,
+  onSignOut,
+  signOutError,
+}: {
+  personName: string;
+  onSignOut: () => void;
+  signOutError: string | null;
+}) {
   return (
     <header className="border-b border-border bg-card">
       <div className="mx-auto flex w-full max-w-3xl flex-wrap items-center justify-between gap-3 px-4 py-4 sm:px-6">
@@ -79,6 +92,16 @@ function Header({ personName, onSignOut }: { personName: string; onSignOut: () =
           </button>
         </div>
       </div>
+      {signOutError ? (
+        <div className="mx-auto w-full max-w-3xl px-4 pb-3 sm:px-6">
+          <p
+            role="alert"
+            className="rounded-sm border border-destructive/40 bg-danger-soft px-3 py-2 text-xs font-semibold text-destructive"
+          >
+            {signOutError}
+          </p>
+        </div>
+      ) : null}
     </header>
   );
 }
@@ -130,13 +153,27 @@ function WaitingScreen({ companyName }: { companyName: string }) {
 }
 
 export function OnboardingPage() {
-  const { personName, companyName, serviceStatus, signOut, refresh } = useSession();
+  // Never render the wizard - or fire its queries - while the session is
+  // anonymous. RequireAuth redirects an anonymous visitor to sign-in.
+  return (
+    <RequireAuth loadingLabel="Loading your onboarding">
+      <OnboardingWizard />
+    </RequireAuth>
+  );
+}
+
+function OnboardingWizard() {
+  const { personName, companyName, serviceStatus, status, refresh } = useSession();
+  const { signOut, error: signOutError } = useSignOut();
   const repo = useMemo(() => getRepository(), []);
   const queryClient = useQueryClient();
 
   const onboarding = useQuery({
     queryKey: ["onboarding"],
     queryFn: () => repo.getOnboarding(),
+    // Belt and braces with RequireAuth: the query must not run against an
+    // unresolved or anonymous session.
+    enabled: status === "authenticated",
   });
 
   const [step, setStep] = useState(1);
@@ -152,7 +189,7 @@ export function OnboardingPage() {
     if (seeded || onboarding.data === undefined) return;
     const loaded: OnboardingState | null = onboarding.data;
     if (loaded) {
-      setCompanyInfo(loaded.companyInfo ?? {});
+      setCompanyInfo(normalizeCompanyInfo(loaded.companyInfo));
       setProgram(loaded.program ?? {});
       setProjects(loaded.projects ?? {});
       setRequirements(loaded.requirements ?? {});
@@ -179,23 +216,13 @@ export function OnboardingPage() {
   // Submitted / under review: show the waiting state regardless of local step.
   const submitted = serviceStatus === "in_review" || Boolean(onboarding.data?.submittedAt);
 
-  function sectionForStep(target: number): OnboardingPatch {
-    switch (target) {
-      case 1:
-        return { companyInfo };
-      case 2:
-        return { program };
-      case 3:
-        return { projects };
-      case 5:
-        return { requirements };
-      default:
-        return {};
-    }
-  }
+  const currentSections = { companyInfo, program, projects, requirements };
 
   async function goNext() {
-    const patch = { ...sectionForStep(step), currentStep: Math.min(step + 1, STEP_LABELS.length) };
+    const patch = {
+      ...sectionForStep(step, currentSections),
+      currentStep: Math.min(step + 1, STEP_LABELS.length),
+    };
     if (live) await save.mutateAsync(patch);
     else await repo.saveOnboarding(patch);
     setStep((s) => Math.min(s + 1, STEP_LABELS.length));
@@ -207,7 +234,10 @@ export function OnboardingPage() {
 
   async function onSubmit() {
     // Persist the last edited section before submitting.
-    await repo.saveOnboarding({ ...sectionForStep(step), currentStep: STEP_LABELS.length });
+    await repo.saveOnboarding({
+      ...sectionForStep(step, currentSections),
+      currentStep: STEP_LABELS.length,
+    });
     await submit.mutateAsync();
   }
 
@@ -221,7 +251,7 @@ export function OnboardingPage() {
 
   return (
     <div className="min-h-screen bg-background">
-      <Header personName={personName} onSignOut={() => void signOut()} />
+      <Header personName={personName} onSignOut={signOut} signOutError={signOutError} />
       <main className="mx-auto w-full max-w-3xl space-y-5 px-4 py-6 sm:px-6">
         {onboarding.isPending ? (
           <LoadingState label="Loading your onboarding" rows={4} />
