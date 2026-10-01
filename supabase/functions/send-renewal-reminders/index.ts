@@ -60,7 +60,7 @@ interface VendorRow {
   contact_name: string;
   contact_email: string;
   company_id: string;
-  companies: { name: string } | null;
+  companies: { name: string; service_status?: string } | null;
 }
 
 interface PolicyRow {
@@ -147,7 +147,7 @@ Deno.serve(async (req: Request) => {
     await Promise.all([
       supabase
         .from("vendors")
-        .select("id, name, contact_name, contact_email, company_id, companies ( name )")
+        .select("id, name, contact_name, contact_email, company_id, companies ( name, service_status )")
         .in("id", vendorIds),
       supabase
         .from("vendor_policies")
@@ -176,6 +176,14 @@ Deno.serve(async (req: Request) => {
       const policy = policyById.get(row.policy_id);
 
       if (!vendor || !policy || !vendor.contact_email) {
+        skipped++;
+        continue;
+      }
+
+      // Managed-service gate: a workspace that is not live yet must not receive
+      // automated outbound. The DB trigger on vendor_upload_requests enforces this
+      // too; skipping here avoids a doomed insert and keeps the run quiet.
+      if (vendor.companies?.service_status && vendor.companies.service_status !== "live") {
         skipped++;
         continue;
       }
