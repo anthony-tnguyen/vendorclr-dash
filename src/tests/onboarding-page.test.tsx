@@ -51,7 +51,9 @@ describe("onboarding wizard (demo mode)", () => {
     const user = userEvent.setup();
     await renderOnboarding();
 
-    await user.type(screen.getByLabelText(/Company name/i), "Halstead Builders");
+    // Wait for the onboarding query to resolve (the page shows a loading state
+    // first) before the field exists.
+    await user.type(await screen.findByLabelText(/Company name/i), "Halstead Builders");
     await user.click(screen.getByRole("button", { name: /Save & continue/i }));
 
     // Step 2 (Compliance program) is optional and empty -> Skip for now shows.
