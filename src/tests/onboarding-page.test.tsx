@@ -41,9 +41,7 @@ afterEach(() => {
 describe("onboarding wizard (demo mode)", () => {
   it("shows the optionality copy and requires only the company name on step 1", async () => {
     await renderOnboarding();
-    expect(
-      await screen.findByText(/Only your company name is required/i),
-    ).toBeInTheDocument();
+    expect(await screen.findByText(/Only your company name is required/i)).toBeInTheDocument();
     // The company-name field carries the required marker.
     const company = screen.getByLabelText(/Company name/i);
     expect(company).toBeRequired();

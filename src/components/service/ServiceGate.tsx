@@ -26,8 +26,7 @@ export function ServiceLockedNote({ className }: { className?: string }) {
   return (
     <p
       className={
-        className ??
-        "rounded-sm border border-warn/40 bg-warn-soft px-3 py-2 text-xs text-warn"
+        className ?? "rounded-sm border border-warn/40 bg-warn-soft px-3 py-2 text-xs text-warn"
       }
     >
       {SERVICE_LOCKED_REASON}

@@ -258,7 +258,9 @@ export function OnboardingReviewPage() {
         onLaunch={onLaunch}
         onRequestChanges={onRequestChanges}
         launching={launch.isPending && launch.variables === review.companyId}
-        requestingChanges={requestChanges.isPending && requestChanges.variables === review.companyId}
+        requestingChanges={
+          requestChanges.isPending && requestChanges.variables === review.companyId
+        }
       />
     );
   }
@@ -321,7 +323,9 @@ export function OnboardingReviewPage() {
                 Still filling in the wizard — not yet submitted, so not launchable.
               </p>
               {inProgress.length === 0 ? (
-                <p className="text-sm text-muted-foreground">No companies are mid-setup right now.</p>
+                <p className="text-sm text-muted-foreground">
+                  No companies are mid-setup right now.
+                </p>
               ) : (
                 <div className="space-y-4">{inProgress.map(renderCard)}</div>
               )}

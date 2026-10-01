@@ -34,7 +34,10 @@ export function OnboardingReviewSummary({
       )}
 
       {SECTION_DEFS.map((def) => (
-        <section key={`${def.step}-${def.title}`} className="rounded-md border border-border bg-card p-4">
+        <section
+          key={`${def.step}-${def.title}`}
+          className="rounded-md border border-border bg-card p-4"
+        >
           <div className="flex items-center justify-between gap-3">
             <h3 className="text-sm font-bold text-foreground">{def.title}</h3>
             <button

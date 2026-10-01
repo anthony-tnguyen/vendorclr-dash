@@ -46,10 +46,7 @@ export function RequireAuth({
     return (
       <div className="min-h-screen bg-background px-4 py-6">
         <div className="mx-auto w-full max-w-3xl">
-          <LoadingState
-            label={signedOut ? "Opening the sign-in screen" : loadingLabel}
-            rows={5}
-          />
+          <LoadingState label={signedOut ? "Opening the sign-in screen" : loadingLabel} rows={5} />
         </div>
       </div>
     );

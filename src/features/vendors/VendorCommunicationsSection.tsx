@@ -553,7 +553,9 @@ export function VendorCommunicationsSection({
           </button>
         ) : null}
       </div>
-      {canWrite && !serviceLive ? <ServiceLockedNote className="mt-3 rounded-sm border border-warn/40 bg-warn-soft px-3 py-2 text-xs text-warn" /> : null}
+      {canWrite && !serviceLive ? (
+        <ServiceLockedNote className="mt-3 rounded-sm border border-warn/40 bg-warn-soft px-3 py-2 text-xs text-warn" />
+      ) : null}
       {draft ? (
         <RequestComposer
           vendorId={vendorId}
