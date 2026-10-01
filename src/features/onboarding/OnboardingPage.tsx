@@ -9,10 +9,14 @@ import { RequireAuth } from "@/components/auth/RequireAuth";
 import { ErrorState, LoadingState } from "@/components/states/AsyncState";
 import type { OnboardingPatch, OnboardingState } from "@/data/contracts";
 import { getRepository, isBackendConfigured } from "@/data/repository";
+import { CONTACT_EMAIL } from "@/features/legal/LegalPages";
+import { OnboardingReviewSummary } from "@/features/onboarding/OnboardingReviewSummary";
 import {
+  missingRequired,
   normalizeCompanyInfo,
   sectionForStep,
   type Section,
+  type WizardSections,
 } from "@/features/onboarding/onboardingSections";
 import { cn } from "@/lib/utils";
 
@@ -133,22 +137,51 @@ function Stepper({ step }: { step: number }) {
   );
 }
 
-function WaitingScreen({ companyName }: { companyName: string }) {
+function UnderReviewScreen({
+  companyName,
+  sections,
+  onEditStep,
+}: {
+  companyName: string;
+  sections: WizardSections;
+  onEditStep: (step: number) => void;
+}) {
   return (
-    <section className="rounded-md border border-border bg-card p-6">
-      <h2 className="text-base font-bold tracking-tight text-foreground">
-        Thanks — your setup is with our team
-      </h2>
-      <p className="mt-2 text-sm text-muted-foreground">
-        We&apos;ve received {companyName || "your"} onboarding details. A VendorClr specialist is
-        validating your vendors, requirement profiles and project setup. Your console opens
-        automatically once we&apos;ve confirmed everything and started managed service — you
-        don&apos;t need to do anything else.
-      </p>
-      <p className="mt-3 text-xs text-muted-foreground">
-        You can close this tab; we&apos;ll email you when your workspace is live.
-      </p>
-    </section>
+    <div className="space-y-5">
+      <section className="rounded-md border border-border bg-card p-6">
+        <h2 className="text-base font-bold tracking-tight text-foreground">
+          Your setup is under review
+        </h2>
+        <p className="mt-2 text-sm text-muted-foreground">
+          We&apos;ve received {companyName || "your"} onboarding details and a VendorClr specialist
+          is validating your vendors, requirement profiles and project setup. Managed service — the
+          automated requests and renewal outreach we run for you — turns on once that&apos;s done.
+        </p>
+        <p className="mt-2 text-sm text-muted-foreground">
+          In the meantime your workspace is open: you can keep building it, and you can still edit
+          anything below and resubmit until we launch.
+        </p>
+        <div className="mt-4 flex flex-wrap gap-2">
+          <Link
+            to={routes.dashboard}
+            className="focusable rounded-sm bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground"
+          >
+            Go to your dashboard
+          </Link>
+          <a
+            href={`mailto:${CONTACT_EMAIL}`}
+            className="focusable rounded-sm border border-input bg-card px-3 py-2 text-sm font-semibold text-foreground"
+          >
+            Contact VendorClr
+          </a>
+        </div>
+      </section>
+
+      <section className="space-y-3">
+        <h3 className="text-sm font-bold tracking-tight text-foreground">Your setup</h3>
+        <OnboardingReviewSummary sections={sections} onEditStep={onEditStep} />
+      </section>
+    </div>
   );
 }
 
@@ -182,6 +215,9 @@ function OnboardingWizard() {
   const [projects, setProjects] = useState<Section>({});
   const [requirements, setRequirements] = useState<Section>({});
   const [seeded, setSeeded] = useState(false);
+  // Once submitted, the page shows the under-review summary; "editing" drops back
+  // into the wizard so the customer can correct answers and resubmit until launch.
+  const [editing, setEditing] = useState(false);
 
   // Seed local form state once from whatever was saved, so a returning customer
   // resumes where they left off.
@@ -217,6 +253,9 @@ function OnboardingWizard() {
   const submitted = serviceStatus === "in_review" || Boolean(onboarding.data?.submittedAt);
 
   const currentSections = { companyInfo, program, projects, requirements };
+  // Company name was already supplied at checkout, so it is the one required
+  // field; everything else is explicitly optional.
+  const requiredMissing = missingRequired(currentSections);
 
   async function goNext() {
     const patch = {
@@ -239,6 +278,8 @@ function OnboardingWizard() {
       currentStep: STEP_LABELS.length,
     });
     await submit.mutateAsync();
+    // A resubmit from the editing flow returns to the under-review summary.
+    setEditing(false);
   }
 
   function toggleCoverage(option: string) {
@@ -257,11 +298,27 @@ function OnboardingWizard() {
           <LoadingState label="Loading your onboarding" rows={4} />
         ) : onboarding.isError ? (
           <ErrorState description="Your onboarding could not be loaded. Nothing was changed." />
-        ) : submitted ? (
-          <WaitingScreen companyName={companyName} />
+        ) : submitted && !editing ? (
+          <UnderReviewScreen
+            companyName={companyName}
+            sections={currentSections}
+            onEditStep={(target) => {
+              setEditing(true);
+              setStep(target);
+            }}
+          />
         ) : (
           <>
             <div className="space-y-3">
+              {submitted ? (
+                <button
+                  type="button"
+                  onClick={() => setEditing(false)}
+                  className="focusable text-xs font-semibold text-primary underline"
+                >
+                  ← Back to review
+                </button>
+              ) : null}
               <h1 className="text-lg font-bold tracking-tight text-foreground">
                 Set up {companyName || "your workspace"}
               </h1>
@@ -279,11 +336,13 @@ function OnboardingWizard() {
                   <div className="grid gap-3 sm:grid-cols-2">
                     <div>
                       <label className={labelClass} htmlFor="ob-company">
-                        Company name
+                        Company name <span className="text-destructive">*</span>
                       </label>
                       <input
                         id="ob-company"
                         className={inputClass}
+                        required
+                        aria-required="true"
                         value={text(companyInfo, "companyName")}
                         onChange={(e) =>
                           setCompanyInfo({ ...companyInfo, companyName: e.target.value })
@@ -539,27 +598,18 @@ function OnboardingWizard() {
                   <h2 className="text-sm font-bold text-foreground">Review &amp; submit</h2>
                   <p className="text-sm text-muted-foreground">
                     When you submit, our compliance team validates your setup — vendors, requirement
-                    profiles, projects and communication — then activates managed service and opens
-                    your console.
+                    profiles, projects and communication — then activates managed service. Your
+                    workspace stays open throughout, and you can edit and resubmit until we launch.
                   </p>
-                  <dl className="grid gap-2 text-sm">
-                    <div className="flex justify-between gap-4 border-b border-border py-1.5">
-                      <dt className="text-muted-foreground">Company</dt>
-                      <dd className="text-foreground">{text(companyInfo, "companyName") || "—"}</dd>
-                    </div>
-                    <div className="flex justify-between gap-4 border-b border-border py-1.5">
-                      <dt className="text-muted-foreground">Primary contact</dt>
-                      <dd className="text-foreground">
-                        {text(companyInfo, "primaryContact") || "—"}
-                      </dd>
-                    </div>
-                    <div className="flex justify-between gap-4 border-b border-border py-1.5">
-                      <dt className="text-muted-foreground">Required coverages</dt>
-                      <dd className="text-foreground">
-                        {stringArray(requirements, "coverages").length || 0} selected
-                      </dd>
-                    </div>
-                  </dl>
+                  <OnboardingReviewSummary sections={currentSections} onEditStep={setStep} />
+                  {requiredMissing.length > 0 ? (
+                    <p
+                      role="alert"
+                      className="rounded-sm border border-destructive/40 bg-danger-soft px-3 py-2 text-xs font-semibold text-destructive"
+                    >
+                      Add your company name before submitting — you can edit it on the Company step.
+                    </p>
+                  ) : null}
                   {submit.isError ? (
                     <p
                       role="alert"
@@ -600,10 +650,16 @@ function OnboardingWizard() {
                   <button
                     type="button"
                     onClick={() => void onSubmit()}
-                    disabled={submit.isPending || !live}
+                    disabled={submit.isPending || !live || requiredMissing.length > 0}
                     className="focusable rounded-sm bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-60"
                   >
-                    {submit.isPending ? "Submitting…" : "Submit for review"}
+                    {submit.isPending
+                      ? submitted
+                        ? "Resubmitting…"
+                        : "Submitting…"
+                      : submitted
+                        ? "Save & resubmit"
+                        : "Submit for review"}
                   </button>
                 )}
               </div>

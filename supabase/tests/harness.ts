@@ -218,8 +218,8 @@ export async function signUp(db: PGlite, user: TestUser): Promise<void> {
 
   if (user.companyName) {
     const company = await db.query<{ id: string }>(
-      `insert into public.companies (name, activation_status, activated_at, activated_by)
-       values ($1, 'activated', now(), $2)
+      `insert into public.companies (name, activation_status, activated_at, activated_by, service_status)
+       values ($1, 'activated', now(), $2, 'live')
        returning id`,
       [user.companyName, user.id],
     );

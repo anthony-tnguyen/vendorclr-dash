@@ -62,6 +62,13 @@ export interface Session {
    * console; grants nothing (RLS is the boundary).
    */
   serviceStatus: CompanyServiceStatus | null;
+  /**
+   * Whether managed-service actions (anything VendorClr sends on the customer's
+   * behalf) are live. True for staff and for a 'live' company; false while a paid
+   * company is still onboarding / in review. Not an access gate — the dashboard is
+   * open regardless — only a gate on outbound actions.
+   */
+  serviceLive: boolean;
   /** True for VendorClr staff (platform_admins), who are never gated. */
   isStaff: boolean;
   /**
@@ -90,6 +97,7 @@ const DEMO_FALLBACK: Session = {
   companyRole: "owner",
   activation: "demo",
   serviceStatus: "live",
+  serviceLive: true,
   isStaff: false,
   refresh: () => {},
   userId: null,
@@ -120,6 +128,7 @@ function useDemoSessionValue(): Session {
       // sessions in live mode, so this value is descriptive, not load-bearing.
       activation: "demo" as CompanyActivationStatus,
       serviceStatus: "live" as CompanyServiceStatus,
+      serviceLive: true,
       isStaff: false,
       refresh: () => {},
       userId: null,
@@ -290,6 +299,7 @@ function useLiveSessionValue(): Session {
       companyRole: identity?.companyRole ?? null,
       activation: identity?.activation ?? "none",
       serviceStatus: identity?.serviceStatus ?? null,
+      serviceLive: identity?.isPlatformAdmin === true || identity?.serviceStatus === "live",
       isStaff: identity?.isPlatformAdmin === true,
       refresh,
       userId: identity?.userId ?? null,
