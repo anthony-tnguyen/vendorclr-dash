@@ -147,7 +147,9 @@ Deno.serve(async (req: Request) => {
     await Promise.all([
       supabase
         .from("vendors")
-        .select("id, name, contact_name, contact_email, company_id, companies ( name, service_status )")
+        .select(
+          "id, name, contact_name, contact_email, company_id, companies ( name, service_status )",
+        )
         .in("id", vendorIds),
       supabase
         .from("vendor_policies")
