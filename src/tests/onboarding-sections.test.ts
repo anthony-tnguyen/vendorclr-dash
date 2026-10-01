@@ -1,8 +1,11 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  missingCount,
+  missingRequired,
   normalizeCompanyInfo,
   sectionForStep,
+  stepIsEmpty,
   type WizardSections,
 } from "@/features/onboarding/onboardingSections";
 
@@ -57,5 +60,38 @@ describe("normalizeCompanyInfo", () => {
 
   it("does not promote a blank legacy name", () => {
     expect(normalizeCompanyInfo({ name: "" })).toEqual({ name: "" });
+  });
+});
+
+describe("missingCount / missingRequired / stepIsEmpty", () => {
+  const empty: WizardSections = {
+    companyInfo: {},
+    program: {},
+    projects: {},
+    requirements: {},
+  };
+
+  it("counts every blank field when nothing is filled in", () => {
+    // 5 company + 4 program + 3 projects + 1 vendors + 2 requirements = 15.
+    expect(missingCount(empty)).toBe(15);
+  });
+
+  it("drops the count as fields are filled", () => {
+    expect(missingCount(sections)).toBeLessThan(missingCount(empty));
+  });
+
+  it("flags a blank required company name and clears once provided", () => {
+    expect(missingRequired(empty).map((f) => f.key)).toEqual(["companyName"]);
+    expect(missingRequired(sections)).toEqual([]);
+  });
+
+  it("reports a step empty only when all its fields are blank", () => {
+    expect(stepIsEmpty(2, empty)).toBe(true);
+    expect(stepIsEmpty(2, sections)).toBe(false);
+    // Step 4 (Vendors) owns only the migration note, which `sections` provides.
+    expect(stepIsEmpty(4, sections)).toBe(false);
+    expect(stepIsEmpty(4, empty)).toBe(true);
+    // The review step owns no fields.
+    expect(stepIsEmpty(6, empty)).toBe(false);
   });
 });

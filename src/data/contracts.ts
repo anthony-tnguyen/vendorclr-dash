@@ -288,6 +288,11 @@ export interface DashboardRepository {
     companyId: string,
     status: "onboarding" | "in_review" | "live",
   ): Promise<void>;
+  /**
+   * Staff-only: send a submitted company back to the customer to fix. Moves it
+   * from in_review to onboarding and clears submitted_at. RLS/RPC re-check staff.
+   */
+  requestCompanyChanges(companyId: string): Promise<void>;
 }
 
 export const COMPLIANCE_LABELS: Record<ComplianceKey, string> = {

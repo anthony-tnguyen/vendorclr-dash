@@ -5,7 +5,18 @@ import { AppShell } from "@/components/shell/AppShell";
 import { EmptyState, ErrorState, LoadingState } from "@/components/states/AsyncState";
 import type { OnboardingReview } from "@/data/contracts";
 import { getRepository } from "@/data/repository";
+import { missingCount, type WizardSections } from "@/features/onboarding/onboardingSections";
 import { planLabel } from "@/domain/billing/plans";
+
+/** The wizard-section view of a staff review, for the shared missing-item count. */
+function reviewSections(review: OnboardingReview): WizardSections {
+  return {
+    companyInfo: review.companyInfo,
+    program: review.program,
+    projects: review.projects,
+    requirements: review.requirements,
+  };
+}
 
 /**
  * Step 6 of onboarding — the staff side.
@@ -102,11 +113,15 @@ function formatDate(iso: string | null): string {
 function ReviewCard({
   review,
   onLaunch,
+  onRequestChanges,
   launching,
+  requestingChanges,
 }: {
   review: OnboardingReview;
   onLaunch: (companyId: string) => void;
+  onRequestChanges: (companyId: string) => void;
   launching: boolean;
+  requestingChanges: boolean;
 }) {
   // A workspace may only be launched once the customer has finished the wizard:
   // service_status 'in_review' with a submitted_at. The RPC enforces the same
@@ -114,6 +129,8 @@ function ReviewCard({
   // request the database will reject. A company still 'in progress' is not
   // launchable from here.
   const launchReady = review.serviceStatus === "in_review" && Boolean(review.submittedAt);
+  const missing = missingCount(reviewSections(review));
+  const busy = launching || requestingChanges;
   return (
     <article className="space-y-4 rounded-md border border-border bg-card p-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -121,26 +138,53 @@ function ReviewCard({
           <div className="flex flex-wrap items-center gap-2">
             <h3 className="text-sm font-bold text-foreground">{review.companyName}</h3>
             <StatusBadge status={review.serviceStatus} />
+            {missing > 0 ? (
+              <span className="rounded-sm border border-warn/40 bg-warn-soft px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-warn">
+                {missing} missing
+              </span>
+            ) : (
+              <span className="rounded-sm border border-ok/40 bg-ok-soft px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-ok">
+                Complete
+              </span>
+            )}
           </div>
           <p className="mt-1 text-xs text-muted-foreground">
             {planLabel(review.plan)} · {review.activeVendors} active vendors · step{" "}
             {review.currentStep} · submitted {formatDate(review.submittedAt)}
           </p>
+          {launchReady && missing > 0 ? (
+            <p className="mt-1 text-[11px] text-warn">
+              {missing} onboarding {missing === 1 ? "answer is" : "answers are"} still blank —
+              consider requesting changes before launch.
+            </p>
+          ) : null}
         </div>
         <div className="flex flex-col items-end gap-1">
-          <button
-            type="button"
-            onClick={() => onLaunch(review.companyId)}
-            disabled={launching || !launchReady}
-            title={
-              launchReady
-                ? undefined
-                : "Only companies that have submitted the wizard (awaiting review) can be launched."
-            }
-            className="focusable rounded-sm bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-60"
-          >
-            {launching ? "Launching…" : "Launch — set live"}
-          </button>
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            {launchReady ? (
+              <button
+                type="button"
+                onClick={() => onRequestChanges(review.companyId)}
+                disabled={busy}
+                className="focusable rounded-sm border border-input bg-card px-3 py-2 text-sm font-semibold text-foreground disabled:opacity-60"
+              >
+                {requestingChanges ? "Sending…" : "Request changes"}
+              </button>
+            ) : null}
+            <button
+              type="button"
+              onClick={() => onLaunch(review.companyId)}
+              disabled={busy || !launchReady}
+              title={
+                launchReady
+                  ? undefined
+                  : "Only companies that have submitted the wizard (awaiting review) can be launched."
+              }
+              className="focusable rounded-sm bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-60"
+            >
+              {launching ? "Launching…" : "Launch — set live"}
+            </button>
+          </div>
           {!launchReady ? (
             <p className="text-[11px] text-muted-foreground">Waiting on the customer to submit</p>
           ) : null}
@@ -172,6 +216,13 @@ export function OnboardingReviewPage() {
     },
   });
 
+  const requestChanges = useMutation({
+    mutationFn: (companyId: string) => repo.requestCompanyChanges(companyId),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["admin", "onboarding-reviews"] });
+    },
+  });
+
   function onLaunch(companyId: string) {
     const review = (reviews.data ?? []).find((r) => r.companyId === companyId);
     const name = review?.companyName ?? "this company";
@@ -180,6 +231,36 @@ export function OnboardingReviewPage() {
       return;
     }
     launch.mutate(companyId);
+  }
+
+  function onRequestChanges(companyId: string) {
+    const review = (reviews.data ?? []).find((r) => r.companyId === companyId);
+    const name = review?.companyName ?? "this company";
+    if (
+      !window.confirm(
+        `Send ${name} back for changes? They return to the editable wizard and must resubmit.`,
+      )
+    ) {
+      return;
+    }
+    requestChanges.mutate(companyId);
+  }
+
+  const all = reviews.data ?? [];
+  const awaitingReview = all.filter((r) => r.serviceStatus === "in_review");
+  const inProgress = all.filter((r) => r.serviceStatus !== "in_review");
+
+  function renderCard(review: OnboardingReview) {
+    return (
+      <ReviewCard
+        key={review.companyId}
+        review={review}
+        onLaunch={onLaunch}
+        onRequestChanges={onRequestChanges}
+        launching={launch.isPending && launch.variables === review.companyId}
+        requestingChanges={requestChanges.isPending && requestChanges.variables === review.companyId}
+      />
+    );
   }
 
   return (
@@ -195,31 +276,56 @@ export function OnboardingReviewPage() {
             description="Onboarding reviews could not be loaded."
             onRetry={() => void reviews.refetch()}
           />
-        ) : (reviews.data ?? []).length === 0 ? (
+        ) : all.length === 0 ? (
           <EmptyState
             title="No companies awaiting launch"
             description="Companies in onboarding or under review appear here for the Step 6 validation."
           />
         ) : (
-          <div className="space-y-4">
-            {launch.isError ? (
+          <div className="space-y-8">
+            {launch.isError || requestChanges.isError ? (
               <p
                 role="alert"
                 className="rounded-sm border border-destructive/40 bg-danger-soft px-3 py-2 text-xs font-semibold text-destructive"
               >
-                {launch.error instanceof Error
-                  ? launch.error.message
-                  : "Could not launch that workspace."}
+                {(launch.error ?? requestChanges.error) instanceof Error
+                  ? (launch.error ?? requestChanges.error ?? ({} as Error)).message
+                  : "That action could not be completed."}
               </p>
             ) : null}
-            {(reviews.data ?? []).map((review) => (
-              <ReviewCard
-                key={review.companyId}
-                review={review}
-                onLaunch={onLaunch}
-                launching={launch.isPending && launch.variables === review.companyId}
-              />
-            ))}
+
+            <section className="space-y-4">
+              <h2 className="text-sm font-bold tracking-tight text-foreground">
+                Awaiting review{" "}
+                <span className="numeric text-xs font-normal text-muted-foreground">
+                  ({awaitingReview.length})
+                </span>
+              </h2>
+              {awaitingReview.length === 0 ? (
+                <p className="text-sm text-muted-foreground">
+                  No companies are waiting on a decision right now.
+                </p>
+              ) : (
+                <div className="space-y-4">{awaitingReview.map(renderCard)}</div>
+              )}
+            </section>
+
+            <section className="space-y-4">
+              <h2 className="text-sm font-bold tracking-tight text-foreground">
+                In progress{" "}
+                <span className="numeric text-xs font-normal text-muted-foreground">
+                  ({inProgress.length})
+                </span>
+              </h2>
+              <p className="text-xs text-muted-foreground">
+                Still filling in the wizard — not yet submitted, so not launchable.
+              </p>
+              {inProgress.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No companies are mid-setup right now.</p>
+              ) : (
+                <div className="space-y-4">{inProgress.map(renderCard)}</div>
+              )}
+            </section>
           </div>
         )}
       </AdminGuard>

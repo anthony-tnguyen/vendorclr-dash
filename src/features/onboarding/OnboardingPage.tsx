@@ -12,9 +12,11 @@ import { getRepository, isBackendConfigured } from "@/data/repository";
 import { CONTACT_EMAIL } from "@/features/legal/LegalPages";
 import { OnboardingReviewSummary } from "@/features/onboarding/OnboardingReviewSummary";
 import {
+  missingCount,
   missingRequired,
   normalizeCompanyInfo,
   sectionForStep,
+  stepIsEmpty,
   type Section,
   type WizardSections,
 } from "@/features/onboarding/onboardingSections";
@@ -272,6 +274,16 @@ function OnboardingWizard() {
   }
 
   async function onSubmit() {
+    // Submitting with blanks is allowed, but confirm it so it is a choice, not a
+    // surprise — the customer can finish the rest from Settings later.
+    const missing = missingCount(currentSections);
+    if (live && missing > 0) {
+      const ok = window.confirm(
+        `You're submitting with ${missing} unanswered ${missing === 1 ? "item" : "items"}. ` +
+          "You can finish these yourself later from Settings. Submit now?",
+      );
+      if (!ok) return;
+    }
     // Persist the last edited section before submitting.
     await repo.saveOnboarding({
       ...sectionForStep(step, currentSections),
@@ -333,6 +345,10 @@ function OnboardingWizard() {
               {step === 1 ? (
                 <div className="space-y-4">
                   <h2 className="text-sm font-bold text-foreground">Company</h2>
+                  <p className="text-xs text-muted-foreground">
+                    Only your company name is required. Everything else is optional — you can add it
+                    now or from Settings later.
+                  </p>
                   <div className="grid gap-3 sm:grid-cols-2">
                     <div>
                       <label className={labelClass} htmlFor="ob-company">
@@ -409,6 +425,9 @@ function OnboardingWizard() {
               {step === 2 ? (
                 <div className="space-y-4">
                   <h2 className="text-sm font-bold text-foreground">Compliance program</h2>
+                  <p className="text-xs text-muted-foreground">
+                    Optional — skip anything now and add it from Settings later.
+                  </p>
                   <div>
                     <label className={labelClass} htmlFor="ob-vendortypes">
                       Types of vendors / subcontractors
@@ -464,6 +483,9 @@ function OnboardingWizard() {
               {step === 3 ? (
                 <div className="space-y-4">
                   <h2 className="text-sm font-bold text-foreground">Projects</h2>
+                  <p className="text-xs text-muted-foreground">
+                    Optional — skip anything now and add it from Settings later.
+                  </p>
                   <div>
                     <label className={labelClass} htmlFor="ob-projects">
                       Existing projects (one per line)
@@ -557,7 +579,7 @@ function OnboardingWizard() {
                   <h2 className="text-sm font-bold text-foreground">Requirements</h2>
                   <p className="text-sm text-muted-foreground">
                     Which coverages do you require from vendors? We&apos;ll build requirement
-                    profiles from this.
+                    profiles from this. Optional — you can set these up later from Settings.
                   </p>
                   <fieldset className="grid gap-2 sm:grid-cols-2">
                     <legend className="sr-only">Required coverages</legend>
@@ -638,14 +660,26 @@ function OnboardingWizard() {
                   Back
                 </button>
                 {step < STEP_LABELS.length ? (
-                  <button
-                    type="button"
-                    onClick={() => void goNext()}
-                    disabled={save.isPending}
-                    className="focusable rounded-sm bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-60"
-                  >
-                    {save.isPending ? "Saving…" : "Save & continue"}
-                  </button>
+                  <div className="flex items-center gap-2">
+                    {step !== 1 && stepIsEmpty(step, currentSections) ? (
+                      <button
+                        type="button"
+                        onClick={() => void goNext()}
+                        disabled={save.isPending}
+                        className="focusable rounded-sm border border-input bg-card px-3 py-2 text-sm font-semibold text-muted-foreground disabled:opacity-60"
+                      >
+                        Skip for now
+                      </button>
+                    ) : null}
+                    <button
+                      type="button"
+                      onClick={() => void goNext()}
+                      disabled={save.isPending}
+                      className="focusable rounded-sm bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-60"
+                    >
+                      {save.isPending ? "Saving…" : "Save & continue"}
+                    </button>
+                  </div>
                 ) : (
                   <button
                     type="button"

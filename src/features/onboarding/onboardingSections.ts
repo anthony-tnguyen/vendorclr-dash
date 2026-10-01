@@ -142,6 +142,13 @@ export function missingCount(sections: WizardSections): number {
   return missing;
 }
 
+/** Whether every field owned by a wizard step is still blank. */
+export function stepIsEmpty(step: number, sections: WizardSections): boolean {
+  const def = SECTION_DEFS.find((d) => d.step === step);
+  if (!def) return false;
+  return def.fields.every((field) => !fieldDisplay(sections, def, field).provided);
+}
+
 /** Required fields (currently just company name) that are still blank. */
 export function missingRequired(sections: WizardSections): FieldDef[] {
   const out: FieldDef[] = [];

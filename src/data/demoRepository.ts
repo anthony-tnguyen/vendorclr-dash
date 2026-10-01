@@ -706,5 +706,13 @@ export function createDemoRepository(): DashboardRepository {
     listOnboardingReviews: () => delay(onboardingReviews.map((r) => ({ ...r }))),
     setCompanyServiceStatus: (): Promise<void> =>
       Promise.reject(new Error("Demo mode: there is no company here to launch.")),
+    requestCompanyChanges: (companyId: string): Promise<void> => {
+      const review = onboardingReviews.find((r) => r.companyId === companyId);
+      if (review) {
+        review.serviceStatus = "onboarding";
+        review.submittedAt = null;
+      }
+      return delay(undefined);
+    },
   };
 }
