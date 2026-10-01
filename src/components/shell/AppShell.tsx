@@ -72,7 +72,7 @@ function SidebarContents({
           className="focusable"
           aria-label="VendorClr dashboard home"
         >
-          <img src="/vendorclr-logo-white.svg" alt="VendorClr" className="h-5 w-auto" />
+          <img src="/vendorclr-logo-black.svg" alt="VendorClr" className="h-5 w-auto" />
         </Link>
         <span className="numeric rounded-sm border border-sidebar-border px-1.5 py-0.5 text-[10px] uppercase text-sidebar-foreground/70">
           {role === "admin" ? "ADMIN" : "CUSTOMER"}
@@ -279,7 +279,7 @@ export function AppShell({ title, subtitle, actions, children }: AppShellProps) 
           <div className="border-b border-sidebar-border bg-sidebar text-sidebar-foreground lg:hidden">
             <div className="flex items-center justify-between px-4 py-3">
               <Link to="/dashboard" className="focusable" aria-label="VendorClr dashboard home">
-                <img src="/vendorclr-logo-white.svg" alt="VendorClr" className="h-5 w-auto" />
+                <img src="/vendorclr-logo-black.svg" alt="VendorClr" className="h-5 w-auto" />
               </Link>
               <button
                 type="button"

@@ -45,13 +45,13 @@
   --input: oklch(0.909 0.015 255.508);
   --ring: #2563eb;
 
-  --sidebar: #0f172a;
-  --sidebar-foreground: oklch(0.97 0.005 250);
+  --sidebar: #ffffff;
+  --sidebar-foreground: #0f172a;
   --sidebar-primary: #2563eb;
   --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: oklch(0.27 0.04 262);
-  --sidebar-accent-foreground: oklch(0.97 0.005 250);
-  --sidebar-border: oklch(0.3 0.035 262);
+  --sidebar-accent: #f1f5f9;
+  --sidebar-accent-foreground: #0f172a;
+  --sidebar-border: #e2e8f0;
   --sidebar-ring: #2563eb;
 
   --chart-1: #2563eb;
