@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 
+import { ServiceLockedNote, useServiceGate } from "@/components/service/ServiceGate";
 import type { VendorContactRole } from "@/data/dbTypeAliases";
 import {
   REQUEST_PURPOSES,
@@ -508,6 +509,7 @@ export function VendorCommunicationsSection({
   canWrite: boolean;
 }) {
   const [draft, setDraft] = useState<Draft | null>(null);
+  const { serviceLive } = useServiceGate();
   const panel = useQuery({
     queryKey: vendorContactsQueryKey(vendorId),
     queryFn: () => getVendorContactsPanel({ data: { vendorId } }),
@@ -545,12 +547,15 @@ export function VendorCommunicationsSection({
         <h2 id="communications-heading" className="text-sm font-semibold text-foreground">
           Document requests &amp; communication history
         </h2>
-        {canWrite && !draft ? (
+        {canWrite && serviceLive && !draft ? (
           <button type="button" className={primary} onClick={openFresh}>
             Request documents
           </button>
         ) : null}
       </div>
+      {canWrite && !serviceLive ? (
+        <ServiceLockedNote className="mt-3 rounded-sm border border-warn/40 bg-warn-soft px-3 py-2 text-xs text-warn" />
+      ) : null}
       {draft ? (
         <RequestComposer
           vendorId={vendorId}
@@ -560,7 +565,12 @@ export function VendorCommunicationsSection({
           onClose={() => setDraft(null)}
         />
       ) : null}
-      <CommunicationHistory vendorId={vendorId} canWrite={canWrite} onResend={openResend} />
+      {/* Resend is an outbound action too, so it is gated with sending. */}
+      <CommunicationHistory
+        vendorId={vendorId}
+        canWrite={canWrite && serviceLive}
+        onResend={openResend}
+      />
     </section>
   );
 }

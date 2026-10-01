@@ -2,8 +2,10 @@ import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { useSession } from "@/app/App";
+import { useSignOut } from "@/app/useSignOut";
 import { adminNav, customerNav } from "@/app/router";
 import { LoadingState } from "@/components/states/AsyncState";
+import { SetupBanner } from "@/components/shell/SetupBanner";
 import { LegalLinks } from "@/features/legal/LegalPages";
 import { cn } from "@/lib/utils";
 
@@ -97,7 +99,8 @@ function SessionPanel() {
 }
 
 function SignedInPanel() {
-  const { personName, companyName, signOut } = useSession();
+  const { personName, companyName } = useSession();
+  const { signOut, error: signOutError } = useSignOut();
 
   return (
     <div className="rounded-sm border border-sidebar-border p-3">
@@ -105,11 +108,16 @@ function SignedInPanel() {
       <p className="truncate text-[11px] text-sidebar-foreground/70">{companyName}</p>
       <button
         type="button"
-        onClick={() => void signOut()}
+        onClick={signOut}
         className="focusable mt-2 w-full rounded-sm border border-sidebar-border px-2 py-1.5 text-xs font-semibold text-sidebar-foreground"
       >
         Sign out
       </button>
+      {signOutError ? (
+        <p role="alert" className="mt-2 text-[11px] font-semibold text-destructive">
+          {signOutError}
+        </p>
+      ) : null}
     </div>
   );
 }
@@ -162,57 +170,52 @@ export interface AppShellProps {
 }
 
 export function AppShell({ title, subtitle, actions, children }: AppShellProps) {
-  const {
-    personName,
-    companyName,
-    role,
-    mode,
-    status,
-    activation,
-    serviceStatus,
-    isStaff,
-    signOut,
-  } = useSession();
+  const { personName, companyName, role, mode, status, activation, serviceStatus, isStaff } =
+    useSession();
+  const { signOut } = useSignOut();
   const navigate = useNavigate();
   // The router's own location, not window.location - the latter lags behind a
   // client-side navigation and would send the wrong page back to sign-in.
   const here = useRouterState({ select: (state) => state.location.href });
+  const pathname = useRouterState({ select: (state) => state.location.pathname });
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const navigation = role === "admin" ? adminNav : customerNav;
   const navigationTitle = role === "admin" ? "Operations" : "Workspace";
 
   /**
-   * The one access gate for the whole console, placed in the chrome every
-   * dashboard page renders through so no page has to remember to check access
-   * itself - and, because nothing below <AppShell /> mounts until it passes, no
-   * page's queries fire against a session that has not been resolved or an
-   * account that has no company to be scoped to.
+   * The access gate for the whole console, placed in the chrome every dashboard
+   * page renders through. Two hard redirects remain:
    *
-   * Not a security boundary: RLS is. An unactivated account has no company, so
-   * its reads come back empty even if it reaches a page.
+   *   - signed out      -> /login (carrying the page asked for)
+   *   - not activated    -> /demo  (no paid workspace yet)
    *
-   * Demo mode is the preview sandbox rather than a session, and staff may hold
-   * no company membership at all, so neither is gated.
+   * Managed-service readiness (service_status) is NO LONGER an access gate. A paid
+   * customer whose setup is still onboarding / in review has full run of their
+   * real dashboard; the only nudge is "wizard-first": a brand-new customer who has
+   * not submitted yet (service_status 'onboarding'), landing on the dashboard
+   * home, is sent to the wizard once. They can return to the dashboard freely, and
+   * once submitted ('in_review') the home renders the dashboard with the setup
+   * banner. Outbound actions are gated separately by service_status (ServiceGate +
+   * the server-side trigger), not here.
+   *
+   * Not a security boundary: RLS is. An unactivated account has no company, so its
+   * reads come back empty even if it reaches a page.
    */
   const signedOut = mode === "live" && status === "anonymous";
   const needsActivation =
     mode === "live" && status === "authenticated" && !isStaff && activation !== "activated";
-  // An activated (paid) account whose managed-service setup is not yet live
-  // belongs in the onboarding wizard, not the console. Staff are never gated;
-  // 'live' (and pre-existing/activation-code companies, which are 'live') pass.
-  // The vendor importers are part of onboarding's Vendors step, so an onboarding
-  // account must be allowed to reach them even though they live in the gated
-  // console chrome; every other console page still bounces to the wizard.
-  const onOnboardingImporter =
-    here.includes("/dashboard/vendors/coi-import") || here.includes("/dashboard/vendors/import");
-  const needsOnboarding =
+  const activatedNotLive =
     mode === "live" &&
     status === "authenticated" &&
     !isStaff &&
     activation === "activated" &&
     serviceStatus !== null &&
-    serviceStatus !== "live" &&
-    !onOnboardingImporter;
+    serviceStatus !== "live";
+  // Wizard-first, but reachable: only the dashboard home nudges a not-yet-submitted
+  // customer into the wizard. Every other route renders with the setup banner.
+  const needsWizardFirst =
+    activatedNotLive && serviceStatus === "onboarding" && pathname === "/dashboard";
+  const showSetupBanner = activatedNotLive && serviceStatus !== null;
 
   // The destination is captured on first render and never recomputed: `here`
   // changes the moment the redirect lands, and re-running on it would send the
@@ -234,10 +237,10 @@ export function AppShell({ title, subtitle, actions, children }: AppShellProps) 
       void navigate({ to: "/demo", replace: true });
       return;
     }
-    if (needsOnboarding) void navigate({ to: "/onboarding", replace: true });
-  }, [signedOut, needsActivation, needsOnboarding, navigate]);
+    if (needsWizardFirst) void navigate({ to: "/onboarding", replace: true });
+  }, [signedOut, needsActivation, needsWizardFirst, navigate]);
 
-  if (status === "loading" || signedOut || needsActivation || needsOnboarding) {
+  if (status === "loading" || signedOut || needsActivation || needsWizardFirst) {
     return (
       <div className="min-h-screen bg-background px-4 py-6">
         <div className="mx-auto w-full max-w-3xl">
@@ -247,7 +250,7 @@ export function AppShell({ title, subtitle, actions, children }: AppShellProps) 
                 ? "Opening the sign-in screen"
                 : needsActivation
                   ? "Opening the demo console"
-                  : needsOnboarding
+                  : needsWizardFirst
                     ? "Opening your onboarding"
                     : "Loading your workspace"
             }
@@ -315,15 +318,9 @@ export function AppShell({ title, subtitle, actions, children }: AppShellProps) 
                 {mode === "demo" || (mode === "live" && status === "authenticated") ? (
                   <button
                     type="button"
-                    onClick={() => {
-                      // Demo mode has no session to end; "signing out" of the
-                      // sandbox returns the visitor to the sign-in screen.
-                      if (mode === "demo") {
-                        void navigate({ to: "/login", replace: true });
-                        return;
-                      }
-                      void signOut();
-                    }}
+                    // useSignOut ends the session (a no-op in the demo sandbox),
+                    // clears cached queries and returns to the sign-in screen.
+                    onClick={signOut}
                     className="focusable rounded-sm border border-input px-3 py-1.5 text-xs font-semibold text-foreground"
                   >
                     Sign out
@@ -341,6 +338,9 @@ export function AppShell({ title, subtitle, actions, children }: AppShellProps) 
             tabIndex={-1}
             className="mx-auto w-full max-w-[100rem] px-4 py-6 sm:px-6"
           >
+            {showSetupBanner && serviceStatus !== null ? (
+              <SetupBanner serviceStatus={serviceStatus} />
+            ) : null}
             {children}
           </main>
           <footer className="border-t border-border px-4 py-4 text-xs text-muted-foreground sm:px-6">

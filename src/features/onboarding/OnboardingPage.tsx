@@ -4,9 +4,22 @@ import { Link } from "@tanstack/react-router";
 
 import { useSession } from "@/app/App";
 import { routes } from "@/app/router";
+import { useSignOut } from "@/app/useSignOut";
+import { RequireAuth } from "@/components/auth/RequireAuth";
 import { ErrorState, LoadingState } from "@/components/states/AsyncState";
 import type { OnboardingPatch, OnboardingState } from "@/data/contracts";
 import { getRepository, isBackendConfigured } from "@/data/repository";
+import { CONTACT_EMAIL } from "@/features/legal/LegalPages";
+import { OnboardingReviewSummary } from "@/features/onboarding/OnboardingReviewSummary";
+import {
+  missingCount,
+  missingRequired,
+  normalizeCompanyInfo,
+  sectionForStep,
+  stepIsEmpty,
+  type Section,
+  type WizardSections,
+} from "@/features/onboarding/onboardingSections";
 import { cn } from "@/lib/utils";
 
 /**
@@ -40,8 +53,6 @@ const COVERAGE_OPTIONS = [
   "Primary & Noncontributory",
 ];
 
-type Section = Record<string, unknown>;
-
 function text(section: Section, key: string): string {
   const value = section[key];
   return typeof value === "string" ? value : "";
@@ -56,7 +67,15 @@ const inputClass =
   "focusable mt-1 w-full rounded-sm border border-input bg-background px-3 py-2 text-sm text-foreground";
 const labelClass = "block text-sm font-medium text-foreground";
 
-function Header({ personName, onSignOut }: { personName: string; onSignOut: () => void }) {
+function Header({
+  personName,
+  onSignOut,
+  signOutError,
+}: {
+  personName: string;
+  onSignOut: () => void;
+  signOutError: string | null;
+}) {
   return (
     <header className="border-b border-border bg-card">
       <div className="mx-auto flex w-full max-w-3xl flex-wrap items-center justify-between gap-3 px-4 py-4 sm:px-6">
@@ -79,6 +98,16 @@ function Header({ personName, onSignOut }: { personName: string; onSignOut: () =
           </button>
         </div>
       </div>
+      {signOutError ? (
+        <div className="mx-auto w-full max-w-3xl px-4 pb-3 sm:px-6">
+          <p
+            role="alert"
+            className="rounded-sm border border-destructive/40 bg-danger-soft px-3 py-2 text-xs font-semibold text-destructive"
+          >
+            {signOutError}
+          </p>
+        </div>
+      ) : null}
     </header>
   );
 }
@@ -110,33 +139,76 @@ function Stepper({ step }: { step: number }) {
   );
 }
 
-function WaitingScreen({ companyName }: { companyName: string }) {
+function UnderReviewScreen({
+  companyName,
+  sections,
+  onEditStep,
+}: {
+  companyName: string;
+  sections: WizardSections;
+  onEditStep: (step: number) => void;
+}) {
   return (
-    <section className="rounded-md border border-border bg-card p-6">
-      <h2 className="text-base font-bold tracking-tight text-foreground">
-        Thanks — your setup is with our team
-      </h2>
-      <p className="mt-2 text-sm text-muted-foreground">
-        We&apos;ve received {companyName || "your"} onboarding details. A VendorClr specialist is
-        validating your vendors, requirement profiles and project setup. Your console opens
-        automatically once we&apos;ve confirmed everything and started managed service — you
-        don&apos;t need to do anything else.
-      </p>
-      <p className="mt-3 text-xs text-muted-foreground">
-        You can close this tab; we&apos;ll email you when your workspace is live.
-      </p>
-    </section>
+    <div className="space-y-5">
+      <section className="rounded-md border border-border bg-card p-6">
+        <h2 className="text-base font-bold tracking-tight text-foreground">
+          Your setup is under review
+        </h2>
+        <p className="mt-2 text-sm text-muted-foreground">
+          We&apos;ve received {companyName || "your"} onboarding details and a VendorClr specialist
+          is validating your vendors, requirement profiles and project setup. Managed service — the
+          automated requests and renewal outreach we run for you — turns on once that&apos;s done.
+        </p>
+        <p className="mt-2 text-sm text-muted-foreground">
+          In the meantime your workspace is open: you can keep building it, and you can still edit
+          anything below and resubmit until we launch.
+        </p>
+        <div className="mt-4 flex flex-wrap gap-2">
+          <Link
+            to={routes.dashboard}
+            className="focusable rounded-sm bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground"
+          >
+            Go to your dashboard
+          </Link>
+          <a
+            href={`mailto:${CONTACT_EMAIL}`}
+            className="focusable rounded-sm border border-input bg-card px-3 py-2 text-sm font-semibold text-foreground"
+          >
+            Contact VendorClr
+          </a>
+        </div>
+      </section>
+
+      <section className="space-y-3">
+        <h3 className="text-sm font-bold tracking-tight text-foreground">Your setup</h3>
+        <OnboardingReviewSummary sections={sections} onEditStep={onEditStep} />
+      </section>
+    </div>
   );
 }
 
 export function OnboardingPage() {
-  const { personName, companyName, serviceStatus, signOut, refresh } = useSession();
+  // Never render the wizard - or fire its queries - while the session is
+  // anonymous. RequireAuth redirects an anonymous visitor to sign-in.
+  return (
+    <RequireAuth loadingLabel="Loading your onboarding">
+      <OnboardingWizard />
+    </RequireAuth>
+  );
+}
+
+function OnboardingWizard() {
+  const { personName, companyName, serviceStatus, status, refresh } = useSession();
+  const { signOut, error: signOutError } = useSignOut();
   const repo = useMemo(() => getRepository(), []);
   const queryClient = useQueryClient();
 
   const onboarding = useQuery({
     queryKey: ["onboarding"],
     queryFn: () => repo.getOnboarding(),
+    // Belt and braces with RequireAuth: the query must not run against an
+    // unresolved or anonymous session.
+    enabled: status === "authenticated",
   });
 
   const [step, setStep] = useState(1);
@@ -145,6 +217,9 @@ export function OnboardingPage() {
   const [projects, setProjects] = useState<Section>({});
   const [requirements, setRequirements] = useState<Section>({});
   const [seeded, setSeeded] = useState(false);
+  // Once submitted, the page shows the under-review summary; "editing" drops back
+  // into the wizard so the customer can correct answers and resubmit until launch.
+  const [editing, setEditing] = useState(false);
 
   // Seed local form state once from whatever was saved, so a returning customer
   // resumes where they left off.
@@ -152,7 +227,7 @@ export function OnboardingPage() {
     if (seeded || onboarding.data === undefined) return;
     const loaded: OnboardingState | null = onboarding.data;
     if (loaded) {
-      setCompanyInfo(loaded.companyInfo ?? {});
+      setCompanyInfo(normalizeCompanyInfo(loaded.companyInfo));
       setProgram(loaded.program ?? {});
       setProjects(loaded.projects ?? {});
       setRequirements(loaded.requirements ?? {});
@@ -179,23 +254,16 @@ export function OnboardingPage() {
   // Submitted / under review: show the waiting state regardless of local step.
   const submitted = serviceStatus === "in_review" || Boolean(onboarding.data?.submittedAt);
 
-  function sectionForStep(target: number): OnboardingPatch {
-    switch (target) {
-      case 1:
-        return { companyInfo };
-      case 2:
-        return { program };
-      case 3:
-        return { projects };
-      case 5:
-        return { requirements };
-      default:
-        return {};
-    }
-  }
+  const currentSections = { companyInfo, program, projects, requirements };
+  // Company name was already supplied at checkout, so it is the one required
+  // field; everything else is explicitly optional.
+  const requiredMissing = missingRequired(currentSections);
 
   async function goNext() {
-    const patch = { ...sectionForStep(step), currentStep: Math.min(step + 1, STEP_LABELS.length) };
+    const patch = {
+      ...sectionForStep(step, currentSections),
+      currentStep: Math.min(step + 1, STEP_LABELS.length),
+    };
     if (live) await save.mutateAsync(patch);
     else await repo.saveOnboarding(patch);
     setStep((s) => Math.min(s + 1, STEP_LABELS.length));
@@ -206,9 +274,24 @@ export function OnboardingPage() {
   }
 
   async function onSubmit() {
+    // Submitting with blanks is allowed, but confirm it so it is a choice, not a
+    // surprise — the customer can finish the rest from Settings later.
+    const missing = missingCount(currentSections);
+    if (live && missing > 0) {
+      const ok = window.confirm(
+        `You're submitting with ${missing} unanswered ${missing === 1 ? "item" : "items"}. ` +
+          "You can finish these yourself later from Settings. Submit now?",
+      );
+      if (!ok) return;
+    }
     // Persist the last edited section before submitting.
-    await repo.saveOnboarding({ ...sectionForStep(step), currentStep: STEP_LABELS.length });
+    await repo.saveOnboarding({
+      ...sectionForStep(step, currentSections),
+      currentStep: STEP_LABELS.length,
+    });
     await submit.mutateAsync();
+    // A resubmit from the editing flow returns to the under-review summary.
+    setEditing(false);
   }
 
   function toggleCoverage(option: string) {
@@ -221,17 +304,33 @@ export function OnboardingPage() {
 
   return (
     <div className="min-h-screen bg-background">
-      <Header personName={personName} onSignOut={() => void signOut()} />
+      <Header personName={personName} onSignOut={signOut} signOutError={signOutError} />
       <main className="mx-auto w-full max-w-3xl space-y-5 px-4 py-6 sm:px-6">
         {onboarding.isPending ? (
           <LoadingState label="Loading your onboarding" rows={4} />
         ) : onboarding.isError ? (
           <ErrorState description="Your onboarding could not be loaded. Nothing was changed." />
-        ) : submitted ? (
-          <WaitingScreen companyName={companyName} />
+        ) : submitted && !editing ? (
+          <UnderReviewScreen
+            companyName={companyName}
+            sections={currentSections}
+            onEditStep={(target) => {
+              setEditing(true);
+              setStep(target);
+            }}
+          />
         ) : (
           <>
             <div className="space-y-3">
+              {submitted ? (
+                <button
+                  type="button"
+                  onClick={() => setEditing(false)}
+                  className="focusable text-xs font-semibold text-primary underline"
+                >
+                  ← Back to review
+                </button>
+              ) : null}
               <h1 className="text-lg font-bold tracking-tight text-foreground">
                 Set up {companyName || "your workspace"}
               </h1>
@@ -246,14 +345,20 @@ export function OnboardingPage() {
               {step === 1 ? (
                 <div className="space-y-4">
                   <h2 className="text-sm font-bold text-foreground">Company</h2>
+                  <p className="text-xs text-muted-foreground">
+                    Only your company name is required. Everything else is optional — you can add it
+                    now or from Settings later.
+                  </p>
                   <div className="grid gap-3 sm:grid-cols-2">
                     <div>
                       <label className={labelClass} htmlFor="ob-company">
-                        Company name
+                        Company name <span className="text-destructive">*</span>
                       </label>
                       <input
                         id="ob-company"
                         className={inputClass}
+                        required
+                        aria-required="true"
                         value={text(companyInfo, "companyName")}
                         onChange={(e) =>
                           setCompanyInfo({ ...companyInfo, companyName: e.target.value })
@@ -320,6 +425,9 @@ export function OnboardingPage() {
               {step === 2 ? (
                 <div className="space-y-4">
                   <h2 className="text-sm font-bold text-foreground">Compliance program</h2>
+                  <p className="text-xs text-muted-foreground">
+                    Optional — skip anything now and add it from Settings later.
+                  </p>
                   <div>
                     <label className={labelClass} htmlFor="ob-vendortypes">
                       Types of vendors / subcontractors
@@ -375,6 +483,9 @@ export function OnboardingPage() {
               {step === 3 ? (
                 <div className="space-y-4">
                   <h2 className="text-sm font-bold text-foreground">Projects</h2>
+                  <p className="text-xs text-muted-foreground">
+                    Optional — skip anything now and add it from Settings later.
+                  </p>
                   <div>
                     <label className={labelClass} htmlFor="ob-projects">
                       Existing projects (one per line)
@@ -468,7 +579,7 @@ export function OnboardingPage() {
                   <h2 className="text-sm font-bold text-foreground">Requirements</h2>
                   <p className="text-sm text-muted-foreground">
                     Which coverages do you require from vendors? We&apos;ll build requirement
-                    profiles from this.
+                    profiles from this. Optional — you can set these up later from Settings.
                   </p>
                   <fieldset className="grid gap-2 sm:grid-cols-2">
                     <legend className="sr-only">Required coverages</legend>
@@ -509,27 +620,18 @@ export function OnboardingPage() {
                   <h2 className="text-sm font-bold text-foreground">Review &amp; submit</h2>
                   <p className="text-sm text-muted-foreground">
                     When you submit, our compliance team validates your setup — vendors, requirement
-                    profiles, projects and communication — then activates managed service and opens
-                    your console.
+                    profiles, projects and communication — then activates managed service. Your
+                    workspace stays open throughout, and you can edit and resubmit until we launch.
                   </p>
-                  <dl className="grid gap-2 text-sm">
-                    <div className="flex justify-between gap-4 border-b border-border py-1.5">
-                      <dt className="text-muted-foreground">Company</dt>
-                      <dd className="text-foreground">{text(companyInfo, "companyName") || "—"}</dd>
-                    </div>
-                    <div className="flex justify-between gap-4 border-b border-border py-1.5">
-                      <dt className="text-muted-foreground">Primary contact</dt>
-                      <dd className="text-foreground">
-                        {text(companyInfo, "primaryContact") || "—"}
-                      </dd>
-                    </div>
-                    <div className="flex justify-between gap-4 border-b border-border py-1.5">
-                      <dt className="text-muted-foreground">Required coverages</dt>
-                      <dd className="text-foreground">
-                        {stringArray(requirements, "coverages").length || 0} selected
-                      </dd>
-                    </div>
-                  </dl>
+                  <OnboardingReviewSummary sections={currentSections} onEditStep={setStep} />
+                  {requiredMissing.length > 0 ? (
+                    <p
+                      role="alert"
+                      className="rounded-sm border border-destructive/40 bg-danger-soft px-3 py-2 text-xs font-semibold text-destructive"
+                    >
+                      Add your company name before submitting — you can edit it on the Company step.
+                    </p>
+                  ) : null}
                   {submit.isError ? (
                     <p
                       role="alert"
@@ -558,22 +660,40 @@ export function OnboardingPage() {
                   Back
                 </button>
                 {step < STEP_LABELS.length ? (
-                  <button
-                    type="button"
-                    onClick={() => void goNext()}
-                    disabled={save.isPending}
-                    className="focusable rounded-sm bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-60"
-                  >
-                    {save.isPending ? "Saving…" : "Save & continue"}
-                  </button>
+                  <div className="flex items-center gap-2">
+                    {step !== 1 && stepIsEmpty(step, currentSections) ? (
+                      <button
+                        type="button"
+                        onClick={() => void goNext()}
+                        disabled={save.isPending}
+                        className="focusable rounded-sm border border-input bg-card px-3 py-2 text-sm font-semibold text-muted-foreground disabled:opacity-60"
+                      >
+                        Skip for now
+                      </button>
+                    ) : null}
+                    <button
+                      type="button"
+                      onClick={() => void goNext()}
+                      disabled={save.isPending}
+                      className="focusable rounded-sm bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-60"
+                    >
+                      {save.isPending ? "Saving…" : "Save & continue"}
+                    </button>
+                  </div>
                 ) : (
                   <button
                     type="button"
                     onClick={() => void onSubmit()}
-                    disabled={submit.isPending || !live}
+                    disabled={submit.isPending || !live || requiredMissing.length > 0}
                     className="focusable rounded-sm bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-60"
                   >
-                    {submit.isPending ? "Submitting…" : "Submit for review"}
+                    {submit.isPending
+                      ? submitted
+                        ? "Resubmitting…"
+                        : "Submitting…"
+                      : submitted
+                        ? "Save & resubmit"
+                        : "Submit for review"}
                   </button>
                 )}
               </div>

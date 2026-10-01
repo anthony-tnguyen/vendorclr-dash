@@ -217,10 +217,27 @@ export async function signUp(db: PGlite, user: TestUser): Promise<void> {
   await db.query(`insert into auth.users (id, email) values ($1, $2)`, [user.id, user.email]);
 
   if (user.companyName) {
+    // service_status only exists once the self-checkout migration has run. Tests
+    // that build the schema at an earlier migration point (stopBeforeMigration)
+    // have no such column, so set it only when it is actually present. Where it is,
+    // a signup company stands in for an activated workspace, which is 'live' — so
+    // the managed-service trigger does not block its request inserts.
+    const hasServiceStatus =
+      (
+        await db.query(
+          `select 1 from information_schema.columns
+           where table_schema = 'public' and table_name = 'companies'
+             and column_name = 'service_status'`,
+        )
+      ).rows.length > 0;
     const company = await db.query<{ id: string }>(
-      `insert into public.companies (name, activation_status, activated_at, activated_by)
-       values ($1, 'activated', now(), $2)
-       returning id`,
+      hasServiceStatus
+        ? `insert into public.companies (name, activation_status, activated_at, activated_by, service_status)
+           values ($1, 'activated', now(), $2, 'live')
+           returning id`
+        : `insert into public.companies (name, activation_status, activated_at, activated_by)
+           values ($1, 'activated', now(), $2)
+           returning id`,
       [user.companyName, user.id],
     );
     await db.query(

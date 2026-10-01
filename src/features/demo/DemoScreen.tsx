@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
 
 import { useSession } from "@/app/App";
+import { useSignOut } from "@/app/useSignOut";
 import { routes } from "@/app/router";
 import { ComplianceMatrix } from "@/components/compliance/ComplianceMatrix";
 import { ErrorState, LoadingState } from "@/components/states/AsyncState";
@@ -275,7 +276,8 @@ function SignedOutPrompt() {
 }
 
 export function DemoScreen() {
-  const { status, activation, isStaff, personName, signOut } = useSession();
+  const { status, activation, isStaff, personName } = useSession();
+  const { signOut, error: signOutError } = useSignOut();
   const revoked = activation === "revoked";
   const noCompanyYet = activation === "none" || activation === "demo";
 
@@ -310,13 +312,23 @@ export function DemoScreen() {
             ) : null}
             <button
               type="button"
-              onClick={() => void signOut()}
+              onClick={signOut}
               className="focusable rounded-sm border border-input bg-card px-3 py-1.5 text-xs font-semibold text-foreground"
             >
               Sign out
             </button>
           </div>
         </div>
+        {signOutError ? (
+          <div className="mx-auto w-full max-w-4xl px-4 pb-3 sm:px-6">
+            <p
+              role="alert"
+              className="rounded-sm border border-destructive/40 bg-danger-soft px-3 py-2 text-xs font-semibold text-destructive"
+            >
+              {signOutError}
+            </p>
+          </div>
+        ) : null}
       </header>
 
       <main

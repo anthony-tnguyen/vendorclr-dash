@@ -47,7 +47,7 @@ function newIdempotencyKey(): string {
 }
 
 export function VendorImportPage() {
-  const { companyId, companyName, companyRole } = useSession();
+  const { companyId, companyName, companyRole, serviceLive } = useSession();
   const live = isBackendConfigured();
   const canWrite = companyRole !== null && companyRole !== "read_only";
 
@@ -311,12 +311,13 @@ export function VendorImportPage() {
             <label className="mt-3 flex items-start gap-2 text-sm">
               <input
                 type="checkbox"
-                checked={dispatchRequests}
+                checked={dispatchRequests && serviceLive}
+                disabled={!serviceLive}
                 onChange={(e) => {
                   setDispatchRequests(e.target.checked);
                   setConfirmed(false);
                 }}
-                className="focusable mt-0.5 size-4 accent-primary"
+                className="focusable mt-0.5 size-4 accent-primary disabled:opacity-50"
               />
               <span>
                 Send an upload request to each vendor whose row has dispatch_request set to true
@@ -324,6 +325,12 @@ export function VendorImportPage() {
                   Sent to the vendor's operational contact. Suppressed addresses are skipped. A
                   failed send never undoes that row's import.
                 </span>
+                {!serviceLive ? (
+                  <span className="mt-1 block text-xs text-warn">
+                    Requests are held until your workspace is live — vendors will still be imported,
+                    and you can send requests after launch.
+                  </span>
+                ) : null}
               </span>
             </label>
 

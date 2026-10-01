@@ -774,5 +774,10 @@ export function createSupabaseRepository(
         }),
       );
     },
+
+    async requestCompanyChanges(companyId: string): Promise<void> {
+      const supabase = clientFactory();
+      unwrap(await supabase.rpc("request_company_changes", { target_company: companyId }));
+    },
   };
 }
