@@ -162,14 +162,14 @@ export function missingRequired(sections: WizardSections): FieldDef[] {
 
 export function normalizeCompanyInfo(raw: Record<string, unknown> | null | undefined): Section {
   const section: Section = { ...(raw ?? {}) };
-  const companyName = section.companyName;
-  const legacyName = section.name;
+  const companyName = section["companyName"];
+  const legacyName = section["name"];
   if (
     (typeof companyName !== "string" || companyName === "") &&
     typeof legacyName === "string" &&
     legacyName !== ""
   ) {
-    section.companyName = legacyName;
+    section["companyName"] = legacyName;
   }
   return section;
 }
