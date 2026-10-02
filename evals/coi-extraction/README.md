@@ -104,12 +104,24 @@ sync (`src/workflows/`, `supabase/functions/process-document-jobs/`,
 `supabase/functions/retry-failed-documents/`). To trial a change _before_
 editing production:
 
-1. Copy `candidate.example.ts` to `candidate.ts` and edit its prompt / effort /
-   model.
+1. Copy one of the example candidates to `candidate.ts` (only **one**
+   `candidate.ts` is active at a time) and edit it:
+   - `candidate.example.ts` — baseline extractor with prompt / effort / model
+     knobs. Start by flipping `EFFORT` from `medium` to `high`; it's the
+     biggest accuracy lever per line changed.
+   - `candidate-structured-outputs.example.ts` — trials server-enforced
+     structured outputs (`output_config.format` built from the existing zod
+     schema) in place of "respond with ONLY JSON" + parse. The win shows up as
+     fewer `needs_review (validation)` cases, not necessarily higher field
+     accuracy. See the note at the top of that file about the one SDK import
+     path to verify for your build.
 2. Run the eval — if `candidate.ts` exists, the harness tests it instead of
    production and labels the report accordingly.
 3. If it beats the baseline, port the winning change into **all three** copies
    (and bump `EXTRACTION_SCHEMA_VERSION` if the shape or prompt changed), then
    delete `candidate.ts` so the harness is measuring production again.
 
-`candidate.ts` is git-ignored — it is a scratch pad, not a deliverable.
+Run the baseline first (no `candidate.ts`), then each candidate, and compare
+the saved reports — A/B both against the same golden set, not against each
+other's memory. `candidate.ts` is git-ignored — it is a scratch pad, not a
+deliverable.
