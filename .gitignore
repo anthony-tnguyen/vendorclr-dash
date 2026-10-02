@@ -39,3 +39,7 @@ dist-ssr
 /test-results/
 /playwright-report/
 /blob-report/
+
+# COI eval harness: generated reports and local candidate scratch extractor
+/evals/coi-extraction/reports/
+/evals/coi-extraction/candidate.ts
