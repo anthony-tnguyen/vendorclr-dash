@@ -1,0 +1,58 @@
+{
+  "document_type": "ACORD_25",
+  "insured": {
+    "name": "Corbett Structural Steel LLC",
+    "address": "4120 Industrial Pkwy, Columbus, OH 43204"
+  },
+  "producer": {
+    "name": "Halstead Insurance Services"
+  },
+  "policies": [
+    {
+      "type": "general_liability",
+      "carrier": "Continental Casualty Company",
+      "policy_number": "GL-2291043",
+      "effective_date": "2026-01-01",
+      "expiration_date": "2027-01-01",
+      "limits": {
+        "each_occurrence": 1000000,
+        "general_aggregate": 2000000
+      },
+      "additional_insured": true,
+      "waiver_of_subrogation": true,
+      "primary_noncontributory": true,
+      "additional_insured_ongoing_operations": true,
+      "additional_insured_completed_operations": true,
+      "cancellation_notice_provided": true,
+      "cancellation_notice_days": 30,
+      "follows_form": null,
+      "endorsement_forms": ["CG 20 10 04 13", "CG 20 37 04 13"]
+    },
+    {
+      "type": "workers_compensation",
+      "carrier": "Ohio Casualty Insurance Company",
+      "policy_number": "WC-5582210",
+      "effective_date": "2026-01-01",
+      "expiration_date": "2027-01-01",
+      "limits": {},
+      "additional_insured": null,
+      "waiver_of_subrogation": true,
+      "primary_noncontributory": null,
+      "cancellation_notice_provided": true,
+      "cancellation_notice_days": 30,
+      "employers_liability": {
+        "each_accident": 1000000,
+        "disease_each_employee": 1000000,
+        "disease_policy_limit": 1000000
+      },
+      "follows_form": null,
+      "endorsement_forms": null
+    }
+  ],
+  "certificate_holder": {
+    "name": "Halstead Builders Inc.",
+    "address": "900 Commerce Dr, Dublin, OH 43017"
+  },
+  "overall_confidence": 0.95,
+  "notes": null
+}
