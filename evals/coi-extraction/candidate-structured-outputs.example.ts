@@ -68,14 +68,20 @@ function toBase64(bytes: ArrayBuffer): string {
   return btoa(binary);
 }
 
-function buildUserContent(input: ExtractDocumentInput): Array<Anthropic.Messages.ContentBlockParam> {
+function buildUserContent(
+  input: ExtractDocumentInput,
+): Array<Anthropic.Messages.ContentBlockParam> {
   const data = toBase64(input.fileBytes);
   const documentBlock: Anthropic.Messages.ContentBlockParam =
     input.mimeType === "application/pdf"
       ? { type: "document", source: { type: "base64", media_type: "application/pdf", data } }
       : {
           type: "image",
-          source: { type: "base64", media_type: input.mimeType as "image/jpeg" | "image/png", data },
+          source: {
+            type: "base64",
+            media_type: input.mimeType as "image/jpeg" | "image/png",
+            data,
+          },
         };
   return [
     documentBlock,
@@ -87,7 +93,12 @@ const candidate: DocumentExtractor = {
   async extract(input): Promise<ExtractDocumentResult> {
     const apiKey = process.env["ANTHROPIC_API_KEY"]?.trim();
     if (!apiKey) {
-      return { status: "not_configured", data: null, confidence: null, error: "ANTHROPIC_API_KEY unset" };
+      return {
+        status: "not_configured",
+        data: null,
+        confidence: null,
+        error: "ANTHROPIC_API_KEY unset",
+      };
     }
     const client = new Anthropic({ apiKey });
 
@@ -110,17 +121,28 @@ const candidate: DocumentExtractor = {
         status: "failed",
         data: null,
         confidence: null,
-        error: error instanceof Error ? error.message : "Unknown error calling the extraction model",
+        error:
+          error instanceof Error ? error.message : "Unknown error calling the extraction model",
       };
     }
 
     if (response.stop_reason === "refusal") {
-      return { status: "failed", data: null, confidence: null, error: "The model declined to process this document." };
+      return {
+        status: "failed",
+        data: null,
+        confidence: null,
+        error: "The model declined to process this document.",
+      };
     }
 
     const text = response.content.find((block) => block.type === "text")?.text;
     if (!text) {
-      return { status: "failed", data: null, confidence: null, error: "No text in the model response." };
+      return {
+        status: "failed",
+        data: null,
+        confidence: null,
+        error: "No text in the model response.",
+      };
     }
 
     // Still run the production parse/normalize/validate path as defense in
@@ -132,7 +154,10 @@ const candidate: DocumentExtractor = {
     }
 
     return {
-      status: parsed.data.overall_confidence >= CONFIDENCE_NEEDS_REVIEW_BELOW ? "processed" : "needs_review",
+      status:
+        parsed.data.overall_confidence >= CONFIDENCE_NEEDS_REVIEW_BELOW
+          ? "processed"
+          : "needs_review",
       data: parsed.data,
       confidence: parsed.data.overall_confidence,
       error: null,

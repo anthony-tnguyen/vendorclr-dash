@@ -93,11 +93,11 @@ field is absent is a right answer.
 
 Wrong answers are split into three kinds because they do not cost the same:
 
-| Kind | Meaning | Why it matters |
-|---|---|---|
-| **miss** | truth had a value, model said `null` | conservative error; routes to review |
+| Kind              | Meaning                                  | Why it matters                             |
+| ----------------- | ---------------------------------------- | ------------------------------------------ |
+| **miss**          | truth had a value, model said `null`     | conservative error; routes to review       |
 | **hallucination** | truth was `null`, model invented a value | the trust-killer — a confident wrong field |
-| **mismatch** | both had values, they differ | wrong reading |
+| **mismatch**      | both had values, they differ             | wrong reading                              |
 
 String fields (carrier, insured/holder names and addresses) are matched
 fuzzily (case/whitespace/punctuation-insensitive, with containment and token

@@ -99,10 +99,17 @@ interface Args {
 }
 
 function parseArgs(argv: string[]): Args {
-  const a: Args = { since: null, limit: DEFAULT_LIMIT, company: null, out: DEFAULT_OUT, force: false };
+  const a: Args = {
+    since: null,
+    limit: DEFAULT_LIMIT,
+    company: null,
+    out: DEFAULT_OUT,
+    force: false,
+  };
   for (const arg of argv) {
     if (arg.startsWith("--since=")) a.since = arg.slice("--since=".length);
-    else if (arg.startsWith("--limit=")) a.limit = Number.parseInt(arg.slice("--limit=".length), 10);
+    else if (arg.startsWith("--limit="))
+      a.limit = Number.parseInt(arg.slice("--limit=".length), 10);
     else if (arg.startsWith("--company=")) a.company = arg.slice("--company=".length);
     else if (arg.startsWith("--out=")) a.out = arg.slice("--out=".length);
     else if (arg === "--force") a.force = true;
@@ -129,7 +136,10 @@ function caseIdFor(row: ReviewerEditRow): string {
   return `captured-${date}-${row.id.slice(0, 8)}`;
 }
 
-async function fetchReviewerEdits(supabase: SupabaseClient, args: Args): Promise<ReviewerEditRow[]> {
+async function fetchReviewerEdits(
+  supabase: SupabaseClient,
+  args: Args,
+): Promise<ReviewerEditRow[]> {
   let query = supabase
     .from("document_extractions")
     .select("id, company_id, document_id, parsed_data, confidence, reviewer_id, attempted_at")
@@ -144,7 +154,10 @@ async function fetchReviewerEdits(supabase: SupabaseClient, args: Args): Promise
   return (data ?? []) as unknown as ReviewerEditRow[];
 }
 
-async function fetchDocument(supabase: SupabaseClient, documentId: string): Promise<DocumentRow | null> {
+async function fetchDocument(
+  supabase: SupabaseClient,
+  documentId: string,
+): Promise<DocumentRow | null> {
   const { data, error } = await supabase
     .from("vendor_documents")
     .select("storage_path, mime_type, file_name")
@@ -180,7 +193,9 @@ async function main(): Promise<void> {
     // Ground truth must be schema-valid, or it is not a usable golden answer.
     const parsed = InsuranceExtractionSchema.safeParse(normalizeExtraction(row.parsed_data));
     if (!parsed.success) {
-      skipped.push(`${caseId} (correction failed schema validation: ${parsed.error.issues[0]?.message ?? "invalid"})`);
+      skipped.push(
+        `${caseId} (correction failed schema validation: ${parsed.error.issues[0]?.message ?? "invalid"})`,
+      );
       continue;
     }
 
@@ -199,13 +214,18 @@ async function main(): Promise<void> {
       .from(VENDOR_DOCUMENTS_BUCKET)
       .download(doc.storage_path);
     if (dlError || !blob) {
-      skipped.push(`${caseId} (could not download ${doc.storage_path}: ${dlError?.message ?? "no data"})`);
+      skipped.push(
+        `${caseId} (could not download ${doc.storage_path}: ${dlError?.message ?? "no data"})`,
+      );
       continue;
     }
 
     await mkdir(caseDir, { recursive: true });
     await writeFile(path.join(caseDir, `document${ext}`), new Uint8Array(await blob.arrayBuffer()));
-    await writeFile(path.join(caseDir, "expected.json"), JSON.stringify(parsed.data, null, 2) + "\n");
+    await writeFile(
+      path.join(caseDir, "expected.json"),
+      JSON.stringify(parsed.data, null, 2) + "\n",
+    );
     await writeFile(
       path.join(caseDir, "provenance.json"),
       JSON.stringify(

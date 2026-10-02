@@ -137,7 +137,11 @@ function stringsMatch(exp: string, act: string): boolean {
 }
 
 function normFormToken(s: string): string {
-  return s.toUpperCase().replace(/[^A-Z0-9]+/g, " ").trim().replace(/\s+/g, " ");
+  return s
+    .toUpperCase()
+    .replace(/[^A-Z0-9]+/g, " ")
+    .trim()
+    .replace(/\s+/g, " ");
 }
 
 function compareField(kind: FieldKind, expRaw: unknown, actRaw: unknown): Outcome {
@@ -174,10 +178,25 @@ function compareField(kind: FieldKind, expRaw: unknown, actRaw: unknown): Outcom
 
 function topLevelSpecs(exp: InsuranceExtraction, act: InsuranceExtraction): FieldSpec[] {
   return [
-    { label: "document_type", kind: "string", expected: exp.document_type, actual: act.document_type },
+    {
+      label: "document_type",
+      kind: "string",
+      expected: exp.document_type,
+      actual: act.document_type,
+    },
     { label: "insured.name", kind: "string", expected: exp.insured.name, actual: act.insured.name },
-    { label: "insured.address", kind: "string", expected: exp.insured.address, actual: act.insured.address },
-    { label: "producer.name", kind: "string", expected: exp.producer.name, actual: act.producer.name },
+    {
+      label: "insured.address",
+      kind: "string",
+      expected: exp.insured.address,
+      actual: act.insured.address,
+    },
+    {
+      label: "producer.name",
+      kind: "string",
+      expected: exp.producer.name,
+      actual: act.producer.name,
+    },
     {
       label: "certificate_holder.name",
       kind: "string",
@@ -200,9 +219,24 @@ function policySpecs(exp: ExtractedPolicy, act: ExtractedPolicy | null): FieldSp
   const ael = a.employers_liability ?? {};
   return [
     { label: "policy.carrier", kind: "string", expected: exp.carrier, actual: a.carrier },
-    { label: "policy.policy_number", kind: "string", expected: exp.policy_number, actual: a.policy_number },
-    { label: "policy.effective_date", kind: "date", expected: exp.effective_date, actual: a.effective_date },
-    { label: "policy.expiration_date", kind: "date", expected: exp.expiration_date, actual: a.expiration_date },
+    {
+      label: "policy.policy_number",
+      kind: "string",
+      expected: exp.policy_number,
+      actual: a.policy_number,
+    },
+    {
+      label: "policy.effective_date",
+      kind: "date",
+      expected: exp.effective_date,
+      actual: a.effective_date,
+    },
+    {
+      label: "policy.expiration_date",
+      kind: "date",
+      expected: exp.expiration_date,
+      actual: a.expiration_date,
+    },
     {
       label: "policy.limits.each_occurrence",
       kind: "number",
@@ -215,7 +249,12 @@ function policySpecs(exp: ExtractedPolicy, act: ExtractedPolicy | null): FieldSp
       expected: exp.limits.general_aggregate,
       actual: a.limits?.general_aggregate,
     },
-    { label: "policy.additional_insured", kind: "bool", expected: exp.additional_insured, actual: a.additional_insured },
+    {
+      label: "policy.additional_insured",
+      kind: "bool",
+      expected: exp.additional_insured,
+      actual: a.additional_insured,
+    },
     {
       label: "policy.waiver_of_subrogation",
       kind: "bool",
@@ -270,7 +309,12 @@ function policySpecs(exp: ExtractedPolicy, act: ExtractedPolicy | null): FieldSp
       expected: el.disease_policy_limit,
       actual: ael.disease_policy_limit,
     },
-    { label: "policy.follows_form", kind: "bool", expected: exp.follows_form, actual: a.follows_form },
+    {
+      label: "policy.follows_form",
+      kind: "bool",
+      expected: exp.follows_form,
+      actual: a.follows_form,
+    },
     {
       label: "policy.endorsement_forms",
       kind: "stringArray",
@@ -428,7 +472,9 @@ async function findDocument(caseDir: string): Promise<{ path: string; mimeType: 
   return null;
 }
 
-async function loadCases(casesDir: string): Promise<{ runnable: RunnableCase[]; skipped: string[] }> {
+async function loadCases(
+  casesDir: string,
+): Promise<{ runnable: RunnableCase[]; skipped: string[] }> {
   const runnable: RunnableCase[] = [];
   const skipped: string[] = [];
   if (!existsSync(casesDir)) return { runnable, skipped };
@@ -472,7 +518,10 @@ async function resolveExtractor(): Promise<{ extractor: DocumentExtractor; sourc
     }
     throw new Error(`${CANDIDATE_PATH} exists but does not default-export a DocumentExtractor.`);
   }
-  return { extractor: getDocumentExtractor(), source: "production (src/workflows/documentExtraction.ts)" };
+  return {
+    extractor: getDocumentExtractor(),
+    source: "production (src/workflows/documentExtraction.ts)",
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -508,7 +557,12 @@ function printReport(grades: CaseGrade[], source: string, quiet: boolean): unkno
   }
 
   // Routing 2x2.
-  const quadrant = { autoSafe: 0, autoUnsafe: [] as string[], heldCorrectly: 0, heldOvercautious: 0 };
+  const quadrant = {
+    autoSafe: 0,
+    autoUnsafe: [] as string[],
+    heldCorrectly: 0,
+    heldOvercautious: 0,
+  };
   for (const g of grades) {
     if (g.autoProcessed) {
       if (g.accuracy >= SAFE_AUTO_ACCURACY) quadrant.autoSafe++;
@@ -544,7 +598,9 @@ function printReport(grades: CaseGrade[], source: string, quiet: boolean): unkno
   console.log(`Cases run            : ${grades.length}`);
   console.log(`Model confidence     : ${CONFIDENCE_NEEDS_REVIEW_BELOW}+ auto-processes`);
   console.log("-".repeat(72));
-  console.log(`HEADLINE field accuracy : ${pct(totalCorrect, totalGraded)}  (${totalCorrect}/${totalGraded})`);
+  console.log(
+    `HEADLINE field accuracy : ${pct(totalCorrect, totalGraded)}  (${totalCorrect}/${totalGraded})`,
+  );
   console.log(
     `  wrong breakdown        : ${totalMiss} miss (said null, had value) · ` +
       `${totalHalluc} hallucination (said value, was null) · ${totalMismatch} mismatch`,
@@ -611,7 +667,11 @@ function printReport(grades: CaseGrade[], source: string, quiet: boolean): unkno
     generatedAt: new Date().toISOString(),
     extractorSource: source,
     casesRun: grades.length,
-    headline: { correct: totalCorrect, graded: totalGraded, accuracy: totalGraded ? totalCorrect / totalGraded : 1 },
+    headline: {
+      correct: totalCorrect,
+      graded: totalGraded,
+      accuracy: totalGraded ? totalCorrect / totalGraded : 1,
+    },
     wrong: { miss: totalMiss, hallucination: totalHalluc, mismatch: totalMismatch },
     policyDetection: { tp: policyTP, fp: policyFP, fn: policyFN },
     routing: {
@@ -671,7 +731,10 @@ async function main(): Promise<void> {
     // Slice to the exact file bytes: Node pools small Buffers, so `.buffer`
     // alone can carry unrelated bytes from the shared pool into the encoder.
     const buf = await readFile(c.documentPath);
-    const fileBytes = buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength) as ArrayBuffer;
+    const fileBytes = buf.buffer.slice(
+      buf.byteOffset,
+      buf.byteOffset + buf.byteLength,
+    ) as ArrayBuffer;
     const result = await extractor.extract({ fileBytes, mimeType: c.mimeType });
 
     if (result.status === "not_configured") {
@@ -691,7 +754,10 @@ async function main(): Promise<void> {
   const report = printReport(grades, source, quiet);
 
   await mkdir(REPORTS_DIR, { recursive: true });
-  const reportPath = path.join(REPORTS_DIR, `${new Date().toISOString().replace(/[:.]/g, "-")}.json`);
+  const reportPath = path.join(
+    REPORTS_DIR,
+    `${new Date().toISOString().replace(/[:.]/g, "-")}.json`,
+  );
   await writeFile(reportPath, JSON.stringify(report, null, 2));
   console.log(`Full report written to ${reportPath}`);
 }
