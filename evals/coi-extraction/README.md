@@ -48,6 +48,31 @@ cases/
   against garbage. Fields that are genuinely unreadable on the certificate must
   be `null` — that is a real, gradeable answer, not a blank.
 
+### The fastest source of cases: your own review queue
+
+Every human correction on the review screen is stored as a `reviewer_edit`
+`document_extractions` row whose `parsed_data` is the full, verified correct
+extraction — ground truth for a real, hard certificate, for free. Harvest
+those into golden-case format with:
+
+```bash
+VENDORCLEAR_SUPABASE_URL=... VENDORCLEAR_SERVICE_ROLE_KEY=... bun run capture:golden
+# incremental / scoped:
+... bun run capture:golden -- --since=2026-09-01 --limit=100 --company=<uuid>
+```
+
+It reads the live project (service-role, read-only), takes the latest
+correction per document, and stages each as `document.*` + `expected.json` +
+`provenance.json` under `evals/coi-extraction/captured/` — which is
+**git-ignored on purpose**. These are real customer certificates. Review each,
+confirm the correction is right, redact anything that shouldn't be retained,
+then move the good ones into `cases/`. The capture step never writes to the
+committed set itself.
+
+This is the flywheel: production correction → captured case → tuning → fewer
+corrections. Run it periodically and the golden set grows exactly where the
+parser is weakest.
+
 **Aim for ~30–50 cases that span the hard cases, not 50 clean ones:** crisp
 machine-generated ACORD 25s, poor scans, handwriting, multi-policy certificates
 (GL + WC + Auto + Umbrella on one form), struck-through or amended cancellation

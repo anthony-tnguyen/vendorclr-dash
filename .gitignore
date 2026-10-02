@@ -43,3 +43,5 @@ dist-ssr
 # COI eval harness: generated reports and local candidate scratch extractor
 /evals/coi-extraction/reports/
 /evals/coi-extraction/candidate.ts
+# Captured real customer certificates staged for review before promotion to cases/
+/evals/coi-extraction/captured/

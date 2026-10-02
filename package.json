@@ -16,6 +16,7 @@
     "db:verify": "vitest run --config vitest.db.config.ts",
     "e2e": "playwright test",
     "eval:coi": "bun scripts/eval-coi-extraction.ts",
+    "capture:golden": "bun scripts/capture-golden-cases.ts",
     "check:email-deliverability": "bun scripts/check-email-deliverability.ts",
     "export:company": "bun scripts/export-company.ts",
     "delete:company": "bun scripts/delete-company.ts",
