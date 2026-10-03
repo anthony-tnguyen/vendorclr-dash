@@ -8,6 +8,7 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 import Anthropic from "npm:@anthropic-ai/sdk@0.122.0";
 
 import { extractDocument } from "./documentExtraction.ts";
+import { PARSER_METADATA } from "../_shared/coiParserContract.ts";
 import { logOperational, newRequestId } from "./operationalLog.ts";
 
 /**
@@ -37,8 +38,7 @@ import { logOperational, newRequestId } from "./operationalLog.ts";
  * it must see every company's due documents, not one tenant's.
  */
 
-/** Matches EXTRACTION_SCHEMA_VERSION in src/workflows/insuranceExtractionSchema.ts exactly - keep the two in sync. */
-const EXTRACTION_SCHEMA_VERSION = "2026-09-16-task9a";
+/** Parser provenance comes from the generated canonical contract. */
 
 const MAX_AUTO_RETRIES = 5;
 const BACKOFF_HOURS_BY_ATTEMPT = [1, 4, 12, 24, 48];
@@ -168,9 +168,9 @@ Deno.serve(async (req: Request) => {
         p_document_id: row.document_id,
         p_company_id: row.company_id,
         p_source: "model",
-        p_provider: "anthropic",
-        p_model: "claude-opus-5",
-        p_prompt_version: EXTRACTION_SCHEMA_VERSION,
+        p_provider: PARSER_METADATA.provider,
+        p_model: PARSER_METADATA.model,
+        p_prompt_version: `${PARSER_METADATA.promptVersion}:${PARSER_METADATA.schemaVersion}:${PARSER_METADATA.parserVersion}:${PARSER_METADATA.contractFingerprint}`,
         p_confidence: extraction.confidence,
         p_parsed_data: extraction.data,
         p_error: null,

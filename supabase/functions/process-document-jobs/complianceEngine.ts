@@ -3,7 +3,7 @@
 // isGeneralLiability) to Supabase's Deno Edge Runtime - no I/O, no
 // Deno-specific APIs, nothing here differs from the Node original except the
 // two type imports, which point at this directory's own copies
-// (insuranceExtractionSchema.ts) and a local ComplianceStatus type (below)
+// (the generated canonical parser contract) and a local ComplianceStatus type (below)
 // instead of "@/data/contracts", which is not resolvable across the Node/
 // Deno boundary. If the Node original changes, check this file too.
 //
@@ -18,7 +18,7 @@
 // app's Phase 3 feature, not a neutral simplification - see this Edge
 // Function's own index.ts docblock and this dispatch's task description for
 // the full reasoning.
-import type { ExtractedPolicy, PolicyType } from "./insuranceExtractionSchema.ts";
+import type { ExtractedPolicy, PolicyType } from "../_shared/coiParserContract.ts";
 
 export type ComplianceStatus = "compliant" | "expiring" | "missing" | "expired" | "pending";
 

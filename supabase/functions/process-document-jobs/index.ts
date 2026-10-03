@@ -24,7 +24,7 @@ import {
   documentReceivedSubject,
   documentReceivedText,
 } from "./emailTemplates.ts";
-import type { ExtractedPolicy } from "./insuranceExtractionSchema.ts";
+import { PARSER_METADATA, type ExtractedPolicy } from "../_shared/coiParserContract.ts";
 import { logOperational, newRequestId } from "./operationalLog.ts";
 
 /**
@@ -115,8 +115,7 @@ import { logOperational, newRequestId } from "./operationalLog.ts";
  * a claimed batch can span multiple companies in one invocation.
  */
 
-/** Matches EXTRACTION_SCHEMA_VERSION in src/workflows/insuranceExtractionSchema.ts exactly - keep the two in sync. */
-const EXTRACTION_SCHEMA_VERSION = "2026-09-16-task9a";
+/** Parser provenance comes from the generated canonical contract. */
 
 const BATCH_SIZE = 10;
 const BACKOFF_SECONDS_BY_ATTEMPT = [15, 45, 120, 300];
@@ -605,9 +604,9 @@ async function finalizeSuccess(
     p_document_id: job.target_document_id,
     p_company_id: job.company_id,
     p_source: "model",
-    p_provider: "anthropic",
-    p_model: "claude-opus-5",
-    p_prompt_version: EXTRACTION_SCHEMA_VERSION,
+    p_provider: PARSER_METADATA.provider,
+    p_model: PARSER_METADATA.model,
+    p_prompt_version: `${PARSER_METADATA.promptVersion}:${PARSER_METADATA.schemaVersion}:${PARSER_METADATA.parserVersion}:${PARSER_METADATA.contractFingerprint}`,
     p_confidence: extraction.confidence,
     p_parsed_data: extraction.data,
     p_error: extraction.error,

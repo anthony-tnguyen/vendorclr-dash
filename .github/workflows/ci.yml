@@ -30,6 +30,9 @@ jobs:
       - name: Type-check
         run: bun run typecheck
 
+      - name: Check generated COI parser adapter
+        run: bun run check:coi-parser-contract
+
       - name: Lint
         run: bun run lint
 
