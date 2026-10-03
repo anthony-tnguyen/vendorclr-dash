@@ -88,15 +88,26 @@ interface AuthFormState {
   notice: string | null;
   error: string | null;
   pending: boolean;
+  // When a submit reaches a terminal success - e.g. "check your email to
+  // confirm" - there is nothing left to type. The page replaces the form with
+  // the notice alone so the screen clearly reads as finished.
+  done: boolean;
 }
 
-const IDLE: AuthFormState = { notice: null, error: null, pending: false };
+const IDLE: AuthFormState = { notice: null, error: null, pending: false, done: false };
+
+/**
+ * The shape a submit handler may return. A bare string is a notice that leaves
+ * the form in place; `{ notice, done: true }` marks a terminal success so the
+ * page can clear the form and show only the confirmation.
+ */
+type AuthFormResult = string | { notice: string; done?: boolean };
 
 /**
  * Wraps a submit handler with pending/notice/error state. In demo mode the
  * handler is never called and the original demo notice is shown instead.
  */
-function useAuthForm(handler: (form: FormData) => Promise<string>) {
+function useAuthForm(handler: (form: FormData) => Promise<AuthFormResult>) {
   const [state, setState] = useState<AuthFormState>(IDLE);
 
   const onSubmit = async (event: FormEvent<HTMLFormElement>) => {
@@ -108,19 +119,23 @@ function useAuthForm(handler: (form: FormData) => Promise<string>) {
         notice: "Demo mode: nothing was submitted, saved or emailed. Open the dashboard directly.",
         error: null,
         pending: false,
+        done: false,
       });
       return;
     }
 
-    setState({ notice: null, error: null, pending: true });
+    setState({ notice: null, error: null, pending: true, done: false });
     try {
-      const notice = await handler(form);
-      setState({ notice, error: null, pending: false });
+      const result = await handler(form);
+      const notice = typeof result === "string" ? result : result.notice;
+      const done = typeof result === "string" ? false : (result.done ?? false);
+      setState({ notice, error: null, pending: false, done });
     } catch (error) {
       setState({
         notice: null,
         error: error instanceof Error ? error.message : "Something went wrong. Try again.",
         pending: false,
+        done: false,
       });
     }
   };
@@ -148,6 +163,30 @@ function Messages({ notice, error }: { notice: string | null; error: string | nu
         </p>
       ) : null}
     </>
+  );
+}
+
+/**
+ * Shown in place of a form once a submit reaches a terminal success (e.g. the
+ * signup confirmation email is on its way). It is the only thing left on the
+ * card, so the screen reads as finished rather than as a form still awaiting
+ * input.
+ */
+function AuthConfirmation({ title, message }: { title: string; message: string }) {
+  return (
+    <div className="mt-4" role="status">
+      <div className="flex size-10 items-center justify-center rounded-full bg-primary/10 text-primary">
+        <svg viewBox="0 0 20 20" fill="currentColor" aria-hidden="true" className="size-5">
+          <path
+            fillRule="evenodd"
+            d="M16.7 5.3a1 1 0 0 1 0 1.4l-7.5 7.5a1 1 0 0 1-1.4 0l-3.5-3.5a1 1 0 1 1 1.4-1.4l2.8 2.79 6.8-6.79a1 1 0 0 1 1.4 0Z"
+            clipRule="evenodd"
+          />
+        </svg>
+      </div>
+      <h2 className="mt-3 text-base font-semibold text-foreground">{title}</h2>
+      <p className="mt-1 text-sm text-muted-foreground">{message}</p>
+    </div>
   );
 }
 
@@ -251,7 +290,7 @@ export function SignupPage() {
     }
   }
 
-  const { notice, error, pending, onSubmit } = useAuthForm(async (form) => {
+  const { notice, error, pending, done, onSubmit } = useAuthForm(async (form) => {
     // Sign-up is open: an account is created with no company attached, and the
     // handle_new_user() trigger creates the profile only. The workspace itself
     // arrives later, when an activation code is redeemed on the demo screen -
@@ -282,7 +321,13 @@ export function SignupPage() {
       await goToDestination();
       return "Account created.";
     }
-    return "Check your email to confirm the account, then sign in.";
+    // No session means Supabase is waiting on email confirmation: there is
+    // nothing left to do on this screen, so mark it terminal and let the page
+    // clear the form.
+    return {
+      notice: "Check your email to confirm the account, then sign in.",
+      done: true,
+    };
   });
 
   return (
@@ -298,30 +343,37 @@ export function SignupPage() {
         </span>
       }
     >
-      <form onSubmit={onSubmit} className="mt-4 space-y-4">
-        <Field id="full-name" label="Your name" autoComplete="name" />
-        <Field
-          id="signup-email"
-          label="Work email"
-          type="email"
-          autoComplete="email"
-          required={live}
-          hint="The address any activation code for your company will be issued to."
+      {done ? (
+        <AuthConfirmation
+          title="Check your email"
+          message={notice ?? "Check your email to confirm the account, then sign in."}
         />
-        <Field
-          id="signup-password"
-          label="Password"
-          type="password"
-          autoComplete="new-password"
-          required={live}
-          hint="Minimum 12 characters."
-        />
-        <button type="submit" disabled={pending} className={submitClass}>
-          {pending ? "Creating…" : live ? "Create account" : "Create account (demo)"}
-        </button>
-        <LegalConsent action="creating an account" />
-        <Messages notice={notice} error={error} />
-      </form>
+      ) : (
+        <form onSubmit={onSubmit} className="mt-4 space-y-4">
+          <Field id="full-name" label="Your name" autoComplete="name" />
+          <Field
+            id="signup-email"
+            label="Work email"
+            type="email"
+            autoComplete="email"
+            required={live}
+            hint="The address any activation code for your company will be issued to."
+          />
+          <Field
+            id="signup-password"
+            label="Password"
+            type="password"
+            autoComplete="new-password"
+            required={live}
+            hint="Minimum 12 characters."
+          />
+          <button type="submit" disabled={pending} className={submitClass}>
+            {pending ? "Creating…" : live ? "Create account" : "Create account (demo)"}
+          </button>
+          <LegalConsent action="creating an account" />
+          <Messages notice={notice} error={error} />
+        </form>
+      )}
     </AuthLayout>
   );
 }
