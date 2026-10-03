@@ -17,6 +17,8 @@
     "e2e": "playwright test",
     "eval:coi": "bun scripts/eval-coi-extraction.ts",
     "capture:golden": "bun scripts/capture-golden-cases.ts",
+    "sync:coi-parser-contract": "bun scripts/sync-coi-parser-contract.ts",
+    "check:coi-parser-contract": "bun scripts/sync-coi-parser-contract.ts --check",
     "check:email-deliverability": "bun scripts/check-email-deliverability.ts",
     "export:company": "bun scripts/export-company.ts",
     "delete:company": "bun scripts/delete-company.ts",

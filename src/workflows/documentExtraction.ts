@@ -1,10 +1,15 @@
 import Anthropic from "@anthropic-ai/sdk";
 
 import {
-  INSURANCE_EXTRACTION_JSON_SHAPE,
+  CONFIDENCE_NEEDS_REVIEW_BELOW,
+  EXTRACTION_MODEL,
+  EXTRACTION_PROVIDER,
+  SYSTEM_PROMPT,
   parseExtractionResponse,
   type InsuranceExtraction,
-} from "./insuranceExtractionSchema";
+} from "./coiParserContract";
+
+export { EXTRACTION_MODEL, EXTRACTION_PROVIDER } from "./coiParserContract";
 
 /**
  * Document -> structured JSON, server-side only. Same pluggable-provider
@@ -39,44 +44,6 @@ export interface DocumentExtractor {
   extract(input: ExtractDocumentInput): Promise<ExtractDocumentResult>;
 }
 
-/** claude-opus-5 only, per this project's Anthropic API usage policy - never substituted for a cheaper model. */
-const MODEL = "claude-opus-5";
-
-/**
- * Exported so callers recording a document_extractions row
- * (record_document_extraction()'s p_provider/p_model - Task 9a) can cite the
- * exact provider/model this attempt used without duplicating the string.
- */
-export const EXTRACTION_PROVIDER = "anthropic";
-export const EXTRACTION_MODEL = MODEL;
-
-/**
- * Below this confidence, a technically-valid extraction is still routed to
- * `needs_review` rather than `processed`. `processed` does not mean
- * "compliant" - see the migration comment on vendor_documents - but it does
- * mean "trustworthy enough that Phase 3 could reasonably act on it without a
- * human looking first." A hedge below this line should not carry that
- * implication.
- */
-const CONFIDENCE_NEEDS_REVIEW_BELOW = 0.6;
-
-const SYSTEM_PROMPT = `You extract structured data from certificates of insurance (typically ACORD 25 forms) for a construction vendor-compliance product.
-
-Respond with ONLY a single JSON object matching this exact shape - no markdown fencing, no prose before or after:
-
-${INSURANCE_EXTRACTION_JSON_SHAPE}
-
-Rules:
-- Extract every policy listed (General Liability, Workers Compensation, Auto, Umbrella, Professional Liability, Pollution Liability, Builders Risk, etc.) as a separate entry in "policies" - a single certificate commonly lists several.
-- A certificate of insurance itself typically states it confers no rights on the certificate holder and does not amend the referenced policies. Additional-insured, waiver-of-subrogation, and primary-noncontributory status are usually shown by a checkbox tied to an attached endorsement form (e.g. CG 20 10, CG 20 37, CG 24 04). If you cannot see an endorsement page, or the checkbox is ambiguous, use null for that field and say so in "notes" rather than inferring an answer from the checkbox alone.
-- Additional-insured coverage is often split across two separate checkboxes/endorsements: "ongoing operations" (commonly CG 20 10) and "completed operations" (commonly CG 20 37). Report each independently in additional_insured_ongoing_operations/additional_insured_completed_operations when the certificate distinguishes them; still set the overall additional_insured field to your best single read of whether additional-insured status applies at all. If the certificate only shows one combined checkbox with no ongoing/completed split, leave the two split fields null rather than guessing which one it means.
-- cancellation_notice_provided is whether the certificate shows the required advance-cancellation-notice language (most ACORD 25 forms carry this near the bottom, sometimes struck through or amended). cancellation_notice_days is the stated notice period in days if you can read a specific number - leave it null if the language is present but no specific day count is legible.
-- employers_liability applies only to a Workers Compensation policy line (leave it null for every other coverage type) - it is that policy's separate "Part Two" limits (each accident / disease-each-employee / disease-policy-limit), distinct from the policy's own liability limits.
-- follows_form is specific to an Umbrella/Excess policy line: does the certificate state the umbrella/excess policy follows form over (or otherwise provides evidence of excess coverage for) the scheduled underlying policies. Leave null for other coverage types or when not stated.
-- endorsement_forms lists specific endorsement form numbers you can actually read as attached to or referenced by that policy line (e.g. "CG 20 10 07 04"). Use null if the certificate gives no basis to identify any forms by number (this is the common case), or an empty array only if you positively confirmed no endorsement forms are named.
-- Use null for anything you cannot read confidently - illegible handwriting, a cut-off scan, a field simply not present. Do not guess.
-- Dates must be ISO format (yyyy-mm-dd) or null.
-- "overall_confidence" is your own assessment of this whole extraction, 0.0-1.0. A clean, fully machine-generated certificate with every field legible should score high; a poor scan, handwriting, or missing pages should score lower - this number is what routes the result to automatic processing versus human review, so do not inflate it.`;
 
 /**
  * Standard base64 (not base64url - the Anthropic API expects the former for
@@ -113,7 +80,7 @@ function buildUserContent(
   ];
 }
 
-function statusForConfidence(confidence: number): "processed" | "needs_review" {
+export function statusForConfidence(confidence: number): "processed" | "needs_review" {
   return confidence >= CONFIDENCE_NEEDS_REVIEW_BELOW ? "processed" : "needs_review";
 }
 
@@ -128,7 +95,7 @@ function createAnthropicExtractor(client: Anthropic): DocumentExtractor {
       let response: Anthropic.Messages.Message;
       try {
         response = await client.messages.create({
-          model: MODEL,
+          model: EXTRACTION_MODEL,
           max_tokens: 8192,
           output_config: { effort: "medium" },
           system: SYSTEM_PROMPT,
