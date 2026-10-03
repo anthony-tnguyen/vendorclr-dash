@@ -128,7 +128,7 @@ function useAuthForm(handler: (form: FormData) => Promise<AuthFormResult>) {
     try {
       const result = await handler(form);
       const notice = typeof result === "string" ? result : result.notice;
-      const done = typeof result === "string" ? false : result.done ?? false;
+      const done = typeof result === "string" ? false : (result.done ?? false);
       setState({ notice, error: null, pending: false, done });
     } catch (error) {
       setState({
@@ -176,12 +176,7 @@ function AuthConfirmation({ title, message }: { title: string; message: string }
   return (
     <div className="mt-4" role="status">
       <div className="flex size-10 items-center justify-center rounded-full bg-primary/10 text-primary">
-        <svg
-          viewBox="0 0 20 20"
-          fill="currentColor"
-          aria-hidden="true"
-          className="size-5"
-        >
+        <svg viewBox="0 0 20 20" fill="currentColor" aria-hidden="true" className="size-5">
           <path
             fillRule="evenodd"
             d="M16.7 5.3a1 1 0 0 1 0 1.4l-7.5 7.5a1 1 0 0 1-1.4 0l-3.5-3.5a1 1 0 1 1 1.4-1.4l2.8 2.79 6.8-6.79a1 1 0 0 1 1.4 0Z"
