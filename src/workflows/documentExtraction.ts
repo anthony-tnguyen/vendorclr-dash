@@ -44,7 +44,6 @@ export interface DocumentExtractor {
   extract(input: ExtractDocumentInput): Promise<ExtractDocumentResult>;
 }
 
-
 /**
  * Standard base64 (not base64url - the Anthropic API expects the former for
  * document/image `data`). Deliberately avoids `Buffer`, which is a Node-ism

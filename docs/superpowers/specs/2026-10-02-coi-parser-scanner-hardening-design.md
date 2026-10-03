@@ -137,12 +137,12 @@ Endorsements are classified by normalized form identity before scanner rules
 run. Normalization removes punctuation and edition suffix noise while retaining
 the base ISO form number. The initial conservative mapping is:
 
-| Normalized form | Supported requirement |
-| --- | --- |
-| `CG 20 10` | Additional Insured, ongoing operations |
-| `CG 20 37` | Additional Insured, completed operations |
-| `CG 24 04` | Waiver of Subrogation |
-| `CG 20 01` | Primary & Noncontributory |
+| Normalized form | Supported requirement                    |
+| --------------- | ---------------------------------------- |
+| `CG 20 10`      | Additional Insured, ongoing operations   |
+| `CG 20 37`      | Additional Insured, completed operations |
+| `CG 24 04`      | Waiver of Subrogation                    |
+| `CG 20 01`      | Primary & Noncontributory                |
 
 No unknown form satisfies a requirement. A recognized form supports only its
 mapped requirement. The scanner records requirement-specific evidence with the

@@ -219,6 +219,40 @@ export const PARSER_METADATA = {
   contractFingerprint: PARSER_CONTRACT_FINGERPRINT,
 } as const;
 
+export type EndorsementEvidenceState =
+  "verified_form" | "wording_only" | "ambiguous_form" | "no_evidence";
+
+export type EndorsementRequirementKind =
+  | "additional_insured_ongoing"
+  | "additional_insured_completed"
+  | "waiver_of_subrogation"
+  | "primary_noncontributory";
+
+const REQUIRED_FORMS: Record<EndorsementRequirementKind, string> = {
+  additional_insured_ongoing: "CG2010",
+  additional_insured_completed: "CG2037",
+  waiver_of_subrogation: "CG2404",
+  primary_noncontributory: "CG2001",
+};
+
+/** Normalizes punctuation and edition suffixes while preserving the base form. */
+export function normalizeEndorsementForm(value: string): string | null {
+  const compact = value.toUpperCase().replace(/[^A-Z0-9]/g, "");
+  const match = compact.match(/^(CG)(\d{2})(\d{2})(?:\d{4})?$/);
+  return match ? `${match[1]}${match[2]}${match[3]}` : null;
+}
+
+export function endorsementEvidence(
+  kind: EndorsementRequirementKind,
+  wordingPresent: boolean | null | undefined,
+  forms: string[] | null | undefined,
+): EndorsementEvidenceState {
+  const normalized = (forms ?? []).map(normalizeEndorsementForm);
+  if (normalized.includes(REQUIRED_FORMS[kind])) return "verified_form";
+  if (normalized.some((form) => form === null)) return "ambiguous_form";
+  return wordingPresent === true ? "wording_only" : "no_evidence";
+}
+
 /**
  * Loose synonym -> enum mapping for the common ways a certificate or a model
  * might phrase a coverage type. Applied before schema validation so

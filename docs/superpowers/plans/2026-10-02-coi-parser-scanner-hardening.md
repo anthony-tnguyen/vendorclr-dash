@@ -35,6 +35,7 @@
 ### Task 1: Canonical parser contract and deterministic adapters (`vendorclr-dash`)
 
 **Files:**
+
 - Create: `src/workflows/coiParserContract.ts`
 - Create: `scripts/sync-coi-parser-contract.ts`
 - Create: `supabase/functions/_shared/coiParserContract.ts`
@@ -43,6 +44,7 @@
 - Test: `src/tests/coi-parser-contract.test.ts`
 
 **Interfaces:**
+
 - Produces: `InsuranceExtractionSchema`, `normalizeExtraction(raw)`, `parseExtractionResponse(text)`, `PARSER_METADATA`, `PARSER_CONTRACT_FINGERPRINT`, `SYSTEM_PROMPT`, and `INSURANCE_EXTRACTION_JSON_SHAPE`.
 - Produces: `bun run sync:coi-parser-contract` and `bun run check:coi-parser-contract`.
 - Consumes: existing extraction shape and prompt semantics from `insuranceExtractionSchema.ts` and `documentExtraction.ts`.
@@ -51,14 +53,19 @@
 
 ```ts
 it("normalizes synonyms before strict validation", () => {
-  const result = parseExtractionResponse(JSON.stringify(validExtraction({ type: "Commercial General Liability" })));
+  const result = parseExtractionResponse(
+    JSON.stringify(validExtraction({ type: "Commercial General Liability" })),
+  );
   expect(result.success).toBe(true);
   expect(result.data?.policies[0]?.type).toBe("general_liability");
 });
 
-it.each(["not json", JSON.stringify({ policies: [] }), JSON.stringify(validExtraction({ overall_confidence: 2 }))])(
-  "rejects malformed or incomplete output: %s",
-  (text) => expect(parseExtractionResponse(text).success).toBe(false),
+it.each([
+  "not json",
+  JSON.stringify({ policies: [] }),
+  JSON.stringify(validExtraction({ overall_confidence: 2 })),
+])("rejects malformed or incomplete output: %s", (text) =>
+  expect(parseExtractionResponse(text).success).toBe(false),
 );
 
 it("keeps the committed fingerprint equal to the semantic contract hash", () => {
@@ -101,7 +108,10 @@ Move the complete Zod schema, synonym normalizer, safe parser, JSON shape, and p
 const args = new Set(process.argv.slice(2));
 const check = args.has("--check");
 const vendorclearDir = valueAfter("--vendorclear-dir");
-const targets = [dashboardDenoTarget, ...(vendorclearDir ? [vendorclearDenoTarget, vendorclearBrowserTarget] : [])];
+const targets = [
+  dashboardDenoTarget,
+  ...(vendorclearDir ? [vendorclearDenoTarget, vendorclearBrowserTarget] : []),
+];
 for (const target of targets) await writeOrCheck(target, renderTarget(target));
 ```
 
@@ -127,6 +137,7 @@ git commit -m "feat: centralize COI parser contract"
 ### Task 2: Move production and retry workers onto the shared contract (`vendorclr-dash`)
 
 **Files:**
+
 - Modify: `src/workflows/documentExtraction.ts`
 - Modify: `supabase/functions/process-document-jobs/documentExtraction.ts`
 - Modify: `supabase/functions/process-document-jobs/index.ts`
@@ -138,6 +149,7 @@ git commit -m "feat: centralize COI parser contract"
 - Test: `src/tests/coi-parser-contract.test.ts`
 
 **Interfaces:**
+
 - Consumes: Task 1 canonical exports and generated Deno adapter.
 - Produces: every paid/retry call records the same `PARSER_METADATA` values and uses the same strict parser.
 
@@ -145,7 +157,9 @@ git commit -m "feat: centralize COI parser contract"
 
 ```ts
 it("uses canonical model, prompt and confidence threshold", () => {
-  expect({ model: EXTRACTION_MODEL, promptVersion: EXTRACTION_PROMPT_VERSION }).toEqual(PARSER_METADATA);
+  expect({ model: EXTRACTION_MODEL, promptVersion: EXTRACTION_PROMPT_VERSION }).toEqual(
+    PARSER_METADATA,
+  );
   expect(statusForConfidence(0.59)).toBe("needs_review");
   expect(statusForConfidence(0.6)).toBe("processed");
 });
@@ -191,6 +205,7 @@ git commit -m "refactor: share parser contract across workers"
 ### Task 3: Strict free parsing and form-aware endorsement mapping (`vendorclear`)
 
 **Files:**
+
 - Create: `supabase/functions/analyze-coi/scannerMapping.ts`
 - Modify: `supabase/functions/analyze-coi/index.ts`
 - Modify: `src/lib/scanner-analysis.ts`
@@ -198,6 +213,7 @@ git commit -m "refactor: share parser contract across workers"
 - Test: `src/test/scanner-parser.test.ts`
 
 **Interfaces:**
+
 - Consumes: generated `_shared/coiParserContract.ts` and browser contract from Task 1.
 - Produces: `mapInsuranceExtraction(extraction)` and a response envelope `{ extracted, canonicalExtraction, parserRunId, parserMetadata }`.
 - Produces: `EndorsementEvidence` with `verified_form | wording_only | ambiguous_form | no_evidence`.
@@ -216,7 +232,9 @@ it.each([
 });
 
 it("marks wording without a form as wording_only", () => {
-  const mapped = mapInsuranceExtraction(extractionWith({ additional_insured: true, endorsement_forms: null }));
+  const mapped = mapInsuranceExtraction(
+    extractionWith({ additional_insured: true, endorsement_forms: null }),
+  );
   expect(mapped.additionalInsured.state).toBe("wording_only");
 });
 ```
@@ -232,7 +250,8 @@ Expected: FAIL because form-aware mapping and the response envelope do not exist
 - [ ] **Step 3: Implement deterministic form classification**
 
 ```ts
-export type EndorsementEvidenceState = "verified_form" | "wording_only" | "ambiguous_form" | "no_evidence";
+export type EndorsementEvidenceState =
+  "verified_form" | "wording_only" | "ambiguous_form" | "no_evidence";
 
 const FORM_SUPPORT = {
   CG2010: ["additional_insured", "additional_insured_ongoing"],
@@ -273,6 +292,7 @@ git commit -m "fix: validate free COI parsing and match endorsement forms"
 ### Task 4: Conservative scanner confidence and real re-check integrity (`vendorclear`)
 
 **Files:**
+
 - Modify: `src/lib/scanner-rules.ts`
 - Modify: `src/lib/scanner-run.ts`
 - Modify: `src/lib/scanner-sample.ts`
@@ -280,6 +300,7 @@ git commit -m "fix: validate free COI parsing and match endorsement forms"
 - Test: `src/test/coi-scanner.test.tsx`
 
 **Interfaces:**
+
 - Consumes: Task 3 `EndorsementEvidence`, parser metadata, and review state.
 - Produces: `runRecheck()` with separate real and sample branches; low confidence cannot pass.
 
@@ -300,8 +321,9 @@ it("does not mutate a real parsed re-check", async () => {
 });
 
 it("does not pass an adequate low-confidence GL limit", () => {
-  const finding = evaluate(lowConfidenceExtraction(1_000_000), SAMPLE_REQUIREMENTS, NOW)
-    .find((row) => row.key === "general_liability");
+  const finding = evaluate(lowConfidenceExtraction(1_000_000), SAMPLE_REQUIREMENTS, NOW).find(
+    (row) => row.key === "general_liability",
+  );
   expect(finding?.status).toBe("could_not_determine");
 });
 ```
@@ -344,6 +366,7 @@ git commit -m "fix: preserve real recheck evidence"
 ### Task 5: Semantic-safe Correction Generator handoff (`vendorclear`)
 
 **Files:**
+
 - Modify: `src/lib/correction/types.ts`
 - Modify: `src/lib/correction/options.ts`
 - Modify: `src/lib/correction/engine.ts`
@@ -353,6 +376,7 @@ git commit -m "fix: preserve real recheck evidence"
 - Test: `src/test/correction-generator.test.tsx`
 
 **Interfaces:**
+
 - Consumes: exact `Finding.status`, evidence state, requirements, and extracted values.
 - Produces: new issue types `gl_missing`, `gl_limit_unreadable`, `auto_limit_unreadable`, `policy_dates_unreadable`, `policy_effective_in_future`, `certificate_holder_unreadable`, and `supporting_endorsement_ambiguous`.
 
@@ -404,6 +428,7 @@ git commit -m "fix: preserve scanner uncertainty in correction requests"
 ### Task 6: Active re-check state, parser provenance, and report lineage (`vendorclear`)
 
 **Files:**
+
 - Modify: `src/pages/CoiScanner.tsx`
 - Modify: `src/lib/scanner-report.ts`
 - Modify: `src/lib/scanner-storage.ts`
@@ -412,6 +437,7 @@ git commit -m "fix: preserve scanner uncertainty in correction requests"
 - Test: `src/test/scanner-storage.test.ts`
 
 **Interfaces:**
+
 - Consumes: Task 3 parser metadata/run ID, Task 4 current re-check result, Task 5 correction prefill.
 - Produces: current-action `activeResult`, immutable root result, and parent/root/sequence report inserts.
 
@@ -426,8 +452,14 @@ it("prefills only the current re-check issue", async () => {
 
 it("creates a parent-linked three-report chain", async () => {
   expect(await saveOriginal()).toMatchObject({ sequenceNumber: 0, recheckOf: null });
-  expect(await saveNext("report-a", "report-a", 1)).toMatchObject({ recheckOf: "report-a", rootReportId: "report-a" });
-  expect(await saveNext("report-b", "report-a", 2)).toMatchObject({ recheckOf: "report-b", rootReportId: "report-a" });
+  expect(await saveNext("report-a", "report-a", 1)).toMatchObject({
+    recheckOf: "report-a",
+    rootReportId: "report-a",
+  });
+  expect(await saveNext("report-b", "report-a", 2)).toMatchObject({
+    recheckOf: "report-b",
+    rootReportId: "report-a",
+  });
 });
 ```
 
@@ -464,6 +496,7 @@ git commit -m "feat: make recheck results current and preserve lineage"
 ### Task 7: Forward-only scanner provenance/feedback migration and secure endpoint (`vendorclear`)
 
 **Files:**
+
 - Create via CLI: the timestamped migration returned by `bunx supabase migration new scanner_parser_provenance_feedback`
 - Create: `supabase/functions/submit-scanner-feedback/index.ts`
 - Create: `src/test/scanner-feedback.test.ts`
@@ -472,6 +505,7 @@ git commit -m "feat: make recheck results current and preserve lineage"
 - Test cross-repo: `vendorclr-dash/supabase/tests/scanner-parser-feedback.test.ts`
 
 **Interfaces:**
+
 - Consumes: parser run ID/metadata and scanner report lineage.
 - Produces: `scanner_parser_runs`, `scanner_parser_feedback`, private bucket `scanner-parser-feedback`, provenance columns, and `submitParserFeedback(formData)`.
 
@@ -489,16 +523,20 @@ Expected: a new timestamped migration file is created; no existing migration cha
 it("denies anonymous feedback reads and direct writes", async () => {
   await db.exec("set local role anon");
   expect((await db.query("select * from public.scanner_parser_feedback")).rows).toEqual([]);
-  await expect(db.query(`insert into public.scanner_parser_feedback
+  await expect(
+    db.query(`insert into public.scanner_parser_feedback
     (parser_run_id, response, original_extraction, parser_metadata, verified_status, retention_consent)
-    values ('00000000-0000-0000-0000-000000000001', 'looks_correct', '{}', '{}', 'pending', false)`))
-    .rejects.toThrow();
+    values ('00000000-0000-0000-0000-000000000001', 'looks_correct', '{}', '{}', 'pending', false)`),
+  ).rejects.toThrow();
 });
 
 it("rejects anonymous verification even when the feedback id is known", async () => {
   await db.exec("set local role anon");
-  await expect(db.exec(`update public.scanner_parser_feedback set verified_status='verified' where id='${feedbackId}'`))
-    .rejects.toThrow();
+  await expect(
+    db.exec(
+      `update public.scanner_parser_feedback set verified_status='verified' where id='${feedbackId}'`,
+    ),
+  ).rejects.toThrow();
 });
 ```
 
@@ -555,12 +593,14 @@ git commit -m "test: verify free scanner feedback security"
 ### Task 8: Public feedback UX with separate retention consent (`vendorclear`)
 
 **Files:**
+
 - Create: `src/components/scanner/ParserFeedback.tsx`
 - Create: `src/lib/scanner-feedback.ts`
 - Modify: `src/pages/CoiScanner.tsx`
 - Test: `src/test/scanner-feedback-ui.test.tsx`
 
 **Interfaces:**
+
 - Consumes: active real scan, canonical extraction, active file, parser run ID, and Task 7 endpoint.
 - Produces: `buildCorrectedExtraction(original, edits)` and consent-aware feedback submissions.
 
@@ -570,7 +610,9 @@ git commit -m "test: verify free scanner feedback security"
 it("submits looks-correct without declaring ground truth or retaining a file", async () => {
   renderFeedback(realScan());
   await user.click(screen.getByRole("button", { name: /yes, looks correct/i }));
-  expect(submit).toHaveBeenCalledWith(expect.objectContaining({ response: "looks_correct", retainDocumentConsent: false }));
+  expect(submit).toHaveBeenCalledWith(
+    expect.objectContaining({ response: "looks_correct", retainDocumentConsent: false }),
+  );
 });
 
 it("keeps parser-retention consent separate and unchecked", async () => {
@@ -610,11 +652,13 @@ git commit -m "feat: collect conservative scanner parser feedback"
 ### Task 9: Verified scanner feedback to golden-case capture (`vendorclr-dash`)
 
 **Files:**
+
 - Modify: `scripts/capture-golden-cases.ts`
 - Modify: `evals/coi-extraction/README.md`
 - Test: `src/tests/capture-golden-cases.test.ts`
 
 **Interfaces:**
+
 - Consumes: verified scanner feedback with retained private source document.
 - Produces: scanner-sourced cases in the existing `document.*`, `expected.json`, `provenance.json` layout.
 
@@ -626,7 +670,10 @@ it("selects only verified feedback with retained source documents", () => {
 });
 
 it("records scanner provenance without treating anonymous feedback as reviewer truth", () => {
-  expect(buildScannerProvenance(row)).toMatchObject({ source: "scanner_feedback", verifiedBy: row.verified_by });
+  expect(buildScannerProvenance(row)).toMatchObject({
+    source: "scanner_feedback",
+    verifiedBy: row.verified_by,
+  });
 });
 ```
 
@@ -654,6 +701,7 @@ git commit -m "feat: capture verified scanner feedback as eval cases"
 ### Task 10: Cross-repository drift CI, full pipeline regression, and delivery
 
 **Files:**
+
 - Create: `vendorclear/.github/workflows/parser-contract-drift.yml`
 - Modify: `vendorclr-dash/.github/workflows/ci.yml`
 - Modify: `vendorclear/src/test/requirements-builder.test.tsx`
@@ -662,6 +710,7 @@ git commit -m "feat: capture verified scanner feedback as eval cases"
 - Modify: relevant README/operations documentation in both repositories.
 
 **Interfaces:**
+
 - Consumes: every prior task.
 - Produces: blocking drift checks, complete Builder -> Scanner -> Generator coverage, two verified branches, and coordinated PRs to `main`.
 
@@ -672,7 +721,9 @@ it("carries requirements through the current scan into one-issue correction outp
   const requirements = buildRequirements();
   const original = scanWithFiveIssues(requirements);
   const current = recheckWithOneIssue(original);
-  expect(generateCorrection(correctionPrefillFromScan(current) as CorrectionInput)?.checklist).toHaveLength(1);
+  expect(
+    generateCorrection(correctionPrefillFromScan(current) as CorrectionInput)?.checklist,
+  ).toHaveLength(1);
 });
 ```
 
