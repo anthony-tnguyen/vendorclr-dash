@@ -26,9 +26,8 @@ afterEach(() => {
 describe("VendorForm", () => {
   it("offers 'Other' as the last trade option", () => {
     render(wrap(<VendorForm />));
-    const options = Array.from(
-      (screen.getByLabelText("Trade") as HTMLSelectElement).options,
-    ).map((o) => o.value);
+    const select = screen.getByLabelText("Trade") as HTMLSelectElement;
+    const options = Array.from(select.options).map((o) => o.value);
     expect(options).toContain("Other");
     expect(options[options.length - 1]).toBe("Other");
   });
