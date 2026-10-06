@@ -95,10 +95,12 @@ import { sendRequestHandler } from "./communications";
 
 // ---------------------------------------------------------------------------
 // Shared vocab - must exactly match vendors.trade / vendors.risk_tier
-// (20260901000200_vendor_domain.sql) and project_vendor_assignments.
-// trade_code / risk_classification (20260916000300_construction_core_expand.sql).
-// That migration's own comment notes the two CHECK sets must agree; this is
-// deliberately the SAME list, not a third vocabulary.
+// (20260901000200_vendor_domain.sql, widened to add 'Other' by
+// 20261006091707_add_other_vendor_trade.sql) and project_vendor_assignments.
+// trade_code / risk_classification (20260916000300_construction_core_expand.sql,
+// widened by that same migration). That migration's own comment notes the two
+// CHECK sets must agree; this is deliberately the SAME list, not a third
+// vocabulary.
 // ---------------------------------------------------------------------------
 
 export const TRADE_VALUES = [
@@ -110,6 +112,7 @@ export const TRADE_VALUES = [
   "Roofing",
   "Glazing",
   "Fire Protection",
+  "Other",
 ] as const;
 export type Trade = (typeof TRADE_VALUES)[number];
 

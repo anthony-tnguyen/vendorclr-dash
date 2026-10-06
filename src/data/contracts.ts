@@ -36,7 +36,8 @@ export type VendorTrade =
   | "Earthwork"
   | "Roofing"
   | "Glazing"
-  | "Fire Protection";
+  | "Fire Protection"
+  | "Other";
 
 export interface Vendor {
   id: string;

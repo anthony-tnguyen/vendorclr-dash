@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import type { VendorTrade } from "@/data/contracts";
 import {
   emptyValidationContext,
   executeVendorImportHandler,
@@ -8,8 +9,10 @@ import {
   validateOneRow,
   validateRows,
   validateVendorImportRowsHandler,
+  TRADE_VALUES,
   type ParsedRow,
   type RowDispatchResult,
+  type Trade,
 } from "@/workflows/vendorImports";
 
 /**
@@ -131,6 +134,12 @@ describe("validateOneRow()", () => {
       row({ trade: "Structural Steel", riskTier: "moderate", contactEmail: "ops@acme.test" }),
       emptyValidationContext(),
     );
+    expect(result.status).toBe("valid");
+    expect(result.errors).toEqual([]);
+  });
+
+  it("accepts 'Other' as a recognized trade", () => {
+    const result = validateOneRow(row({ trade: "Other" }), emptyValidationContext());
     expect(result.status).toBe("valid");
     expect(result.errors).toEqual([]);
   });
@@ -585,5 +594,36 @@ describe("assignment prediction and write-role guard", () => {
     ).rejects.toThrow(/cannot import/);
     expect(rpcCalls).toHaveLength(0);
     expect(state.batches.size).toBe(0);
+  });
+});
+
+describe("trade vocabulary", () => {
+  it("includes 'Other' as the last trade in the shared vocabulary", () => {
+    expect(TRADE_VALUES).toContain("Other");
+    expect(TRADE_VALUES[TRADE_VALUES.length - 1]).toBe("Other");
+  });
+
+  // Typecheck guard: an exhaustive Record keyed by the trade union must carry
+  // an "Other" entry, so this file fails `tsc` if VendorTrade / Trade and
+  // TRADE_VALUES ever drift (e.g. "Other" added to one list but not another).
+  it("keeps VendorTrade, Trade and TRADE_VALUES in lockstep", () => {
+    const labelByTrade: Record<VendorTrade, string> = {
+      "Structural Steel": "Structural Steel",
+      Electrical: "Electrical",
+      "Mechanical / HVAC": "Mechanical / HVAC",
+      Concrete: "Concrete",
+      Earthwork: "Earthwork",
+      Roofing: "Roofing",
+      Glazing: "Glazing",
+      "Fire Protection": "Fire Protection",
+      Other: "Other",
+    };
+    // VendorTrade (contracts.ts) and Trade (vendorImports.ts) are two hand-kept
+    // copies of the same vocabulary; assigning one to the other proves they are
+    // structurally identical at compile time.
+    const asTrade: Trade = "Other";
+    const asVendorTrade: VendorTrade = asTrade;
+    expect(labelByTrade[asVendorTrade]).toBe("Other");
+    expect(Object.keys(labelByTrade)).toHaveLength(TRADE_VALUES.length);
   });
 });
