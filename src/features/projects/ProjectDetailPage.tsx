@@ -7,6 +7,7 @@ import { EmptyState, ErrorState, LoadingState } from "@/components/states/AsyncS
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { requirementSourceLabel, saveProject } from "@/workflows/projects";
 import { ComplianceCasesSection } from "@/features/compliance/ComplianceCasesSection";
+import { VENDOR_TRADES } from "@/workflows/coiIntakeMapping";
 
 type ResolvedRequirement = {
   key: string;
@@ -358,12 +359,19 @@ export function ProjectDetailPage({ projectId }: { projectId: string }) {
               </div>
               <div className="grid gap-1 text-sm font-medium">
                 <label htmlFor="assignment-trade">Trade</label>
-                <input
+                <select
                   id="assignment-trade"
                   value={tradeCode}
                   onChange={(event) => setTradeCode(event.target.value)}
                   className="focusable rounded-sm border border-input bg-background px-3 py-2 text-sm"
-                />
+                >
+                  <option value="">Not set</option>
+                  {VENDOR_TRADES.map((trade) => (
+                    <option key={trade} value={trade}>
+                      {trade}
+                    </option>
+                  ))}
+                </select>
               </div>
               <div className="grid gap-1 text-sm font-medium">
                 <label htmlFor="assignment-contract-value">Contract value</label>
