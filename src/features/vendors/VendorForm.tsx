@@ -2,18 +2,9 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState, type FormEvent } from "react";
 import { getRepository, isBackendConfigured } from "@/data/repository";
 import type { VendorTrade } from "@/data/contracts";
+import { VENDOR_TRADES } from "@/workflows/coiIntakeMapping";
 
-const trades: VendorTrade[] = [
-  "Structural Steel",
-  "Electrical",
-  "Mechanical / HVAC",
-  "Concrete",
-  "Earthwork",
-  "Roofing",
-  "Glazing",
-  "Fire Protection",
-  "Other",
-];
+const trades = VENDOR_TRADES;
 
 export function VendorForm({ onDone }: { onDone?: () => void }) {
   const repo = getRepository();
