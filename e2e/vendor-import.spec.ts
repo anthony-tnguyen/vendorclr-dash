@@ -22,12 +22,15 @@ test("an owner imports projects and vendors from CSV", async ({ page }, testInfo
   const project = `E2E Import Project ${run}`;
   const vendorA = `E2E Import Vendor A ${run}`;
   const vendorB = `E2E Import Vendor B ${run}`;
+  const vendorC = `E2E Import Vendor C ${run}`;
   const csv = [
     "project_name,vendor_name,trade,contact_email,risk_tier,contract_value,dispatch_request",
     `${project},${vendorA},Electrical,a-${run}@example.com,low,125000,false`,
     `${project},${vendorB},Concrete,,moderate,,false`,
     `${project},${vendorA},Electrical,,low,,false`,
     `,Missing Project Vendor ${run},Electrical,,,,false`,
+    // "Other" is a recognized trade: this row imports like any other.
+    `${project},${vendorC},Other,,moderate,,false`,
   ].join("\n");
 
   await signIn(page, account!);
@@ -41,9 +44,9 @@ test("an owner imports projects and vendors from CSV", async ({ page }, testInfo
     buffer: Buffer.from(csv),
   });
   const rows = page.getByTestId("import-rows");
-  await expect(rows.getByRole("row")).toHaveCount(5);
+  await expect(rows.getByRole("row")).toHaveCount(6);
 
-  await page.getByRole("button", { name: "Validate 4 rows" }).click();
+  await page.getByRole("button", { name: "Validate 5 rows" }).click();
   const errors = page.getByTestId("import-errors");
   await expect(
     errors.getByRole("row", { name: /4 project_name Project name is required/ }),
@@ -53,7 +56,7 @@ test("an owner imports projects and vendors from CSV", async ({ page }, testInfo
   await expect(rows.getByRole("row").nth(1)).toContainText("Create project");
   await capture(page, testInfo, "import-validated");
 
-  const importButton = page.getByRole("button", { name: "Import 3 rows" });
+  const importButton = page.getByRole("button", { name: "Import 4 rows" });
   await expect(importButton).toBeDisabled();
   await page.getByRole("checkbox", { name: /reviewed the proposed actions/ }).check();
   await importButton.click();
@@ -62,11 +65,11 @@ test("an owner imports projects and vendors from CSV", async ({ page }, testInfo
   await expect(results).toBeVisible();
   const value = (label: string) =>
     results.locator("div", { has: page.getByText(label, { exact: true }) }).locator("dd");
-  await expect(value("Processed")).toHaveText("4");
-  await expect(value("Imported")).toHaveText("3");
+  await expect(value("Processed")).toHaveText("5");
+  await expect(value("Imported")).toHaveText("4");
   await expect(value("Projects created")).toHaveText("1");
-  await expect(value("Vendors created")).toHaveText("2");
-  await expect(value("Assignments created")).toHaveText("2");
+  await expect(value("Vendors created")).toHaveText("3");
+  await expect(value("Assignments created")).toHaveText("3");
   await expect(value("Assignments matched")).toHaveText("1");
   await expect(value("Skipped (failed validation)")).toHaveText("1");
   await capture(page, testInfo, "import-results");
@@ -82,4 +85,5 @@ test("an owner imports projects and vendors from CSV", async ({ page }, testInfo
   });
   await expect(assignedVendors.getByText(vendorA)).toBeVisible();
   await expect(assignedVendors.getByText(vendorB)).toBeVisible();
+  await expect(assignedVendors.getByText(vendorC)).toBeVisible();
 });

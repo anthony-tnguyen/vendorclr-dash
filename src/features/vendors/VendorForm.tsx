@@ -12,6 +12,7 @@ const trades: VendorTrade[] = [
   "Roofing",
   "Glazing",
   "Fire Protection",
+  "Other",
 ];
 
 export function VendorForm({ onDone }: { onDone?: () => void }) {

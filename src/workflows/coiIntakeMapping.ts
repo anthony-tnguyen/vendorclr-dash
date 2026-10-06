@@ -24,6 +24,7 @@ export const VENDOR_TRADES: VendorTrade[] = [
   "Roofing",
   "Glazing",
   "Fire Protection",
+  "Other",
 ];
 
 export function isVendorTrade(value: string): value is VendorTrade {

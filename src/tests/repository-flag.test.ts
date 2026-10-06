@@ -69,6 +69,21 @@ describe("getRepository", () => {
     expect(names).toContain("Test Vendor");
   });
 
+  it("saves a vendor whose trade is 'Other' as the literal string", async () => {
+    const created = await getRepository().createVendor({
+      name: "Miscellany Subs",
+      trade: "Other",
+      project: "Harbor Point Tower B",
+      contactName: "Pat Lee",
+      contactEmail: "pat@example.test",
+      contractValue: 5000,
+    });
+
+    expect(created.trade).toBe("Other");
+    const roster = await getRepository().listVendors();
+    expect(roster.find((v) => v.name === "Miscellany Subs")?.trade).toBe("Other");
+  });
+
   it("starts a newly created vendor with every requirement missing", async () => {
     const created = await getRepository().createVendor({
       name: "Fresh Sub",
