@@ -141,9 +141,7 @@ function SubscriptionPanel({ canManage }: { canManage: boolean }) {
       const { url } = await getRepository().createBillingPortalSession();
       window.location.href = url;
     } catch (e) {
-      setError(
-        e instanceof Error ? e.message : "Could not open the billing portal. Try again.",
-      );
+      setError(e instanceof Error ? e.message : "Could not open the billing portal. Try again.");
       setOpening(false);
     }
   };
