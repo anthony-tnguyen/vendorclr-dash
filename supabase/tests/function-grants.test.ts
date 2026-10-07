@@ -88,6 +88,8 @@ describe("trigger-only functions: no one calls these directly", () => {
     "public.set_audit_log_actor()",
     "public.assert_company_matches_email_outbox()",
     "public.set_signup_invite_defaults()",
+    "public.record_project_workflow_audit()",
+    "public.record_requirement_rule_audit()",
   ];
 
   it.each(fns)("anon cannot execute %s", async (fn) => {

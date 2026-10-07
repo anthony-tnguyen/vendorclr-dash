@@ -26,6 +26,9 @@ async function getUploadAbuseModule() {
 async function getFileValidationModule() {
   return import("./fileValidation.server");
 }
+async function getDocumentExtractionModule() {
+  return import("./documentExtraction");
+}
 import {
   computeComplianceItems,
   hasUnclassifiedPolicy,
@@ -34,12 +37,8 @@ import {
   type ExistingPolicySnapshot,
   type RequirementSnapshot,
 } from "./complianceEngine";
-import {
-  EXTRACTION_MODEL,
-  EXTRACTION_PROVIDER,
-  getDocumentExtractor,
-  type ExtractDocumentResult,
-} from "./documentExtraction";
+import { EXTRACTION_MODEL, EXTRACTION_PROVIDER } from "./coiParserContract";
+import type { ExtractDocumentResult } from "./documentExtraction";
 import { getMalwareScanner } from "./malwareScanner";
 import { outboxStatusFor, sendUnlessSuppressed } from "./suppression";
 import {
@@ -763,6 +762,7 @@ async function runExtractionSafely(input: {
   mimeType: string;
 }): Promise<ExtractDocumentResult> {
   try {
+    const { getDocumentExtractor } = await getDocumentExtractionModule();
     return await getDocumentExtractor().extract(input);
   } catch (error) {
     return {

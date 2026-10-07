@@ -2,7 +2,6 @@ import { createServerFn } from "@tanstack/react-start";
 
 import type { VendorTrade } from "@/data/contracts";
 
-import { getDocumentExtractor } from "./documentExtraction";
 import {
   isVendorTrade,
   proposalFromExtraction,
@@ -43,6 +42,10 @@ async function getServiceRoleClient() {
 
 async function getFileValidationModule() {
   return import("./fileValidation.server");
+}
+
+async function getDocumentExtractionModule() {
+  return import("./documentExtraction");
 }
 
 /** The caller's id and their single workspace, resolved from their own membership. */
@@ -112,6 +115,7 @@ export const parseCoiForIntake = createServerFn({ method: "POST" })
     const { bytes, detectedMime } = validated;
     const sha256 = await hashFileBytes(bytes);
 
+    const { getDocumentExtractor } = await getDocumentExtractionModule();
     const extraction = await getDocumentExtractor().extract({
       fileBytes: bytes,
       mimeType: detectedMime,
