@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react
 import { useSession } from "@/app/App";
 import { AppShell } from "@/components/shell/AppShell";
 import { ErrorState, LoadingState } from "@/components/states/AsyncState";
-import { isBackendConfigured } from "@/data/repository";
+import { getRepository, isBackendConfigured } from "@/data/repository";
 import {
   REQUIREMENT_CATALOG,
   canEditRequirements,
@@ -115,6 +115,69 @@ function HistoryPanel({
             </li>
           ))}
         </ul>
+      )}
+    </section>
+  );
+}
+
+/**
+ * Subscription management for the workspace owner.
+ *
+ * Opening the portal runs the billing-portal Edge Function, which returns a
+ * Stripe customer-portal URL. Cancelling, updating the card and viewing
+ * invoices all happen in that hosted portal, so there is nothing to persist
+ * here. Shown only to an owner (the function also re-checks this and refuses a
+ * non-owner); a workspace with no self-checkout subscription gets a clear
+ * message from the function rather than a dead end.
+ */
+function SubscriptionPanel({ canManage }: { canManage: boolean }) {
+  const [opening, setOpening] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const openPortal = async () => {
+    setOpening(true);
+    setError(null);
+    try {
+      const { url } = await getRepository().createBillingPortalSession();
+      window.location.href = url;
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not open the billing portal. Try again.");
+      setOpening(false);
+    }
+  };
+
+  return (
+    <section className="rounded-md border border-border bg-card p-4" aria-labelledby="billing-h">
+      <h2 id="billing-h" className="text-sm font-semibold">
+        Subscription
+      </h2>
+      {canManage ? (
+        <>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Manage your plan in the secure billing portal — update your card, download invoices or
+            cancel your subscription.
+          </p>
+          <button
+            type="button"
+            onClick={() => void openPortal()}
+            disabled={opening}
+            className="focusable mt-3 w-full rounded-sm border border-input px-3 py-2 text-sm font-medium disabled:opacity-50"
+          >
+            {opening ? "Opening…" : "Manage or cancel subscription"}
+          </button>
+          {error ? (
+            <p
+              role="alert"
+              className="mt-2 rounded-sm border border-destructive/30 bg-danger-soft px-3 py-2 text-xs"
+            >
+              {error}
+            </p>
+          ) : null}
+        </>
+      ) : (
+        <p className="mt-1 text-xs text-muted-foreground">
+          Only the workspace owner can manage or cancel the subscription.
+        </p>
       )}
     </section>
   );
@@ -408,6 +471,7 @@ export function SettingsPage() {
                 Applied to every vendor assignment that does not use a project-specific profile.
               </p>
             </section>
+            {isLive ? <SubscriptionPanel canManage={companyRole === "owner"} /> : null}
             <HistoryPanel entries={history} unavailable={historyUnavailable || !isLive} />
           </div>
         </div>
