@@ -46,28 +46,33 @@ describe("demo screen", () => {
     expect(screen.getByText(/nothing you do on this screen is saved/i)).toBeInTheDocument();
   });
 
-  it("renders the sample vendor roster read-only, with the compliance rail on every row", async () => {
+  it("renders the sample vendor roster read-only, dressed as the real console", async () => {
     const { user } = await renderRoute("/demo");
 
     const roster = await screen.findByRole("region", { name: /sample vendor roster/i });
     expect(roster).toBeInTheDocument();
 
     // The roster is the built-in sample list - the same names the demo console
-    // uses everywhere else - and every row carries the five-slot rail.
+    // uses everywhere else - rendered as the live overview's compliance matrix.
     expect(await within(roster).findByText("Corbett Structural Steel")).toBeInTheDocument();
     expect(await within(roster).findByText("Ironclad Fire Protection")).toBeInTheDocument();
     expect(within(roster).getAllByTestId("demo-vendor-row").length).toBeGreaterThan(5);
-    expect(
-      (await within(roster).findAllByLabelText(/compliance matrix for/i)).length,
-    ).toBeGreaterThan(5);
+    // Every row shows the five-requirement compliance read, exposed as status
+    // cells (five per vendor), so the preview mirrors the paid dashboard.
+    expect(within(roster).getAllByRole("status").length).toBeGreaterThan(5);
 
-    // Read-only: the only controls on the page are the code form, sign out, the
-    // skip link and the activation panel. No add-vendor, no document request,
-    // no upload, nothing that could be mistaken for working.
+    // The preview also carries the dashboard chrome: the inert customer sidebar
+    // and the attention queue the real overview opens with.
+    expect(screen.getByRole("heading", { level: 2, name: /needs attention/i })).toBeInTheDocument();
+
+    // Read-only: no control can add a vendor, request a document or upload a
+    // file. The toolbar's "Import vendors" is deliberately disabled, and the
+    // activation code form is the only thing that ever reaches a backend.
     expect(
       screen.queryByRole("button", { name: /add vendor|request documents|upload/i }),
     ).toBeNull();
     expect(screen.queryByRole("link", { name: /new vendor/i })).toBeNull();
+    expect(screen.getByRole("button", { name: /import vendors/i })).toBeDisabled();
     await user.tab();
   });
 
