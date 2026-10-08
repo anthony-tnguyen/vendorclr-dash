@@ -45,7 +45,7 @@ import { cn } from "@/lib/utils";
 // Sample identity shown in the chrome so the preview reads like a real, lived-in
 // workspace rather than an empty "No company yet" shell. It is cosmetic only.
 const SAMPLE_PERSON = "Rosa Sandoval";
-const SAMPLE_COMPANY = "Halstead Builders";
+const SAMPLE_COMPANY = "Corner Cutters Construction";
 
 const requirementLabels: Record<ComplianceKey, string> = {
   coi: "Certificate of insurance",
