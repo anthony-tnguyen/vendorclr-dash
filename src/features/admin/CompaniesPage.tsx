@@ -7,6 +7,7 @@ import type { CompanyPlan } from "@/data/dbTypeAliases";
 import { getRepository } from "@/data/repository";
 import { PLAN_IDS, planLabel } from "@/domain/billing/plans";
 import { VendorForm } from "@/features/vendors/VendorForm";
+import { VendorCommunicationsSection } from "@/features/vendors/VendorCommunicationsSection";
 
 /**
  * Managed-service vendor panel: the roster of one company's vendors plus an
@@ -28,6 +29,7 @@ function CompanyVendorsPanel({
     queryFn: () => repo.listCompanyVendors(companyId),
   });
   const [adding, setAdding] = useState(false);
+  const [openVendor, setOpenVendor] = useState<string | null>(null);
 
   return (
     <div className="space-y-3 rounded-md border border-border bg-background p-4">
@@ -81,19 +83,46 @@ function CompanyVendorsPanel({
                 <th scope="col" className="px-3 py-2 font-medium">
                   Contract
                 </th>
+                <th scope="col" className="px-3 py-2 font-medium">
+                  Requests
+                </th>
               </tr>
             </thead>
             <tbody>
-              {(vendors.data ?? []).map((v) => (
-                <tr key={v.id} className="border-b border-border last:border-0">
-                  <th scope="row" className="px-3 py-2 font-medium">
-                    {v.name}
-                  </th>
-                  <td className="px-3 py-2 text-xs">{v.trade}</td>
-                  <td className="px-3 py-2 text-xs">{v.project}</td>
-                  <td className="numeric px-3 py-2 text-xs">${v.contractValue.toLocaleString()}</td>
-                </tr>
-              ))}
+              {(vendors.data ?? []).map((v) => {
+                const open = openVendor === v.id;
+                return (
+                  <Fragment key={v.id}>
+                    <tr className="border-b border-border last:border-0">
+                      <th scope="row" className="px-3 py-2 font-medium">
+                        {v.name}
+                      </th>
+                      <td className="px-3 py-2 text-xs">{v.trade}</td>
+                      <td className="px-3 py-2 text-xs">{v.project}</td>
+                      <td className="numeric px-3 py-2 text-xs">
+                        ${v.contractValue.toLocaleString()}
+                      </td>
+                      <td className="px-3 py-2 text-xs">
+                        <button
+                          type="button"
+                          aria-expanded={open}
+                          onClick={() => setOpenVendor(open ? null : v.id)}
+                          className="focusable rounded-sm border border-input px-2 py-1 text-xs font-semibold"
+                        >
+                          {open ? "Hide" : "Contacts & COI"}
+                        </button>
+                      </td>
+                    </tr>
+                    {open ? (
+                      <tr className="border-b border-border last:border-0">
+                        <td colSpan={5} className="px-3 py-3">
+                          <VendorCommunicationsSection vendorId={v.id} canWrite />
+                        </td>
+                      </tr>
+                    ) : null}
+                  </Fragment>
+                );
+              })}
             </tbody>
           </table>
         </div>
