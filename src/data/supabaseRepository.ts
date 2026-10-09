@@ -37,6 +37,7 @@ import type {
   VendorPolicyRow,
   VendorRow,
 } from "./dbTypeAliases";
+import { getActingCompanyId } from "./actingCompany";
 import { getSupabaseClient, type VendorClrClient } from "@/lib/supabase/client";
 import { readSupabaseEnv } from "@/lib/supabase/env";
 
@@ -264,6 +265,11 @@ export function createSupabaseRepository(
    * the session context before this becomes correct.
    */
   function resolveCompanyId(): Promise<string> {
+    // When staff are acting as a company, every write targets that company
+    // rather than the caller's own membership (a platform admin has none).
+    const acting = getActingCompanyId();
+    if (acting) return Promise.resolve(acting);
+
     if (!companyIdPromise) {
       companyIdPromise = (async () => {
         const supabase = clientFactory();
@@ -311,13 +317,14 @@ export function createSupabaseRepository(
 
   async function loadVendors(): Promise<VendorWithChildren[]> {
     const supabase = clientFactory();
+    // When staff act as a company, scope to it explicitly: a platform admin's
+    // RLS reads would otherwise return every company's vendors.
+    const acting = getActingCompanyId();
+    let query = supabase.from("vendors").select(VENDOR_SELECT).is("archived_at", null);
+    if (acting) query = query.eq("company_id", acting);
     // Cast: the hand-written Database type declares no PostgREST relationships, so
     // embedded selects cannot be inferred. `supabase gen types` removes this cast.
-    const result = (await supabase
-      .from("vendors")
-      .select(VENDOR_SELECT)
-      .is("archived_at", null)
-      .order("created_at", { ascending: false })) as unknown as {
+    const result = (await query.order("created_at", { ascending: false })) as unknown as {
       data: VendorWithChildren[] | null;
       error: { message: string } | null;
     };
@@ -383,11 +390,11 @@ export function createSupabaseRepository(
 
     async listTasks() {
       const supabase = clientFactory();
+      const acting = getActingCompanyId();
+      let query = supabase.from("tasks").select("*, vendors ( name )");
+      if (acting) query = query.eq("company_id", acting);
       const rows = unwrap(
-        await supabase
-          .from("tasks")
-          .select("*, vendors ( name )")
-          .order("due_on", { ascending: true, nullsFirst: false }),
+        await query.order("due_on", { ascending: true, nullsFirst: false }),
       ) as unknown as Array<{
         id: string;
         vendor_id: string | null;
@@ -413,9 +420,10 @@ export function createSupabaseRepository(
 
     async listReportRows(): Promise<ReportRow[]> {
       const supabase = clientFactory();
-      const rows = unwrap(
-        await supabase.from("company_report_rows").select("*").order("project"),
-      ) as CompanyReportRowView[];
+      const acting = getActingCompanyId();
+      let query = supabase.from("company_report_rows").select("*");
+      if (acting) query = query.eq("company_id", acting);
+      const rows = unwrap(await query.order("project")) as CompanyReportRowView[];
 
       return rows.map((row) => ({
         id: row.id,

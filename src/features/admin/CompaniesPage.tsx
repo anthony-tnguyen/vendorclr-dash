@@ -1,6 +1,8 @@
 import { Fragment, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useNavigate } from "@tanstack/react-router";
 import { AdminGuard } from "./AdminGuard";
+import { useSession } from "@/app/App";
 import { AppShell } from "@/components/shell/AppShell";
 import { EmptyState, ErrorState, LoadingState } from "@/components/states/AsyncState";
 import type { CompanyPlan } from "@/data/dbTypeAliases";
@@ -134,6 +136,8 @@ function CompanyVendorsPanel({
 export function CompaniesPage() {
   const repo = getRepository();
   const queryClient = useQueryClient();
+  const { enterCompany } = useSession();
+  const navigate = useNavigate();
   const companies = useQuery({ queryKey: ["companies"], queryFn: () => repo.listCompanies() });
 
   const [notice, setNotice] = useState<string | null>(null);
@@ -221,6 +225,16 @@ export function CompaniesPage() {
                         <tr className="border-b border-border last:border-0">
                           <th scope="row" className="px-3 py-3 font-medium">
                             {company.name}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                enterCompany(company.id, company.name);
+                                void navigate({ to: "/dashboard" });
+                              }}
+                              className="focusable mt-1 block text-left text-[11px] font-normal text-primary underline"
+                            >
+                              Open console as this company →
+                            </button>
                           </th>
                           <td className="px-3 py-3 text-xs">
                             <label className="sr-only" htmlFor={`plan-${company.id}`}>
