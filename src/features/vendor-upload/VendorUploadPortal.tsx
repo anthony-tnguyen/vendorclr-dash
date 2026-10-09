@@ -14,6 +14,7 @@ import {
 } from "@/workflows/submissionPackages";
 import { resolveUploadToken } from "@/workflows/vendorUploadRequests";
 import { TurnstileChallenge } from "./TurnstileChallenge";
+import logoAsset from "@/assets/vendorclr-logo.svg.asset.json";
 
 const labels: Record<DocumentKind, string> = {
   certificate_of_insurance: "Certificate of Insurance",
@@ -306,7 +307,7 @@ export function VendorUploadPortal({ token }: { token: string }) {
   return (
     <div className="flex min-h-screen justify-center bg-background px-4 py-10">
       <main className="w-full max-w-lg">
-        <img src="/vendorclr-logo-black.svg" alt="VendorClr" className="h-5 w-auto" />
+        <img src={logoAsset.url} alt="VendorClr" className="h-5 w-auto" />
         {request.isLoading || packageQuery.isLoading ? (
           <div className="mt-3">
             <LoadingState label="Loading your request" rows={3} />

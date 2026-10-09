@@ -10,3 +10,5 @@
 > the editor, so keep the branch in a working state.
 
 <!-- LOVABLE:END -->
+
+- Render uploaded brand logos from the shared Lovable Assets pointer, and keep the favicon as a real public asset so every screen shares the same brand source.

@@ -19,6 +19,7 @@ import {
 } from "@/data/contracts";
 import { getRepository, isBackendConfigured } from "@/data/repository";
 import { cn } from "@/lib/utils";
+import logoAsset from "@/assets/vendorclr-logo.svg.asset.json";
 
 /**
  * The screen an account sees before a paid activation code has been entered.
@@ -653,7 +654,7 @@ function DemoSidebar() {
   return (
     <>
       <div className="flex items-center justify-between px-4 py-4">
-        <img src="/vendorclr-logo-black.svg" alt="VendorClr" className="h-5 w-auto" />
+        <img src={logoAsset.url} alt="VendorClr" className="h-5 w-auto" />
         <span className="numeric rounded-sm border border-sidebar-border px-1.5 py-0.5 text-[10px] uppercase text-sidebar-foreground/70">
           CUSTOMER
         </span>
@@ -718,7 +719,7 @@ export function DemoScreen() {
       <div className="min-h-screen bg-background">
         <header className="border-b border-border bg-card">
           <div className="mx-auto flex w-full max-w-4xl items-center justify-between gap-3 px-4 py-4 sm:px-6">
-            <img src="/vendorclr-logo-black.svg" alt="VendorClr" className="h-5 w-auto" />
+            <img src={logoAsset.url} alt="VendorClr" className="h-5 w-auto" />
             <span className="numeric rounded-sm border border-warn/40 bg-warn-soft px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-warn">
               Demo console
             </span>
@@ -749,7 +750,7 @@ export function DemoScreen() {
         <div className="min-w-0 flex-1">
           {/* Mobile brand bar - the desktop sidebar is hidden below lg. */}
           <div className="flex items-center justify-between border-b border-sidebar-border bg-sidebar px-4 py-3 text-sidebar-foreground lg:hidden">
-            <img src="/vendorclr-logo-black.svg" alt="VendorClr" className="h-5 w-auto" />
+            <img src={logoAsset.url} alt="VendorClr" className="h-5 w-auto" />
             <span className="numeric rounded-sm border border-sidebar-border px-1.5 py-0.5 text-[10px] uppercase text-sidebar-foreground/70">
               CUSTOMER
             </span>
