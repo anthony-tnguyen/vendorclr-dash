@@ -118,7 +118,9 @@ function ProvisioningState() {
       aria-live="polite"
       className="rounded-md border border-primary/25 bg-card p-6 shadow-sm"
     >
-      <p className="text-xs font-semibold uppercase tracking-wider text-primary">Payment confirmed</p>
+      <p className="text-xs font-semibold uppercase tracking-wider text-primary">
+        Payment confirmed
+      </p>
       <h1 className="mt-2 text-xl font-bold tracking-tight text-foreground">
         We&apos;re preparing your VendorClr workspace
       </h1>
@@ -391,7 +393,8 @@ function OnboardingWizard() {
                 </div>
               ) : null}
               <h1 className="text-xl font-bold tracking-tight text-foreground">
-                Welcome to {companyName || text(companyInfo, "companyName") || "your VendorClr workspace"}
+                Welcome to{" "}
+                {companyName || text(companyInfo, "companyName") || "your VendorClr workspace"}
               </h1>
               <p className="text-sm text-muted-foreground">
                 Confirm the essentials so our compliance team can start working for you. It takes
@@ -732,8 +735,13 @@ function OnboardingWizard() {
               ) : null}
 
               {save.isError || submit.isError ? (
-                <div role="alert" className="mt-5 rounded-sm border border-destructive/30 bg-danger-soft px-3 py-2">
-                  <p className="text-sm font-semibold text-destructive">We couldn&apos;t save that yet.</p>
+                <div
+                  role="alert"
+                  className="mt-5 rounded-sm border border-destructive/30 bg-danger-soft px-3 py-2"
+                >
+                  <p className="text-sm font-semibold text-destructive">
+                    We couldn&apos;t save that yet.
+                  </p>
                   <p className="mt-0.5 text-xs text-foreground">
                     Check your connection and try again. Your answers are still on this page.
                   </p>
