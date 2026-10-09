@@ -13,6 +13,7 @@ const expectedRouteIds = [
   "/dashboard/tasks",
   "/dashboard/reports",
   "/dashboard/settings",
+  "/dashboard/account",
   "/dashboard/help",
   "/dashboard/admin/",
   "/dashboard/admin/companies",

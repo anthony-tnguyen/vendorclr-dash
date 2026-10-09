@@ -31,6 +31,7 @@ export const routes = {
   projectDetail: "/dashboard/projects/$projectId",
   requirementProfiles: "/dashboard/requirement-profiles",
   settings: "/dashboard/settings",
+  account: "/dashboard/account",
   team: "/dashboard/team",
   adminOverview: "/dashboard/admin",
   adminCompanies: "/dashboard/admin/companies",
@@ -60,6 +61,7 @@ export const customerNav = [
   { label: "Reports", to: routes.reports, description: "Project level compliance reporting" },
   { label: "Settings", to: routes.settings, description: "Requirement defaults and contacts" },
   { label: "Team", to: routes.team, description: "Teammate roles and access" },
+  { label: "Account", to: routes.account, description: "Your profile and password" },
   { label: "Help", to: routes.help, description: "FAQ and how VendorClr works" },
 ] as const satisfies readonly NavItem[];
 
@@ -88,5 +90,6 @@ export const adminNav = [
     to: routes.adminOperations,
     description: "Failed jobs, stale reviews and delivery problems",
   },
+  { label: "Account", to: routes.account, description: "Your profile and password" },
   { label: "Help", to: routes.help, description: "FAQ and how VendorClr works" },
 ] as const satisfies readonly NavItem[];
