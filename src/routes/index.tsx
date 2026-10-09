@@ -15,6 +15,19 @@ import { LoadingState } from "@/components/states/AsyncState";
  * on /dashboard exactly as before.
  */
 export const Route = createFileRoute("/")({
+  head: () => ({
+    meta: [
+      { title: "VendorClr — Workspace access" },
+      { name: "description", content: "Sign in to your VendorClr vendor compliance workspace." },
+      { property: "og:title", content: "VendorClr — Workspace access" },
+      {
+        property: "og:description",
+        content: "Sign in to your VendorClr vendor compliance workspace.",
+      },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary_large_image" },
+    ],
+  }),
   component: LandingRedirect,
 });
 
