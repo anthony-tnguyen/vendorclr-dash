@@ -9,7 +9,8 @@ import { SettingsPage } from "@/features/settings/SettingsPage";
 import { VendorForm } from "@/features/vendors/VendorForm";
 
 const repository = {
-  listAccessGrants: vi.fn().mockResolvedValue([]),
+  listAdminMembers: vi.fn().mockResolvedValue([]),
+  listPlatformAdmins: vi.fn().mockResolvedValue([]),
   listReportRows: vi.fn().mockResolvedValue([]),
   createVendor: vi.fn(),
 };
@@ -66,7 +67,8 @@ function main() {
 }
 
 afterEach(() => {
-  repository.listAccessGrants.mockReset().mockResolvedValue([]);
+  repository.listAdminMembers.mockReset().mockResolvedValue([]);
+  repository.listPlatformAdmins.mockReset().mockResolvedValue([]);
   repository.listReportRows.mockReset().mockResolvedValue([]);
   repository.createVendor.mockReset();
 });
@@ -93,10 +95,12 @@ describe("production action truthfulness", () => {
     expect(main().queryByText(/not available/i)).not.toBeInTheDocument();
   });
 
-  it("does not present a broken teammate-invite control on the legacy access page", async () => {
+  it("renders the access console in production without demo language", async () => {
     renderWithQueryClient(<AccessPage />);
 
-    expect(await main().findByText("No access grants")).toBeInTheDocument();
+    // Empty data on a live session: the members section shows its empty state
+    // rather than a fake invite control, and nothing says "demo".
+    expect(await main().findByText("No members")).toBeInTheDocument();
     expect(main().queryByRole("button", { name: /invit/i })).not.toBeInTheDocument();
     expect(main().queryByText(/demo/i)).not.toBeInTheDocument();
   });
