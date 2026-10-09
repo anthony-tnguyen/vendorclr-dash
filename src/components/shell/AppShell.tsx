@@ -3,14 +3,20 @@ import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { useSession } from "@/app/App";
 import { useSignOut } from "@/app/useSignOut";
-import { adminNav, customerNav } from "@/app/router";
+import { adminNav, customerNav, routes, type NavItem } from "@/app/router";
 import { LoadingState } from "@/components/states/AsyncState";
 import { SetupBanner } from "@/components/shell/SetupBanner";
 import { LegalLinks } from "@/features/legal/LegalPages";
 import { cn } from "@/lib/utils";
 import logoAsset from "@/assets/vendorclr-logo.svg.asset.json";
 
-type NavItems = typeof customerNav | typeof adminNav;
+type NavItems = readonly NavItem[];
+
+// While staff act as a company, only the pages whose reads are scoped to the
+// acting company are shown; the rest (projects, settings, team, requirement
+// profiles) are not yet acting-aware, so they are hidden to avoid showing a
+// staff member every company's data under one company's banner.
+const ACTING_NAV_LABELS = new Set(["Overview", "Vendors", "Tasks", "Reports", "Help"]);
 
 function NavList({
   title,
@@ -173,16 +179,31 @@ export interface AppShellProps {
 }
 
 export function AppShell({ title, subtitle, actions, children }: AppShellProps) {
-  const { personName, companyName, role, mode, status, activation, serviceStatus, isStaff } =
-    useSession();
+  const {
+    personName,
+    companyName,
+    role,
+    mode,
+    status,
+    activation,
+    serviceStatus,
+    isStaff,
+    actingCompanyId,
+    actingCompanyName,
+    exitCompany,
+  } = useSession();
   const { signOut } = useSignOut();
   const navigate = useNavigate();
+  const acting = actingCompanyId != null;
   // The router's own location, not window.location - the latter lags behind a
   // client-side navigation and would send the wrong page back to sign-in.
   const here = useRouterState({ select: (state) => state.location.href });
   const pathname = useRouterState({ select: (state) => state.location.pathname });
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
-  const navigation = role === "admin" ? adminNav : customerNav;
+  const baseNav: NavItems = role === "admin" ? adminNav : customerNav;
+  const navigation: NavItems = acting
+    ? baseNav.filter((item) => ACTING_NAV_LABELS.has(item.label))
+    : baseNav;
   const navigationTitle = role === "admin" ? "Operations" : "Workspace";
 
   /**
@@ -341,6 +362,26 @@ export function AppShell({ title, subtitle, actions, children }: AppShellProps) 
             tabIndex={-1}
             className="mx-auto w-full max-w-[100rem] px-4 py-6 sm:px-6"
           >
+            {acting ? (
+              <div
+                role="status"
+                className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-md border border-warn/40 bg-warn-soft px-3 py-2 text-xs"
+              >
+                <span className="font-semibold text-warn">
+                  Acting as {actingCompanyName} — changes here affect this customer's workspace.
+                </span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    exitCompany();
+                    void navigate({ to: routes.adminCompanies });
+                  }}
+                  className="focusable rounded-sm border border-warn/50 px-2 py-1 font-semibold text-warn"
+                >
+                  Exit company
+                </button>
+              </div>
+            ) : null}
             {showSetupBanner && serviceStatus !== null ? (
               <SetupBanner serviceStatus={serviceStatus} />
             ) : null}

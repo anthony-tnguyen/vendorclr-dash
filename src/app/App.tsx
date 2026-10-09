@@ -7,8 +7,27 @@ import type {
   CompanyRole,
   CompanyServiceStatus,
 } from "@/data/dbTypeAliases";
+import { getActingCompanyId, setActingCompanyId } from "@/data/actingCompany";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { hasBackendEnv } from "@/lib/supabase/env";
+
+// The acting company's id lives in the repository-facing actingCompany module;
+// its display name is kept alongside only for this tab's UI (banner/header).
+const ACTING_NAME_KEY = "vendorclr.actingCompanyName";
+
+function readActingCompany(): { id: string; name: string } | null {
+  const id = getActingCompanyId();
+  if (!id) return null;
+  let name = "this company";
+  if (typeof window !== "undefined") {
+    try {
+      name = window.sessionStorage.getItem(ACTING_NAME_KEY) ?? name;
+    } catch {
+      /* storage blocked; fall back to the generic label */
+    }
+  }
+  return { id, name };
+}
 
 /**
  * Session context.
@@ -81,6 +100,17 @@ export interface Session {
   /** The signed-in user's own email, or null in demo mode / before load. Used to match an invited address — the real check is still server-side inside accept_company_invitation(). */
   email: string | null;
   signOut: () => Promise<void>;
+  /**
+   * The company a staff member is "acting as" (impersonating), or null. When set,
+   * companyId/companyName/companyRole/role below reflect that company so the
+   * customer console renders and scopes to it; isStaff stays true so the Exit
+   * control and the admin console remain reachable. Staff-only — enterCompany is
+   * a no-op for anyone who is not a platform admin.
+   */
+  actingCompanyId: string | null;
+  actingCompanyName: string | null;
+  enterCompany: (companyId: string, companyName: string) => void;
+  exitCompany: () => void;
 }
 
 const SessionContext = createContext<Session | null>(null);
@@ -103,6 +133,10 @@ const DEMO_FALLBACK: Session = {
   userId: null,
   email: null,
   signOut: async () => {},
+  actingCompanyId: null,
+  actingCompanyName: null,
+  enterCompany: () => {},
+  exitCompany: () => {},
 };
 
 // ---------------------------------------------------------------------------
@@ -134,6 +168,10 @@ function useDemoSessionValue(): Session {
       userId: null,
       email: null,
       signOut: async () => {},
+      actingCompanyId: null,
+      actingCompanyName: null,
+      enterCompany: () => {},
+      exitCompany: () => {},
     }),
     [role],
   );
@@ -192,6 +230,7 @@ function useLiveSessionValue(): Session {
   const [identity, setIdentity] = useState<LiveIdentity | null>(null);
   const [role, setRoleState] = useState<DemoRole>("customer");
   const [reloadToken, setReloadToken] = useState(0);
+  const [acting, setActing] = useState<{ id: string; name: string } | null>(readActingCompany);
 
   const refresh = useCallback(() => setReloadToken((token) => token + 1), []);
 
@@ -255,6 +294,16 @@ function useLiveSessionValue(): Session {
         setStatus("anonymous");
         setIdentity(null);
         setRoleState("customer");
+        // Never carry an acting company across a sign-out into the next session.
+        setActingCompanyId(null);
+        if (typeof window !== "undefined") {
+          try {
+            window.sessionStorage.removeItem(ACTING_NAME_KEY);
+          } catch {
+            /* ignore */
+          }
+        }
+        setActing(null);
         return;
       }
       void loadIdentity(user.id, user.email ?? "");
@@ -286,28 +335,75 @@ function useLiveSessionValue(): Session {
     if (error) throw new Error(error.message || "Could not sign out. Try again.");
   }, []);
 
-  return useMemo(
-    () => ({
+  const persistActingName = useCallback((name: string | null) => {
+    if (typeof window === "undefined") return;
+    try {
+      if (name) window.sessionStorage.setItem(ACTING_NAME_KEY, name);
+      else window.sessionStorage.removeItem(ACTING_NAME_KEY);
+    } catch {
+      /* storage blocked; the in-memory state still drives this tab */
+    }
+  }, []);
+
+  const enterCompany = useCallback(
+    (companyId: string, companyName: string) => {
+      // Only staff may act as a company; everyone else would be refused by RLS
+      // on every write anyway, so this just avoids a confusing no-op console.
+      if (identity?.isPlatformAdmin !== true) return;
+      setActingCompanyId(companyId);
+      persistActingName(companyName);
+      setActing({ id: companyId, name: companyName });
+    },
+    [identity?.isPlatformAdmin, persistActingName],
+  );
+
+  const exitCompany = useCallback(() => {
+    setActingCompanyId(null);
+    persistActingName(null);
+    setActing(null);
+  }, [persistActingName]);
+
+  return useMemo(() => {
+    const isStaff = identity?.isPlatformAdmin === true;
+    // Only honour an acting company for staff. When acting, present as that
+    // company so the customer console renders and scopes to it, while isStaff
+    // stays true so the Exit banner and the admin console remain reachable.
+    const activeActing = isStaff ? acting : null;
+    return {
       mode: "live",
       status,
-      role: canSwitchRole ? role : "customer",
+      role: activeActing ? "customer" : canSwitchRole ? role : "customer",
       setRole,
       canSwitchRole,
       personName: identity?.personName ?? "",
-      companyName: identity?.companyName ?? "",
-      companyId: identity?.companyId ?? null,
-      companyRole: identity?.companyRole ?? null,
-      activation: identity?.activation ?? "none",
-      serviceStatus: identity?.serviceStatus ?? null,
-      serviceLive: identity?.isPlatformAdmin === true || identity?.serviceStatus === "live",
-      isStaff: identity?.isPlatformAdmin === true,
+      companyName: activeActing ? activeActing.name : (identity?.companyName ?? ""),
+      companyId: activeActing ? activeActing.id : (identity?.companyId ?? null),
+      companyRole: activeActing ? ("owner" as CompanyRole) : (identity?.companyRole ?? null),
+      activation: activeActing ? "activated" : (identity?.activation ?? "none"),
+      serviceStatus: activeActing ? "live" : (identity?.serviceStatus ?? null),
+      serviceLive: activeActing ? true : isStaff || identity?.serviceStatus === "live",
+      isStaff,
       refresh,
       userId: identity?.userId ?? null,
       email: identity?.email ?? null,
       signOut,
-    }),
-    [status, role, canSwitchRole, identity, setRole, signOut, refresh],
-  );
+      actingCompanyId: activeActing?.id ?? null,
+      actingCompanyName: activeActing?.name ?? null,
+      enterCompany,
+      exitCompany,
+    };
+  }, [
+    status,
+    role,
+    canSwitchRole,
+    identity,
+    acting,
+    setRole,
+    signOut,
+    refresh,
+    enterCompany,
+    exitCompany,
+  ]);
 }
 
 // ---------------------------------------------------------------------------

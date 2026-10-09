@@ -181,14 +181,32 @@ describe("platform staff", () => {
     expect(leads[0]?.n).toBe(1);
   });
 
-  it("cannot write customer records", async () => {
-    // Deliberate: staff support access is read-only. Revisit if support ever
-    // needs to correct customer data directly.
+  it("may write the acting-company surface (vendors, tasks)", async () => {
+    // "Act as company" (20261009180000): the vendors/tasks write policies are
+    // widened with `... or is_platform_admin()` so staff can work inside a
+    // customer's console. End-to-end CRUD is covered in
+    // staff-act-as-company.test.ts; here we just pin the tenancy boundary.
+    const inserted = await asUser<{ id: string }>(
+      db,
+      STAFF,
+      `insert into public.vendors (company_id, name, trade)
+       values ($1, 'Staff Wrote This', 'Roofing') returning id`,
+      [alicesCompany],
+    );
+    expect(inserted[0]?.id).toBeTruthy();
+  });
+
+  it("still cannot write customer tables outside that surface", async () => {
+    // Only vendors, tasks, contacts and upload requests are widened for staff.
+    // Everything else stays members-only via can_write_company(), so a platform
+    // admin (who is a member of no company) is still refused.
     await expectDeniedByRls(() =>
       asUser(
         db,
         STAFF,
-        `insert into public.vendors (company_id, name, trade) values ($1, 'Staff Wrote This', 'Roofing')`,
+        `insert into public.vendor_policies (company_id, vendor_id, policy_type, policy_number)
+         select $1, id, 'general_liability', 'GL-STAFF' from public.vendors
+         where company_id = $1 limit 1`,
         [alicesCompany],
       ),
     );
