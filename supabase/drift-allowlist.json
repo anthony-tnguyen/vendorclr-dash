@@ -1,0 +1,10 @@
+{
+  "_comment": "Hosted-Supabase objects that are expected to exist in the live projects but are NOT owned by this (vendorclr-dash) repository, so the drift check must not flag them as unknown. These belong to the sibling `vendorclear` marketing-site repo, which deploys to the SAME Supabase project (see docs/operations/environment-matrix.md, 2026-10-09 note). When vendorclear adds a shared-database object, add its name here. The drift check still FAILS on any dash migration missing from a ledger (deploy-lag) regardless of this list.",
+  "foreignMigrations": [
+    "coi_scanner_lead_tables",
+    "requirement_builder_sessions",
+    "correction_generator_sessions",
+    "scanner_parser_provenance_feedback"
+  ],
+  "foreignFunctions": ["analyze-coi"]
+}

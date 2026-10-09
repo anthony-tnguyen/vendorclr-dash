@@ -14,6 +14,50 @@ re-verified 2026-09-22 (see the Supabase table).
 > applied to staging and production, bringing both to schema parity with `main`
 > at `7193d1f` (see the Supabase table and `go-live-checklist.md`).
 
+> **2026-10-09 re-verification (supersedes the "56/56 parity" claim in the
+> Supabase table below).** Verified read-only against both live projects via
+> the Supabase MCP. The parity statement is now stale — there is genuine
+> deploy-lag drift, and a separate shared-database wrinkle the earlier note did
+> not call out:
+>
+> - **`company_vendor_usage()` is broken in production.** It is recorded in the
+>   ledger (via `self_checkout_billing_and_onboarding`) but its body selected a
+>   non-existent `company_id` column out of `current_company_ids()` (which
+>   returns `setof uuid`), so every call raises a `42703` undefined-column error
+>   — reproduced live. Fixed in `main` by migration
+>   `20261009000400_fix_company_vendor_usage_company_ids` (+ a regression test
+>   that invokes the RPC); **still pending deploy to prod and staging.**
+> - **Dash migrations not yet applied to the hosted projects.** Prod's ledger
+>   (64 rows) is missing these committed dash migrations by name:
+>   `harden_outbound_gate_grant`, `revoke_trigger_audit_execute`,
+>   `staff_manage_contacts`, `lien_waiver_document_kind`,
+>   `vendor_requirement_overrides` (and now the `company_vendor_usage` fix).
+>   Staging (55 rows) is further behind. "Absent from the ledger" is not proof a
+>   change was never applied — verify each against live schema state before any
+>   `migration repair`; do not blindly replay.
+> - **`revoke_trigger_audit_execute` is confirmed NOT in effect in production:**
+>   the `authenticated` role still holds EXECUTE on
+>   `record_project_workflow_audit()` and `record_requirement_rule_audit()`
+>   (both trigger-only `SECURITY DEFINER` functions). Deploying that migration
+>   closes the exposure the Supabase advisor flags.
+> - **Three prod-ledger migrations are NOT dash's and must not be copied here:**
+>   `coi_scanner_lead_tables`, `requirement_builder_sessions`,
+>   `correction_generator_sessions` (plus the `analyze-coi` Edge Function) belong
+>   to the sibling **vendorclear** marketing repo, which deploys to this same
+>   Supabase project (dash carries cross-repo tests gated on
+>   `VENDORCLEAR_REPO_DIR`, e.g. `supabase/tests/scanner-parser-feedback.test.ts`,
+>   and vendorclear stamps `coi_scanner_lead_tables` at a different version). The
+>   hosted ledger is therefore the **union of two repos' migrations**; any
+>   drift-check or reconciliation (Task 13 / audit rec. #5) must account for
+>   that or it will keep flagging vendorclear's objects as phantom dash drift.
+> - **Edge Functions diverge prod↔staging.** Of the 8 functions both projects
+>   share, 6 have different deployed bundle hashes (`ezbr_sha256`):
+>   `send-renewal-reminders`, `retry-failed-documents`, `resend-webhook`,
+>   `create-checkout`, `billing-portal`, `stripe-webhook`. `config.toml` also
+>   only declares `verify_jwt` for the three Stripe functions, while prod runs
+>   several others with `verify_jwt=false` — redeploy from one authoritative
+>   revision and declare each function's `verify_jwt` to stop this recurring.
+
 This is the authoritative list of every environment-specific value the
 implementation plan names for Task 13, split into a STAGING column and a
 PRODUCTION column, with an explicit note on whether each one is **already

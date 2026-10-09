@@ -23,7 +23,8 @@
     "check:email-deliverability": "bun scripts/check-email-deliverability.ts",
     "export:company": "bun scripts/export-company.ts",
     "delete:company": "bun scripts/delete-company.ts",
-    "smoke:production": "bun scripts/smoke-production.ts"
+    "smoke:production": "bun scripts/smoke-production.ts",
+    "drift:check": "bun scripts/check-supabase-drift.ts"
   },
   "overrides": {
     "rolldown": "1.2.1"
