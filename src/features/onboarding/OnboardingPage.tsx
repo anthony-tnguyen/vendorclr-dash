@@ -600,9 +600,10 @@ function OnboardingWizard() {
                       to={routes.vendorCoiImport}
                       onClick={async (event) => {
                         event.preventDefault();
+                        const href = event.currentTarget.href;
                         try {
                           await saveBeforeImport();
-                          window.location.assign(event.currentTarget.href);
+                          window.location.assign(href);
                         } catch {
                           // The shared inline error keeps the customer in context.
                         }
@@ -620,9 +621,10 @@ function OnboardingWizard() {
                       to={routes.vendorImport}
                       onClick={async (event) => {
                         event.preventDefault();
+                        const href = event.currentTarget.href;
                         try {
                           await saveBeforeImport();
-                          window.location.assign(event.currentTarget.href);
+                          window.location.assign(href);
                         } catch {
                           // The shared inline error keeps the customer in context.
                         }
