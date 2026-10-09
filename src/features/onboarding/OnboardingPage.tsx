@@ -80,7 +80,7 @@ function Header({
     <header className="border-b border-border bg-card">
       <div className="mx-auto flex w-full max-w-3xl flex-wrap items-center justify-between gap-3 px-4 py-4 sm:px-6">
         <div className="flex items-center gap-3">
-          <img src={logoAsset.url} alt="VendorClr" className="h-5 w-auto" />
+          <img src={logoAsset.url} alt="VendorClr" className="h-8 w-auto" />
           <span className="numeric rounded-sm border border-primary/30 bg-primary/[0.06] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-primary">
             Onboarding
           </span>
