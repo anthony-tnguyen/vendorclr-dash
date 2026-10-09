@@ -14,7 +14,7 @@
 -- endorsement kinds.
 
 alter table public.upload_request_checklist_items
-  drop constraint upload_request_checklist_items_document_kind_check;
+  drop constraint if exists upload_request_checklist_items_document_kind_check;
 
 alter table public.upload_request_checklist_items
   add constraint upload_request_checklist_items_document_kind_check
@@ -28,7 +28,7 @@ alter table public.upload_request_checklist_items
   ));
 
 alter table public.package_documents
-  drop constraint package_documents_document_kind_check;
+  drop constraint if exists package_documents_document_kind_check;
 
 alter table public.package_documents
   add constraint package_documents_document_kind_check

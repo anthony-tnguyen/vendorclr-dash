@@ -15,35 +15,35 @@
 -- vendor. Company members' access is unchanged.
 
 -- contacts ------------------------------------------------------------------
-drop policy contacts_insert on public.contacts;
+drop policy if exists contacts_insert on public.contacts;
 create policy contacts_insert on public.contacts
   for insert to authenticated
   with check (public.can_write_company(company_id) or public.is_platform_admin());
 
-drop policy contacts_update on public.contacts;
+drop policy if exists contacts_update on public.contacts;
 create policy contacts_update on public.contacts
   for update to authenticated
   using (public.can_write_company(company_id) or public.is_platform_admin())
   with check (public.can_write_company(company_id) or public.is_platform_admin());
 
-drop policy contacts_delete on public.contacts;
+drop policy if exists contacts_delete on public.contacts;
 create policy contacts_delete on public.contacts
   for delete to authenticated
   using (public.can_write_company(company_id) or public.is_platform_admin());
 
 -- vendor_contacts -----------------------------------------------------------
-drop policy vendor_contacts_insert on public.vendor_contacts;
+drop policy if exists vendor_contacts_insert on public.vendor_contacts;
 create policy vendor_contacts_insert on public.vendor_contacts
   for insert to authenticated
   with check (public.can_write_company(company_id) or public.is_platform_admin());
 
-drop policy vendor_contacts_update on public.vendor_contacts;
+drop policy if exists vendor_contacts_update on public.vendor_contacts;
 create policy vendor_contacts_update on public.vendor_contacts
   for update to authenticated
   using (public.can_write_company(company_id) or public.is_platform_admin())
   with check (public.can_write_company(company_id) or public.is_platform_admin());
 
-drop policy vendor_contacts_delete on public.vendor_contacts;
+drop policy if exists vendor_contacts_delete on public.vendor_contacts;
 create policy vendor_contacts_delete on public.vendor_contacts
   for delete to authenticated
   using (public.can_write_company(company_id) or public.is_platform_admin());
@@ -54,18 +54,18 @@ create policy vendor_contacts_delete on public.vendor_contacts
 -- behalf. The bounce webhook's handle_bounce_suppression() is SECURITY DEFINER
 -- and bypasses these policies regardless, so its automatic writes are
 -- unaffected.
-drop policy suppressed_recipients_insert on public.suppressed_recipients;
+drop policy if exists suppressed_recipients_insert on public.suppressed_recipients;
 create policy suppressed_recipients_insert on public.suppressed_recipients
   for insert to authenticated
   with check (public.can_write_company(company_id) or public.is_platform_admin());
 
-drop policy suppressed_recipients_update on public.suppressed_recipients;
+drop policy if exists suppressed_recipients_update on public.suppressed_recipients;
 create policy suppressed_recipients_update on public.suppressed_recipients
   for update to authenticated
   using (public.can_write_company(company_id) or public.is_platform_admin())
   with check (public.can_write_company(company_id) or public.is_platform_admin());
 
-drop policy suppressed_recipients_delete on public.suppressed_recipients;
+drop policy if exists suppressed_recipients_delete on public.suppressed_recipients;
 create policy suppressed_recipients_delete on public.suppressed_recipients
   for delete to authenticated
   using (public.can_write_company(company_id) or public.is_platform_admin());

@@ -25,7 +25,7 @@
 -- value->>'kind' and value->'configuration' to define a wholly vendor-specific
 -- extra requirement. Missing keys fall back to the layer beneath. No CHECK on
 -- the jsonb shape - same reasoning as project_requirement_overrides.
-create table public.vendor_requirement_overrides (
+create table if not exists public.vendor_requirement_overrides (
   id         uuid primary key default gen_random_uuid(),
   company_id uuid not null references public.companies (id) on delete cascade,
   vendor_id  uuid not null references public.vendors (id) on delete cascade,
@@ -36,21 +36,25 @@ create table public.vendor_requirement_overrides (
   unique (vendor_id, rule_key)
 );
 
-create index vendor_requirement_overrides_company_id_idx
+create index if not exists vendor_requirement_overrides_company_id_idx
   on public.vendor_requirement_overrides (company_id);
-create index vendor_requirement_overrides_vendor_id_idx
+create index if not exists vendor_requirement_overrides_vendor_id_idx
   on public.vendor_requirement_overrides (vendor_id);
 
 -- ---------------------------------------------------------------------------
 -- updated_at maintenance + cross-tenant integrity
 -- ---------------------------------------------------------------------------
 
+drop trigger if exists vendor_requirement_overrides_touch_updated_at
+  on public.vendor_requirement_overrides;
 create trigger vendor_requirement_overrides_touch_updated_at
   before update on public.vendor_requirement_overrides
   for each row execute function public.touch_updated_at();
 
 -- Child company_id must equal the owning vendor's company_id. Reuses the same
 -- check every other vendor_id-keyed child table uses (migration 20260901000200).
+drop trigger if exists vendor_requirement_overrides_company_matches_vendor
+  on public.vendor_requirement_overrides;
 create trigger vendor_requirement_overrides_company_matches_vendor
   before insert or update on public.vendor_requirement_overrides
   for each row execute function public.assert_company_matches_vendor();
@@ -65,19 +69,23 @@ create trigger vendor_requirement_overrides_company_matches_vendor
 -- broader can_write_company() that operational data gets.
 alter table public.vendor_requirement_overrides enable row level security;
 
+drop policy if exists vendor_requirement_overrides_select on public.vendor_requirement_overrides;
 create policy vendor_requirement_overrides_select on public.vendor_requirement_overrides
   for select to authenticated
   using (company_id in (select public.current_company_ids()) or public.is_platform_admin());
 
+drop policy if exists vendor_requirement_overrides_insert on public.vendor_requirement_overrides;
 create policy vendor_requirement_overrides_insert on public.vendor_requirement_overrides
   for insert to authenticated
   with check (public.has_company_role(company_id, array['owner', 'risk_manager']));
 
+drop policy if exists vendor_requirement_overrides_update on public.vendor_requirement_overrides;
 create policy vendor_requirement_overrides_update on public.vendor_requirement_overrides
   for update to authenticated
   using (public.has_company_role(company_id, array['owner', 'risk_manager']))
   with check (public.has_company_role(company_id, array['owner', 'risk_manager']));
 
+drop policy if exists vendor_requirement_overrides_delete on public.vendor_requirement_overrides;
 create policy vendor_requirement_overrides_delete on public.vendor_requirement_overrides
   for delete to authenticated
   using (public.has_company_role(company_id, array['owner', 'risk_manager']));
