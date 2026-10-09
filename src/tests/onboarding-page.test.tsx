@@ -12,12 +12,12 @@ import { resetRepository } from "@/data/repository";
  * the review summary and sign-out routing (the Phase 1-3 behaviours).
  */
 
-async function renderOnboarding() {
+async function renderOnboarding(initialEntry = "/onboarding") {
   const { getRouter } = await import("@/router");
   const router = getRouter();
   router.update({
     ...router.options,
-    history: createMemoryHistory({ initialEntries: ["/onboarding"] }),
+    history: createMemoryHistory({ initialEntries: [initialEntry] }),
   });
   await router.load();
   render(<RouterProvider router={router} />);
@@ -64,6 +64,13 @@ describe("onboarding wizard (demo mode)", () => {
 
     // Advanced to step 3 (Projects).
     expect(await screen.findByText("Projects")).toBeInTheDocument();
+  });
+
+  it("reassures a buyer returning from successful checkout", async () => {
+    await renderOnboarding("/onboarding?checkout=success");
+
+    expect(await screen.findByText(/Payment confirmed/i)).toBeInTheDocument();
+    expect(screen.getByText(/VendorClr will take it from here/i)).toBeInTheDocument();
   });
 
   it("signs out to the login screen", async () => {
