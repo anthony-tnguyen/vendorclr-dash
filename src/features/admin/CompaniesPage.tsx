@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AdminGuard } from "./AdminGuard";
 import { AppShell } from "@/components/shell/AppShell";
@@ -6,6 +6,101 @@ import { EmptyState, ErrorState, LoadingState } from "@/components/states/AsyncS
 import type { CompanyPlan } from "@/data/dbTypeAliases";
 import { getRepository } from "@/data/repository";
 import { PLAN_IDS, planLabel } from "@/domain/billing/plans";
+import { VendorForm } from "@/features/vendors/VendorForm";
+
+/**
+ * Managed-service vendor panel: the roster of one company's vendors plus an
+ * add-vendor form bound to that company. Staff read via the is_platform_admin()
+ * branch of vendors_select; the add goes through the admin_create_vendor RPC
+ * (migration 20261009140000), so no vendors write policy is widened.
+ */
+function CompanyVendorsPanel({
+  companyId,
+  companyName,
+}: {
+  companyId: string;
+  companyName: string;
+}) {
+  const repo = getRepository();
+  const vendorsKey = ["admin", "company-vendors", companyId];
+  const vendors = useQuery({
+    queryKey: vendorsKey,
+    queryFn: () => repo.listCompanyVendors(companyId),
+  });
+  const [adding, setAdding] = useState(false);
+
+  return (
+    <div className="space-y-3 rounded-md border border-border bg-background p-4">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h3 className="text-sm font-semibold text-foreground">Vendors — {companyName}</h3>
+        {!adding ? (
+          <button
+            type="button"
+            onClick={() => setAdding(true)}
+            className="focusable rounded-sm bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground"
+          >
+            Add vendor
+          </button>
+        ) : null}
+      </div>
+
+      {adding ? (
+        <VendorForm
+          create={(draft) => repo.adminCreateVendor(companyId, draft)}
+          invalidateKey={vendorsKey}
+          onDone={() => setAdding(false)}
+        />
+      ) : null}
+
+      {vendors.isLoading ? (
+        <LoadingState label="Loading vendors" rows={3} />
+      ) : vendors.isError ? (
+        <ErrorState
+          description="Could not load this company's vendors."
+          onRetry={() => void vendors.refetch()}
+        />
+      ) : (vendors.data ?? []).length === 0 ? (
+        <p className="text-xs text-muted-foreground">
+          No vendors yet. Add one on this company's behalf.
+        </p>
+      ) : (
+        <div className="overflow-x-auto rounded-sm border border-border bg-card">
+          <table className="w-full min-w-[560px] text-left text-sm">
+            <caption className="sr-only">{companyName} vendors</caption>
+            <thead className="border-b border-border text-xs uppercase tracking-wide text-muted-foreground">
+              <tr>
+                <th scope="col" className="px-3 py-2 font-medium">
+                  Vendor
+                </th>
+                <th scope="col" className="px-3 py-2 font-medium">
+                  Trade
+                </th>
+                <th scope="col" className="px-3 py-2 font-medium">
+                  Project
+                </th>
+                <th scope="col" className="px-3 py-2 font-medium">
+                  Contract
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {(vendors.data ?? []).map((v) => (
+                <tr key={v.id} className="border-b border-border last:border-0">
+                  <th scope="row" className="px-3 py-2 font-medium">
+                    {v.name}
+                  </th>
+                  <td className="px-3 py-2 text-xs">{v.trade}</td>
+                  <td className="px-3 py-2 text-xs">{v.project}</td>
+                  <td className="numeric px-3 py-2 text-xs">${v.contractValue.toLocaleString()}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
 
 export function CompaniesPage() {
   const repo = getRepository();
@@ -14,6 +109,7 @@ export function CompaniesPage() {
 
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [expanded, setExpanded] = useState<string | null>(null);
 
   const setPlan = useMutation({
     mutationFn: (v: { companyId: string; plan: CompanyPlan }) =>
@@ -30,7 +126,10 @@ export function CompaniesPage() {
   });
 
   return (
-    <AppShell title="Companies" subtitle="Customer accounts, plan coverage, and plan changes.">
+    <AppShell
+      title="Companies"
+      subtitle="Customer accounts: plan coverage, plan changes, and managed-service vendors."
+    >
       <AdminGuard>
         {companies.isLoading ? (
           <LoadingState label="Loading companies" rows={4} />
@@ -61,7 +160,7 @@ export function CompaniesPage() {
             ) : null}
 
             <div className="overflow-x-auto rounded-md border border-border bg-card">
-              <table className="w-full min-w-[720px] text-left text-sm">
+              <table className="w-full min-w-[760px] text-left text-sm">
                 <caption className="sr-only">Customer companies</caption>
                 <thead className="border-b border-border text-xs uppercase tracking-wide text-muted-foreground">
                   <tr>
@@ -86,40 +185,65 @@ export function CompaniesPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {(companies.data ?? []).map((company) => (
-                    <tr key={company.id} className="border-b border-border last:border-0">
-                      <th scope="row" className="px-3 py-3 font-medium">
-                        {company.name}
-                      </th>
-                      <td className="px-3 py-3 text-xs">
-                        <label className="sr-only" htmlFor={`plan-${company.id}`}>
-                          Plan for {company.name}
-                        </label>
-                        <select
-                          id={`plan-${company.id}`}
-                          value={company.plan}
-                          disabled={setPlan.isPending}
-                          onChange={(e) =>
-                            setPlan.mutate({
-                              companyId: company.id,
-                              plan: e.target.value as CompanyPlan,
-                            })
-                          }
-                          className="focusable rounded-sm border border-input bg-background px-2 py-1 text-xs disabled:opacity-50"
-                        >
-                          {PLAN_IDS.map((plan) => (
-                            <option key={plan} value={plan}>
-                              {planLabel(plan)}
-                            </option>
-                          ))}
-                        </select>
-                      </td>
-                      <td className="numeric px-3 py-3 text-xs">{company.vendors}</td>
-                      <td className="numeric px-3 py-3 text-xs">{company.seats}</td>
-                      <td className="numeric px-3 py-3 text-xs">{company.complianceRate}%</td>
-                      <td className="numeric px-3 py-3 text-xs">{company.renewalOn}</td>
-                    </tr>
-                  ))}
+                  {(companies.data ?? []).map((company) => {
+                    const isOpen = expanded === company.id;
+                    return (
+                      <Fragment key={company.id}>
+                        <tr className="border-b border-border last:border-0">
+                          <th scope="row" className="px-3 py-3 font-medium">
+                            {company.name}
+                          </th>
+                          <td className="px-3 py-3 text-xs">
+                            <label className="sr-only" htmlFor={`plan-${company.id}`}>
+                              Plan for {company.name}
+                            </label>
+                            <select
+                              id={`plan-${company.id}`}
+                              value={company.plan}
+                              disabled={setPlan.isPending}
+                              onChange={(e) =>
+                                setPlan.mutate({
+                                  companyId: company.id,
+                                  plan: e.target.value as CompanyPlan,
+                                })
+                              }
+                              className="focusable rounded-sm border border-input bg-background px-2 py-1 text-xs disabled:opacity-50"
+                            >
+                              {PLAN_IDS.map((plan) => (
+                                <option key={plan} value={plan}>
+                                  {planLabel(plan)}
+                                </option>
+                              ))}
+                            </select>
+                          </td>
+                          <td className="px-3 py-3 text-xs">
+                            <button
+                              type="button"
+                              aria-expanded={isOpen}
+                              onClick={() => setExpanded(isOpen ? null : company.id)}
+                              className="focusable rounded-sm border border-input px-2 py-1 text-xs font-semibold"
+                            >
+                              <span className="numeric">{company.vendors}</span> ·{" "}
+                              {isOpen ? "Hide" : "Manage"}
+                            </button>
+                          </td>
+                          <td className="numeric px-3 py-3 text-xs">{company.seats}</td>
+                          <td className="numeric px-3 py-3 text-xs">{company.complianceRate}%</td>
+                          <td className="numeric px-3 py-3 text-xs">{company.renewalOn}</td>
+                        </tr>
+                        {isOpen ? (
+                          <tr className="border-b border-border last:border-0">
+                            <td colSpan={6} className="px-3 py-3">
+                              <CompanyVendorsPanel
+                                companyId={company.id}
+                                companyName={company.name}
+                              />
+                            </td>
+                          </tr>
+                        ) : null}
+                      </Fragment>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>

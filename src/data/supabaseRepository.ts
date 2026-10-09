@@ -916,5 +916,42 @@ export function createSupabaseRepository(
       const supabase = clientFactory();
       unwrap(await supabase.rpc("set_company_plan", { target_company: companyId, new_plan: plan }));
     },
+
+    async listCompanyVendors(companyId: string): Promise<Vendor[]> {
+      const supabase = clientFactory();
+      // Staff read: vendors_select exposes every company to a platform admin, so
+      // scope to the one company explicitly rather than relying on membership.
+      const result = (await supabase
+        .from("vendors")
+        .select(VENDOR_SELECT)
+        .eq("company_id", companyId)
+        .is("archived_at", null)
+        .order("created_at", { ascending: false })) as unknown as {
+        data: VendorWithChildren[] | null;
+        error: { message: string } | null;
+      };
+      const [vendors, requirements] = await Promise.all([unwrap(result), loadRequirements()]);
+      return vendors.map((v) => toVendor(v, requirements));
+    },
+
+    async adminCreateVendor(companyId: string, draft: VendorDraft): Promise<Vendor> {
+      const supabase = clientFactory();
+      const inserted = unwrap<{ id: string }>(
+        await supabase.rpc("admin_create_vendor", {
+          target_company: companyId,
+          vendor_name: draft.name,
+          vendor_trade: draft.trade,
+          vendor_project: draft.project,
+          vendor_contract_value: Math.max(0, Math.round(draft.contractValue || 0)),
+          vendor_contact_name: draft.contactName,
+          vendor_contact_email: draft.contactEmail,
+        }),
+      );
+      // The RPC returns the row; re-read for the full projected shape (policies,
+      // the five seeded compliance rows), same as createVendor does.
+      const created = await loadVendorById(inserted.id);
+      if (!created) throw new Error("Vendor was created but could not be read back");
+      return created;
+    },
   };
 }

@@ -343,6 +343,12 @@ export interface DashboardRepository {
   sendPasswordReset(email: string): Promise<void>;
   /** Staff-only: change a company's plan. */
   setCompanyPlan(companyId: string, plan: CompanyPlan): Promise<void>;
+
+  // --- Managed service: act on a customer company's vendors ----------------
+  /** Staff-only: the given company's active vendors (read via is_platform_admin). */
+  listCompanyVendors(companyId: string): Promise<Vendor[]>;
+  /** Staff-only: add a vendor on a company's behalf (admin_create_vendor RPC). */
+  adminCreateVendor(companyId: string, draft: VendorDraft): Promise<Vendor>;
 }
 
 export const COMPLIANCE_LABELS: Record<ComplianceKey, string> = {
