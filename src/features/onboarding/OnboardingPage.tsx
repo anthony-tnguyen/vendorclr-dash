@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Link } from "@tanstack/react-router";
+import { Link, useRouterState } from "@tanstack/react-router";
 
 import { useSession } from "@/app/App";
 import { routes } from "@/app/router";
@@ -12,7 +12,6 @@ import { getRepository, isBackendConfigured } from "@/data/repository";
 import { CONTACT_EMAIL } from "@/features/legal/LegalPages";
 import { OnboardingReviewSummary } from "@/features/onboarding/OnboardingReviewSummary";
 import {
-  missingCount,
   missingRequired,
   normalizeCompanyInfo,
   sectionForStep,
@@ -112,6 +111,31 @@ function Header({
   );
 }
 
+function ProvisioningState() {
+  return (
+    <section
+      role="status"
+      aria-live="polite"
+      className="rounded-md border border-primary/25 bg-card p-6 shadow-sm"
+    >
+      <p className="text-xs font-semibold uppercase tracking-wider text-primary">Payment confirmed</p>
+      <h1 className="mt-2 text-xl font-bold tracking-tight text-foreground">
+        We&apos;re preparing your VendorClr workspace
+      </h1>
+      <p className="mt-2 max-w-xl text-sm text-muted-foreground">
+        Your purchase is complete. We&apos;re connecting your company and setup details now. This
+        normally takes only a few seconds.
+      </p>
+      <div className="mt-5 h-1.5 overflow-hidden rounded-full bg-muted">
+        <div className="h-full w-2/3 animate-pulse rounded-full bg-primary" />
+      </div>
+      <p className="mt-3 text-xs text-muted-foreground">
+        Keep this page open — we&apos;ll continue automatically.
+      </p>
+    </section>
+  );
+}
+
 function Stepper({ step }: { step: number }) {
   return (
     <ol className="flex flex-wrap gap-2" aria-label="Onboarding progress">
@@ -202,12 +226,25 @@ function OnboardingWizard() {
   const { signOut, error: signOutError } = useSignOut();
   const repo = useMemo(() => getRepository(), []);
   const queryClient = useQueryClient();
+  const checkoutSuccess = useRouterState({
+    select: (state) =>
+      String((state.location.search as Record<string, unknown>).checkout ?? "") === "success",
+  });
 
   const onboarding = useQuery({
     queryKey: ["onboarding"],
-    queryFn: () => repo.getOnboarding(),
-    // Belt and braces with RequireAuth: the query must not run against an
-    // unresolved or anonymous session.
+    queryFn: async () => {
+      const loaded = await repo.getOnboarding();
+      if (checkoutSuccess && loaded === null) {
+        throw new Error("Workspace provisioning is still in progress.");
+      }
+      return loaded;
+    },
+    // Stripe may redirect before its webhook has finished creating the company,
+    // membership and onboarding row. Retry that expected race before showing an
+    // error, while keeping ordinary visits responsive.
+    retry: checkoutSuccess ? 10 : 2,
+    retryDelay: checkoutSuccess ? 1_500 : 1_000,
     enabled: status === "authenticated",
   });
 
@@ -274,24 +311,26 @@ function OnboardingWizard() {
   }
 
   async function onSubmit() {
-    // Submitting with blanks is allowed, but confirm it so it is a choice, not a
-    // surprise — the customer can finish the rest from Settings later.
-    const missing = missingCount(currentSections);
-    if (live && missing > 0) {
-      const ok = window.confirm(
-        `You're submitting with ${missing} unanswered ${missing === 1 ? "item" : "items"}. ` +
-          "You can finish these yourself later from Settings. Submit now?",
-      );
-      if (!ok) return;
-    }
+    // Optional answers never block or add another confirmation step.
     // Persist the last edited section before submitting.
-    await repo.saveOnboarding({
+    const finalPatch = {
       ...sectionForStep(step, currentSections),
       currentStep: STEP_LABELS.length,
-    });
+    };
+    if (live) await save.mutateAsync(finalPatch);
+    else await repo.saveOnboarding(finalPatch);
     await submit.mutateAsync();
     // A resubmit from the editing flow returns to the under-review summary.
     setEditing(false);
+  }
+
+  async function saveBeforeImport() {
+    const patch = {
+      ...sectionForStep(4, currentSections),
+      currentStep: 4,
+    };
+    if (live) await save.mutateAsync(patch);
+    else await repo.saveOnboarding(patch);
   }
 
   function toggleCoverage(option: string) {
@@ -306,10 +345,20 @@ function OnboardingWizard() {
     <div className="min-h-screen bg-background">
       <Header personName={personName} onSignOut={signOut} signOutError={signOutError} />
       <main className="mx-auto w-full max-w-3xl space-y-5 px-4 py-6 sm:px-6">
-        {onboarding.isPending ? (
+        {checkoutSuccess && onboarding.isPending ? (
+          <ProvisioningState />
+        ) : onboarding.isPending ? (
           <LoadingState label="Loading your onboarding" rows={4} />
         ) : onboarding.isError ? (
-          <ErrorState description="Your onboarding could not be loaded. Nothing was changed." />
+          <ErrorState
+            title={checkoutSuccess ? "Your payment is confirmed" : "Your setup could not be loaded"}
+            description={
+              checkoutSuccess
+                ? "Your workspace is taking longer than expected to prepare. Retry now — your payment and saved information are safe."
+                : "Your onboarding could not be loaded. Nothing was changed."
+            }
+            onRetry={() => void onboarding.refetch()}
+          />
         ) : submitted && !editing ? (
           <UnderReviewScreen
             companyName={companyName}
@@ -331,12 +380,22 @@ function OnboardingWizard() {
                   ← Back to review
                 </button>
               ) : null}
-              <h1 className="text-lg font-bold tracking-tight text-foreground">
-                Set up {companyName || "your workspace"}
+              {checkoutSuccess ? (
+                <div className="rounded-md border border-ok/35 bg-ok-soft px-4 py-3">
+                  <p className="text-xs font-semibold uppercase tracking-wider text-ok">
+                    Payment confirmed
+                  </p>
+                  <p className="mt-1 text-sm text-foreground">
+                    Welcome to VendorClr. Share the basics and VendorClr will take it from here.
+                  </p>
+                </div>
+              ) : null}
+              <h1 className="text-xl font-bold tracking-tight text-foreground">
+                Welcome to {companyName || text(companyInfo, "companyName") || "your VendorClr workspace"}
               </h1>
               <p className="text-sm text-muted-foreground">
-                A few details so our compliance team can start collecting and reviewing vendor
-                insurance for you. You can change any of this later.
+                Confirm the essentials so our compliance team can start working for you. It takes
+                about three minutes, and only your company name is required.
               </p>
               <Stepper step={step} />
             </div>
@@ -539,7 +598,17 @@ function OnboardingWizard() {
                   <div className="grid gap-3 sm:grid-cols-2">
                     <Link
                       to={routes.vendorCoiImport}
-                      className="focusable rounded-md border border-border bg-background p-4 hover:border-primary"
+                      onClick={async (event) => {
+                        event.preventDefault();
+                        try {
+                          await saveBeforeImport();
+                          window.location.assign(event.currentTarget.href);
+                        } catch {
+                          // The shared inline error keeps the customer in context.
+                        }
+                      }}
+                      aria-disabled={save.isPending}
+                      className="focusable rounded-md border border-border bg-background p-4 hover:border-primary aria-disabled:pointer-events-none aria-disabled:opacity-60"
                     >
                       <p className="text-sm font-semibold text-foreground">Upload COIs</p>
                       <p className="mt-1 text-xs text-muted-foreground">
@@ -549,7 +618,17 @@ function OnboardingWizard() {
                     </Link>
                     <Link
                       to={routes.vendorImport}
-                      className="focusable rounded-md border border-border bg-background p-4 hover:border-primary"
+                      onClick={async (event) => {
+                        event.preventDefault();
+                        try {
+                          await saveBeforeImport();
+                          window.location.assign(event.currentTarget.href);
+                        } catch {
+                          // The shared inline error keeps the customer in context.
+                        }
+                      }}
+                      aria-disabled={save.isPending}
+                      className="focusable rounded-md border border-border bg-background p-4 hover:border-primary aria-disabled:pointer-events-none aria-disabled:opacity-60"
                     >
                       <p className="text-sm font-semibold text-foreground">Import a CSV</p>
                       <p className="mt-1 text-xs text-muted-foreground">
@@ -650,6 +729,15 @@ function OnboardingWizard() {
                 </div>
               ) : null}
 
+              {save.isError || submit.isError ? (
+                <div role="alert" className="mt-5 rounded-sm border border-destructive/30 bg-danger-soft px-3 py-2">
+                  <p className="text-sm font-semibold text-destructive">We couldn&apos;t save that yet.</p>
+                  <p className="mt-0.5 text-xs text-foreground">
+                    Check your connection and try again. Your answers are still on this page.
+                  </p>
+                </div>
+              ) : null}
+
               <div className="mt-6 flex items-center justify-between gap-3">
                 <button
                   type="button"
@@ -677,7 +765,7 @@ function OnboardingWizard() {
                       disabled={save.isPending}
                       className="focusable rounded-sm bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-60"
                     >
-                      {save.isPending ? "Saving…" : "Save & continue"}
+                      {save.isPending ? "Saving…" : "Continue"}
                     </button>
                   </div>
                 ) : (
