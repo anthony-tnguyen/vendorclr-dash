@@ -1,0 +1,50 @@
+name: Supabase drift check
+
+# Compares the committed repo against the live Supabase projects (prod +
+# staging): migrations that are committed but not deployed, Edge Function
+# verify_jwt that disagrees with config.toml, and objects the live projects
+# have that this repo doesn't recognise. See scripts/check-supabase-drift.ts.
+#
+# Deliberately NOT part of the required push/PR CI: it depends on live-project
+# availability and a management-API credential, which must never flake an
+# ordinary PR. Same decoupling as staging-smoke.yml - scheduled + on demand.
+# The audit's point ("CI is green while the hosted RPC is broken") is addressed
+# by having this look at the live projects at all, on a cadence, not by gating
+# every push on prod introspection.
+on:
+  workflow_dispatch:
+  schedule:
+    # Mondays 08:17 UTC. Off-the-hour minute to dodge the top-of-hour load spike.
+    - cron: "17 8 * * 1"
+
+permissions:
+  contents: read
+
+jobs:
+  drift:
+    name: supabase-drift
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - uses: oven-sh/setup-bun@v2
+
+      - name: Install dependencies from the committed Bun lockfile
+        run: bun install --frozen-lockfile
+
+      # SUPABASE_ACCESS_TOKEN is a personal/management API token with read
+      # access to both projects (Settings > Secrets and variables > Actions).
+      # When it is absent the script prints a warning and exits 0, so this job
+      # is a visible no-op until the secret is configured rather than a
+      # hard failure. The project refs are public (see environment-matrix.md)
+      # and default in the script; override here only if they ever change.
+      - name: Check migration and Edge Function drift against live projects
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: bun run drift:check
