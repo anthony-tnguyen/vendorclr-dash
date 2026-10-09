@@ -3,6 +3,8 @@ import type {
   ActivatedWorkspace,
   ActivationCode,
   ActivationCodeDraft,
+  AdminMember,
+  AdminStaff,
   Company,
   ComplianceItem,
   DashboardRepository,
@@ -17,6 +19,7 @@ import type {
   VendorDraft,
   VendorUsage,
 } from "./contracts";
+import type { CompanyRole } from "./dbTypeAliases";
 
 /**
  * DEMO-ONLY in-memory repository. State lives for the lifetime of the tab and
@@ -507,6 +510,14 @@ const leads: Lead[] = [
   },
 ];
 
+/** Reverse of the supabase repo's ROLE_LABELS, for mapping demo grants back. */
+const DEMO_ROLE_BY_LABEL: Record<AccessGrant["role"], CompanyRole> = {
+  Owner: "owner",
+  "Risk Manager": "risk_manager",
+  "Project Engineer": "project_engineer",
+  "Read only": "read_only",
+};
+
 const accessGrants: AccessGrant[] = [
   {
     id: "ac-1",
@@ -714,5 +725,35 @@ export function createDemoRepository(): DashboardRepository {
       }
       return delay(undefined);
     },
+
+    // Staff account & company management. The reads map the demo access grants so
+    // the Access console renders in the preview; every mutation refuses rather
+    // than fake a change to accounts that do not exist here.
+    listAdminMembers: (): Promise<AdminMember[]> =>
+      delay(
+        accessGrants.map((g) => ({
+          id: g.id,
+          userId: g.id,
+          person: g.person,
+          email: g.email,
+          companyId: "demo-company",
+          companyName: "Halstead Builders",
+          role: DEMO_ROLE_BY_LABEL[g.role],
+          isPlatformAdmin: false,
+          lastActiveOn: g.lastActiveOn,
+        })),
+      ),
+    listPlatformAdmins: (): Promise<AdminStaff[]> => delay([]),
+    findUserByEmail: (): Promise<AdminStaff | null> => delay(null),
+    setCompanyMemberRole: (): Promise<void> =>
+      Promise.reject(new Error("Demo mode: there are no real accounts here to manage.")),
+    removeCompanyMember: (): Promise<void> =>
+      Promise.reject(new Error("Demo mode: there are no real accounts here to manage.")),
+    setPlatformAdmin: (): Promise<void> =>
+      Promise.reject(new Error("Demo mode: super-admin access cannot be changed here.")),
+    sendPasswordReset: (): Promise<void> =>
+      Promise.reject(new Error("Demo mode: no email is sent and there is no account to reset.")),
+    setCompanyPlan: (): Promise<void> =>
+      Promise.reject(new Error("Demo mode: there is no company here to change the plan of.")),
   };
 }
