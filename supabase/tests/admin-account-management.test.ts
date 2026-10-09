@@ -51,7 +51,12 @@ beforeEach(async () => {
   await signUp(db, { id: OWNER, email: "owner@acme.test", companyName: "Acme" });
   await signUp(db, { id: OUTSIDER, email: "nobody@acme.test" });
   companyId = await companyIdFor(db, OWNER);
-  // A second active owner, so demoting/removing the first is allowed.
+  // A second active owner, so demoting/removing the first is allowed. The user
+  // must exist in auth.users first (company_members.user_id FK).
+  await db.query(`insert into auth.users (id, email) values ($1, $2)`, [
+    SECOND,
+    "second@acme.test",
+  ]);
   await db.query(
     `insert into public.company_members (company_id, user_id, role, last_active_at)
      values ($1, $2, 'owner', now())`,
