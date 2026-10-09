@@ -66,7 +66,8 @@ function UploadPackage({ token, view }: { token: string; view: PackagePortalView
   const challengeFor = (error: unknown) => {
     if (
       error instanceof Error &&
-      (error.name === "CaptchaRequiredError" || (error as Error & { code?: string }).code === "turnstile_required")
+      (error.name === "CaptchaRequiredError" ||
+        (error as Error & { code?: string }).code === "turnstile_required")
     )
       setChallenge(true);
   };
@@ -115,7 +116,9 @@ function UploadPackage({ token, view }: { token: string; view: PackagePortalView
     ]);
   const uploadAll = async () => {
     for (const entry of queue.filter((item) => item.state === "ready")) {
-      setQueue((old) => old.map((item) => (item.id === entry.id ? { ...item, state: "uploading" } : item)));
+      setQueue((old) =>
+        old.map((item) => (item.id === entry.id ? { ...item, state: "uploading" } : item)),
+      );
       try {
         await add.mutateAsync(entry);
         setQueue((old) => old.filter((item) => item.id !== entry.id));
@@ -141,8 +144,8 @@ function UploadPackage({ token, view }: { token: string; view: PackagePortalView
         <h2 className="font-semibold text-ok">Submission received</h2>
         <p className="mt-2 text-sm">Reference: {receipt}</p>
         <p className="mt-2 text-sm">
-          Your submitted files are queued for processing. This does not confirm compliance. You can safely close this
-          page.
+          Your submitted files are queued for processing. This does not confirm compliance. You can
+          safely close this page.
         </p>
       </section>
     );
@@ -200,7 +203,9 @@ function UploadPackage({ token, view }: { token: string; view: PackagePortalView
                 onChange={(e) =>
                   setQueue((old) =>
                     old.map((entry) =>
-                      entry.id === item.id ? { ...entry, kind: e.target.value as DocumentKind } : entry,
+                      entry.id === item.id
+                        ? { ...entry, kind: e.target.value as DocumentKind }
+                        : entry,
                     ),
                   )
                 }
@@ -223,7 +228,10 @@ function UploadPackage({ token, view }: { token: string; view: PackagePortalView
       </ul>
       <ul className="mt-3 space-y-2">
         {view.documents.map((doc) => (
-          <li key={doc.id} className="flex justify-between gap-2 rounded border border-border p-3 text-sm">
+          <li
+            key={doc.id}
+            className="flex justify-between gap-2 rounded border border-border p-3 text-sm"
+          >
             <span>{doc.fileName}</span>
             {view.status === "open" ? (
               <button
@@ -266,7 +274,9 @@ function UploadPackage({ token, view }: { token: string; view: PackagePortalView
       ) : (
         <div className="mt-4 rounded border border-border p-4">
           <h2 className="font-semibold">Review package</h2>
-          <p className="mt-1 text-sm text-muted-foreground">Finalize to begin asynchronous processing.</p>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Finalize to begin asynchronous processing.
+          </p>
           <button
             type="button"
             className="mt-3 rounded bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground"
@@ -317,7 +327,10 @@ export function VendorUploadPortal({ token }: { token: string }) {
           </div>
         ) : (
           <div className="mt-3">
-            <section aria-label="Request details" className="rounded-md border border-border bg-card p-5">
+            <section
+              aria-label="Request details"
+              className="rounded-md border border-border bg-card p-5"
+            >
               <h1 className="text-lg font-bold">{request.data.vendorName}</h1>
               <p className="mt-1 text-sm text-muted-foreground">{request.data.companyName}</p>
               <p className="mt-3 text-sm">{vendorRequestPurposeMessage(request.data.purpose)}</p>
@@ -331,7 +344,9 @@ export function VendorUploadPortal({ token }: { token: string }) {
               className="mt-4 text-xs leading-5 text-muted-foreground"
             />
             <UploadPackage token={token} view={packageQuery.data} />
-            <p className="mt-6 text-xs text-muted-foreground">This secure link does not require a VendorClr account.</p>
+            <p className="mt-6 text-xs text-muted-foreground">
+              This secure link does not require a VendorClr account.
+            </p>
           </div>
         )}
         <LegalLinks className="mt-6 flex gap-3 text-xs text-muted-foreground" />
