@@ -12,12 +12,12 @@ import { resetRepository } from "@/data/repository";
  * the review summary and sign-out routing (the Phase 1-3 behaviours).
  */
 
-async function renderOnboarding() {
+async function renderOnboarding(initialEntry = "/onboarding") {
   const { getRouter } = await import("@/router");
   const router = getRouter();
   router.update({
     ...router.options,
-    history: createMemoryHistory({ initialEntries: ["/onboarding"] }),
+    history: createMemoryHistory({ initialEntries: [initialEntry] }),
   });
   await router.load();
   render(<RouterProvider router={router} />);
@@ -41,7 +41,9 @@ afterEach(() => {
 describe("onboarding wizard (demo mode)", () => {
   it("shows the optionality copy and requires only the company name on step 1", async () => {
     await renderOnboarding();
-    expect(await screen.findByText(/Only your company name is required/i)).toBeInTheDocument();
+    expect(
+      (await screen.findAllByText(/Only your company name is required/i)).length,
+    ).toBeGreaterThan(0);
     // The company-name field carries the required marker.
     const company = screen.getByLabelText(/Company name/i);
     expect(company).toBeRequired();
@@ -54,7 +56,7 @@ describe("onboarding wizard (demo mode)", () => {
     // Wait for the onboarding query to resolve (the page shows a loading state
     // first) before the field exists.
     await user.type(await screen.findByLabelText(/Company name/i), "Halstead Builders");
-    await user.click(screen.getByRole("button", { name: /Save & continue/i }));
+    await user.click(screen.getByRole("button", { name: /^Continue$/i }));
 
     // Step 2 (Compliance program) is optional and empty -> Skip for now shows.
     expect(await screen.findByText("Compliance program")).toBeInTheDocument();
@@ -64,6 +66,15 @@ describe("onboarding wizard (demo mode)", () => {
 
     // Advanced to step 3 (Projects).
     expect(await screen.findByText("Projects")).toBeInTheDocument();
+  });
+
+  it("reassures a buyer returning from successful checkout", async () => {
+    await renderOnboarding("/onboarding?checkout=success");
+
+    expect(await screen.findByText(/Payment confirmed/i)).toBeInTheDocument();
+    expect(
+      await screen.findByText(/VendorClr will take it from here/i, {}, { timeout: 5_000 }),
+    ).toBeInTheDocument();
   });
 
   it("signs out to the login screen", async () => {
