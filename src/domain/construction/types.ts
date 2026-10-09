@@ -21,7 +21,11 @@ export type PolicyKind = "document" | "limit" | "endorsement" | "certificate_hol
  * `source` column exactly.
  */
 export type RequirementSource =
-  "company_profile" | "project_profile" | "assignment_profile" | "project_override";
+  | "company_profile"
+  | "project_profile"
+  | "assignment_profile"
+  | "project_override"
+  | "vendor_override";
 
 /** One row of resolve_assignment_requirements(assignment_id)'s result. */
 export interface ResolvedRequirement {

@@ -40,6 +40,7 @@ export function requirementSourceLabel(source: string): string {
     project_profile: "Project profile",
     company_profile: "Company default",
     project_override: "Project override",
+    vendor_override: "Vendor override",
   };
   return labels[source] ?? source.replaceAll("_", " ");
 }

@@ -234,6 +234,55 @@ describe("project_requirement_overrides: owner/risk_manager write only", () => {
   });
 });
 
+describe("vendor_requirement_overrides: owner/risk_manager write only", () => {
+  let vendorId: string;
+
+  beforeAll(async () => {
+    const rows = await db.query<{ id: string }>(
+      `insert into public.vendors (company_id, name, trade) values ($1, 'Override Req Vendor', 'Concrete')
+       returning id`,
+      [companyId],
+    );
+    vendorId = rows.rows[0]!.id;
+  });
+
+  it("lets an owner add a vendor override", async () => {
+    const rows = await asUser<{ rule_key: string }>(
+      db,
+      OWNER,
+      `insert into public.vendor_requirement_overrides (company_id, vendor_id, rule_key, value)
+       values ($1, $2, 'document_lien_waiver', '{"required": true}'::jsonb)
+       returning rule_key`,
+      [companyId, vendorId],
+    );
+    expect(rows[0]?.rule_key).toBe("document_lien_waiver");
+  });
+
+  it("refuses a project_engineer adding a vendor override", async () => {
+    await expectDeniedByRls(() =>
+      asUser(
+        db,
+        PROJECT_ENGINEER,
+        `insert into public.vendor_requirement_overrides (company_id, vendor_id, rule_key, value)
+         values ($1, $2, 'engineer_attempt', '{"required": false}'::jsonb)`,
+        [companyId, vendorId],
+      ),
+    );
+  });
+
+  it("refuses a read_only member adding a vendor override", async () => {
+    await expectDeniedByRls(() =>
+      asUser(
+        db,
+        READER,
+        `insert into public.vendor_requirement_overrides (company_id, vendor_id, rule_key, value)
+         values ($1, $2, 'reader_attempt', '{"required": false}'::jsonb)`,
+        [companyId, vendorId],
+      ),
+    );
+  });
+});
+
 describe("projects and project_vendor_assignments: owner/risk_manager/project_engineer write", () => {
   it("lets a project_engineer create a project", async () => {
     const rows = await asUser<{ name: string }>(
@@ -464,6 +513,18 @@ describe("cross-tenant integrity triggers", () => {
     ).rejects.toThrow(/does not match/);
   });
 
+  it("refuses a vendor_requirement_overrides row whose vendor belongs to another company", async () => {
+    await expect(
+      asUser(
+        db,
+        OWNER,
+        `insert into public.vendor_requirement_overrides (company_id, vendor_id, rule_key, value)
+         values ($1, $2, 'cross_company_vendor_override', '{}'::jsonb)`,
+        [companyId, rivalVendorId],
+      ),
+    ).rejects.toThrow(/does not match/);
+  });
+
   it("is invisible to a rival company across every new table", async () => {
     const tables = [
       "projects",
@@ -471,6 +532,7 @@ describe("cross-tenant integrity triggers", () => {
       "requirement_profiles",
       "requirement_profile_rules",
       "project_requirement_overrides",
+      "vendor_requirement_overrides",
     ];
 
     for (const table of tables) {

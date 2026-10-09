@@ -329,6 +329,173 @@ describe("resolve_assignment_requirements()", () => {
     );
   });
 
+  it("applies a vendor override on top of the winning profile, for an existing rule", async () => {
+    const defaultProfile = await db.query<{ id: string }>(
+      `select id from public.requirement_profiles where company_id = $1 and is_company_default`,
+      [companyId],
+    );
+    await db.query(
+      `insert into public.requirement_profile_rules
+         (company_id, profile_id, rule_key, policy_type, rule_kind, required, amount)
+       values ($1, $2, 'gl_each_occ', 'general_liability', 'limit', true, 2000000)
+       on conflict (profile_id, rule_key) do nothing`,
+      [companyId, defaultProfile.rows[0]!.id],
+    );
+
+    const project = await db.query<{ id: string }>(
+      `insert into public.projects (company_id, name) values ($1, 'Vendor Override Site') returning id`,
+      [companyId],
+    );
+    const vendor = await db.query<{ id: string }>(
+      `insert into public.vendors (company_id, name, trade) values ($1, 'Vendor Override Co', 'Concrete')
+       returning id`,
+      [companyId],
+    );
+    const assignment = await db.query<{ id: string }>(
+      `insert into public.project_vendor_assignments (company_id, project_id, vendor_id)
+       values ($1, $2, $3) returning id`,
+      [companyId, project.rows[0]!.id, vendor.rows[0]!.id],
+    );
+
+    await db.query(
+      `insert into public.vendor_requirement_overrides (company_id, vendor_id, rule_key, value)
+       values ($1, $2, 'gl_each_occ', '{"amount": 7500000}'::jsonb)`,
+      [companyId, vendor.rows[0]!.id],
+    );
+
+    const rows = await resolve(assignment.rows[0]!.id);
+    const gl = rows.find((r) => r.key === "gl_each_occ");
+    expect(gl).toEqual(
+      expect.objectContaining({
+        amount: 7500000,
+        required: true,
+        policy_type: "general_liability",
+        source: "vendor_override",
+      }),
+    );
+  });
+
+  it("lets a vendor override win over a project override on the same rule", async () => {
+    const defaultProfile = await db.query<{ id: string }>(
+      `select id from public.requirement_profiles where company_id = $1 and is_company_default`,
+      [companyId],
+    );
+    await db.query(
+      `insert into public.requirement_profile_rules
+         (company_id, profile_id, rule_key, policy_type, rule_kind, required, amount)
+       values ($1, $2, 'wc_limit', 'workers_compensation', 'limit', true, 1000000)
+       on conflict (profile_id, rule_key) do nothing`,
+      [companyId, defaultProfile.rows[0]!.id],
+    );
+
+    const project = await db.query<{ id: string }>(
+      `insert into public.projects (company_id, name) values ($1, 'Layered Override Site') returning id`,
+      [companyId],
+    );
+    const vendor = await db.query<{ id: string }>(
+      `insert into public.vendors (company_id, name, trade) values ($1, 'Layered Vendor', 'Electrical')
+       returning id`,
+      [companyId],
+    );
+    const assignment = await db.query<{ id: string }>(
+      `insert into public.project_vendor_assignments (company_id, project_id, vendor_id)
+       values ($1, $2, $3) returning id`,
+      [companyId, project.rows[0]!.id, vendor.rows[0]!.id],
+    );
+
+    await db.query(
+      `insert into public.project_requirement_overrides (company_id, project_id, rule_key, value)
+       values ($1, $2, 'wc_limit', '{"amount": 2000000}'::jsonb)`,
+      [companyId, project.rows[0]!.id],
+    );
+    await db.query(
+      `insert into public.vendor_requirement_overrides (company_id, vendor_id, rule_key, value)
+       values ($1, $2, 'wc_limit', '{"amount": 5000000}'::jsonb)`,
+      [companyId, vendor.rows[0]!.id],
+    );
+
+    const rows = await resolve(assignment.rows[0]!.id);
+    const wc = rows.find((r) => r.key === "wc_limit");
+    expect(wc).toEqual(expect.objectContaining({ amount: 5000000, source: "vendor_override" }));
+  });
+
+  it("drops a rule a vendor override marks not required", async () => {
+    const defaultProfile = await db.query<{ id: string }>(
+      `select id from public.requirement_profiles where company_id = $1 and is_company_default`,
+      [companyId],
+    );
+    await db.query(
+      `insert into public.requirement_profile_rules
+         (company_id, profile_id, rule_key, policy_type, rule_kind, required, amount)
+       values ($1, $2, 'gl_each_occ', 'general_liability', 'limit', true, 2000000)
+       on conflict (profile_id, rule_key) do nothing`,
+      [companyId, defaultProfile.rows[0]!.id],
+    );
+
+    const project = await db.query<{ id: string }>(
+      `insert into public.projects (company_id, name) values ($1, 'Deselect Site') returning id`,
+      [companyId],
+    );
+    const vendor = await db.query<{ id: string }>(
+      `insert into public.vendors (company_id, name, trade) values ($1, 'Deselect Vendor', 'Roofing')
+       returning id`,
+      [companyId],
+    );
+    const assignment = await db.query<{ id: string }>(
+      `insert into public.project_vendor_assignments (company_id, project_id, vendor_id)
+       values ($1, $2, $3) returning id`,
+      [companyId, project.rows[0]!.id, vendor.rows[0]!.id],
+    );
+
+    await db.query(
+      `insert into public.vendor_requirement_overrides (company_id, vendor_id, rule_key, value)
+       values ($1, $2, 'gl_each_occ', '{"required": false}'::jsonb)`,
+      [companyId, vendor.rows[0]!.id],
+    );
+
+    const rows = await resolve(assignment.rows[0]!.id);
+    const gl = rows.find((r) => r.key === "gl_each_occ");
+    expect(gl).toEqual(expect.objectContaining({ required: false, source: "vendor_override" }));
+  });
+
+  it("folds in a vendor override that names a rule_key no profile defines", async () => {
+    const project = await db.query<{ id: string }>(
+      `insert into public.projects (company_id, name) values ($1, 'Vendor Extra Rule Site') returning id`,
+      [companyId],
+    );
+    const vendor = await db.query<{ id: string }>(
+      `insert into public.vendors (company_id, name, trade) values ($1, 'Vendor Extra Co', 'Glazing')
+       returning id`,
+      [companyId],
+    );
+    const assignment = await db.query<{ id: string }>(
+      `insert into public.project_vendor_assignments (company_id, project_id, vendor_id)
+       values ($1, $2, $3) returning id`,
+      [companyId, project.rows[0]!.id, vendor.rows[0]!.id],
+    );
+
+    await db.query(
+      `insert into public.vendor_requirement_overrides (company_id, vendor_id, rule_key, value)
+       values ($1, $2, 'document_lien_waiver',
+               '{"kind": "document", "required": true,
+                 "configuration": {"documentKind": "lien_waiver"}}'::jsonb)`,
+      [companyId, vendor.rows[0]!.id],
+    );
+
+    const rows = await resolve(assignment.rows[0]!.id);
+    const extra = rows.find((r) => r.key === "document_lien_waiver");
+    expect(extra).toEqual(
+      expect.objectContaining({
+        kind: "document",
+        required: true,
+        amount: null,
+        policy_type: null,
+        source: "vendor_override",
+        configuration: { documentKind: "lien_waiver" },
+      }),
+    );
+  });
+
   it("raises for an assignment id that does not exist", async () => {
     const bogus = "00000000-0000-0000-0000-000000000000";
     await expect(resolve(bogus)).rejects.toThrow();

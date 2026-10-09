@@ -372,6 +372,21 @@ export function evaluateRequirementsAgainstEvidence(
   certificateHolder: CertificateHolderOnFile,
 ): Finding[] {
   return requirements.map((requirement) => {
+    // A requirement the resolver returns as not required (e.g. deselected for
+    // this vendor via vendor_requirement_overrides) is never a deficiency: it
+    // is reported not_applicable and apply_evaluation_result() skips it. Every
+    // requirement_profile_rules row is written required=true, so this only ever
+    // fires for an explicit false override, leaving existing behaviour intact.
+    if (requirement.required === false) {
+      return {
+        requirementKey: requirement.key,
+        state: "not_applicable",
+        expected: { required: false },
+        observed: null,
+        evidenceDocumentIds: [],
+        explanation: "This requirement is not required for this vendor, so it was not evaluated.",
+      };
+    }
     switch (requirement.kind) {
       case "limit":
         return evaluateLimit(requirement, evidence);

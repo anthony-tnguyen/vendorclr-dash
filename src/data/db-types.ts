@@ -1482,6 +1482,51 @@ export type Database = {
           },
         ];
       };
+      vendor_requirement_overrides: {
+        Row: {
+          company_id: string;
+          created_at: string;
+          id: string;
+          rule_key: string;
+          updated_at: string;
+          value: Json;
+          vendor_id: string;
+        };
+        Insert: {
+          company_id: string;
+          created_at?: string;
+          id?: string;
+          rule_key: string;
+          updated_at?: string;
+          value?: Json;
+          vendor_id: string;
+        };
+        Update: {
+          company_id?: string;
+          created_at?: string;
+          id?: string;
+          rule_key?: string;
+          updated_at?: string;
+          value?: Json;
+          vendor_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "vendor_requirement_overrides_company_id_fkey";
+            columns: ["company_id"];
+            isOneToOne: false;
+            referencedRelation: "companies";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "vendor_requirement_overrides_vendor_id_fkey";
+            columns: ["vendor_id"];
+            isOneToOne: false;
+            referencedRelation: "vendors";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       project_vendor_assignments: {
         Row: {
           company_id: string;

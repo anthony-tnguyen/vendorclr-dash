@@ -8,6 +8,7 @@ import { getRepository, isBackendConfigured } from "@/data/repository";
 import { ComplianceCasesSection } from "@/features/compliance/ComplianceCasesSection";
 import { VendorCommunicationsSection } from "./VendorCommunicationsSection";
 import { VendorContactsPanel } from "./VendorContactsPanel";
+import { VendorRequirementsPanel } from "./VendorRequirementsPanel";
 
 const currency = new Intl.NumberFormat("en-US", {
   style: "currency",
@@ -32,10 +33,15 @@ function looksLikeMismatch(certificateHolderName: string, companyName: string): 
 
 export function VendorDetailPage({ vendorId }: { vendorId: string }) {
   const repo = getRepository();
-  const { companyName, companyRole, mode } = useSession();
+  const { companyName, companyRole, mode, isStaff } = useSession();
   // Presentation only - RLS (can_write_company) is the real boundary.
   const canWrite =
     mode === "live" && ["owner", "risk_manager", "project_engineer"].includes(companyRole ?? "");
+  // VendorClr staff manage a customer's contacts on their behalf. Staff hold no
+  // company role, so canWrite is false for them; this opens just the contacts
+  // panel. The contact write RLS also admits is_platform_admin() (migration
+  // 20261009000100) so the database accepts these writes.
+  const canWriteContacts = canWrite || isStaff;
   // Exception approval is owner/risk_manager only - mirrors approve_compliance_exception().
   const canApprove = mode === "live" && ["owner", "risk_manager"].includes(companyRole ?? "");
   const vendor = useQuery({
@@ -207,6 +213,8 @@ export function VendorDetailPage({ vendorId }: { vendorId: string }) {
             </section>
           </div>
 
+          <VendorRequirementsPanel vendorId={data.id} />
+
           {isBackendConfigured() ? (
             <>
               <section aria-labelledby="cases-heading">
@@ -221,7 +229,7 @@ export function VendorDetailPage({ vendorId }: { vendorId: string }) {
                   />
                 </div>
               </section>
-              <VendorContactsPanel vendorId={data.id} canWrite={canWrite} />
+              <VendorContactsPanel vendorId={data.id} canWrite={canWriteContacts} />
               <VendorCommunicationsSection vendorId={data.id} canWrite={canWrite} />
             </>
           ) : null}
