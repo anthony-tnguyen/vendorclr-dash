@@ -50,6 +50,7 @@ const DOCUMENT_KIND_VALUES = [
   "additional_insured_endorsement",
   "waiver_of_subrogation_endorsement",
   "primary_noncontributory_endorsement",
+  "lien_waiver",
   "other",
 ] as const satisfies readonly DocumentKind[];
 

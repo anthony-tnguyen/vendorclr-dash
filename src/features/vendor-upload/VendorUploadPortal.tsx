@@ -20,6 +20,7 @@ const labels: Record<DocumentKind, string> = {
   additional_insured_endorsement: "Additional Insured endorsement",
   waiver_of_subrogation_endorsement: "Waiver of Subrogation endorsement",
   primary_noncontributory_endorsement: "Primary & Non-Contributory endorsement",
+  lien_waiver: "Lien waiver",
   other: "Other supporting document",
 };
 type Queued = {

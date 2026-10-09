@@ -74,9 +74,11 @@ function SidebarContents({
         >
           <img src="/vendorclr-logo-black.svg" alt="VendorClr" className="h-5 w-auto" />
         </Link>
-        <span className="numeric rounded-sm border border-sidebar-border px-1.5 py-0.5 text-[10px] uppercase text-sidebar-foreground/70">
-          {role === "admin" ? "ADMIN" : "CUSTOMER"}
-        </span>
+        {role === "admin" ? (
+          <span className="numeric rounded-sm border border-sidebar-border px-1.5 py-0.5 text-[10px] uppercase text-sidebar-foreground/70">
+            ADMIN
+          </span>
+        ) : null}
       </div>
       <nav aria-label="Dashboard sections" className="space-y-4 px-1 pb-4">
         <NavList title={navigationTitle} items={navigation} onNavigate={onNavigate} />

@@ -70,6 +70,7 @@ describe("migrations", () => {
       "vendor_documents",
       "vendor_import_batches",
       "vendor_policies",
+      "vendor_requirement_overrides",
       "vendor_upload_requests",
       "vendors",
     ]);

@@ -182,6 +182,11 @@ export const REQUIREMENT_CATALOG: RequirementRuleSpec[] = [
     "Primary and non-contributory endorsement page",
     "The endorsement form evidencing primary and non-contributory wording.",
   ),
+  documentRule(
+    "lien_waiver",
+    "Lien waiver",
+    "A signed lien waiver must be on file before the vendor is paid.",
+  ),
 ];
 
 export interface RequirementSettingValue {
