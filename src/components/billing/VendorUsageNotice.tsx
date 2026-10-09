@@ -1,6 +1,9 @@
 import { useQuery } from "@tanstack/react-query";
+import { useEffect } from "react";
 
 import { getRepository } from "@/data/repository";
+import { reportLovableError } from "@/lib/lovable-error-reporting";
+import { captureClientError } from "@/lib/observability/sentryClient";
 
 /**
  * The ~90%-utilization notice.
@@ -21,6 +24,17 @@ export function VendorUsageNotice() {
     queryKey: ["vendor-usage"],
     queryFn: () => getRepository().getVendorUsage(),
   });
+
+  // Report query failures instead of silently rendering nothing. This notice is
+  // advisory (never blocking), so a failure must not surface a scary banner or
+  // break the page - but it must not vanish into a swallowed React Query error
+  // either, which is exactly how the shipped company_vendor_usage() 42703 stayed
+  // invisible in production. Mirror __root.tsx's dual-reporter pattern.
+  useEffect(() => {
+    if (!usage.isError) return;
+    reportLovableError(usage.error, { component: "VendorUsageNotice" });
+    captureClientError(usage.error, { component: "VendorUsageNotice" });
+  }, [usage.isError, usage.error]);
 
   const data = usage.data;
   // No ceiling (Enterprise), still loading, or comfortably under the threshold:
