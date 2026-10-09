@@ -67,7 +67,7 @@ function AuthLayout({
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4 py-10">
       <div className="w-full max-w-md">
-        <img src={logoAsset.url} alt="VendorClr" className="h-5 w-auto" />
+        <img src={logoAsset.url} alt="VendorClr" className="h-8 w-auto" />
         <div className="mt-3 rounded-md border border-border bg-card p-6">
           <h1 className="text-lg font-bold tracking-tight text-foreground">{title}</h1>
           <p className="mt-1 text-sm text-muted-foreground">{description}</p>

@@ -80,7 +80,7 @@ function LegalLayout({ title, children }: { title: string; children: ReactNode }
     <div className="min-h-screen bg-background px-4 py-10">
       <main className="mx-auto w-full max-w-2xl">
         <Link to="/" className="focusable inline-block" aria-label="VendorClr home">
-          <img src={logoAsset.url} alt="VendorClr" className="h-5 w-auto" />
+          <img src={logoAsset.url} alt="VendorClr" className="h-8 w-auto" />
         </Link>
         <article className="mt-4 rounded-md border border-border bg-card p-6">
           <h1 className="text-xl font-bold tracking-tight text-foreground">{title}</h1>
