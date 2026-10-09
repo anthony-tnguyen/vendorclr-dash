@@ -5,7 +5,7 @@
  * repository. Nothing is persisted, emailed, uploaded, reviewed or exported.
  */
 
-import type { CompanyPlan, CompanyServiceStatus } from "./dbTypeAliases";
+import type { CompanyPlan, CompanyRole, CompanyServiceStatus } from "./dbTypeAliases";
 
 export type DemoRole = "customer" | "admin";
 
@@ -138,6 +138,32 @@ export interface AccessGrant {
   role: "Owner" | "Risk Manager" | "Project Engineer" | "Read only";
   scope: string;
   lastActiveOn: string;
+}
+
+/**
+ * Staff view of one company membership, for the admin Access console. Unlike
+ * AccessGrant (a flat display row), this carries the raw ids and role the staff
+ * mutations need, the company it belongs to, and whether the user is also a
+ * VendorClr staff account (platform_admins).
+ */
+export interface AdminMember {
+  /** company_members.id — the handle every membership mutation takes. */
+  id: string;
+  userId: string;
+  person: string;
+  email: string;
+  companyId: string;
+  companyName: string;
+  role: CompanyRole;
+  isPlatformAdmin: boolean;
+  lastActiveOn: string;
+}
+
+/** A VendorClr staff account (platform_admins), possibly with no company. */
+export interface AdminStaff {
+  userId: string;
+  person: string;
+  email: string;
 }
 
 /**
@@ -294,6 +320,29 @@ export interface DashboardRepository {
    * from in_review to onboarding and clears submitted_at. RLS/RPC re-check staff.
    */
   requestCompanyChanges(companyId: string): Promise<void>;
+
+  // --- Staff account & company management ---------------------------------
+  // Every mutation below is a platform-admin-gated RPC (see
+  // supabase/migrations/20261009120000_admin_account_and_company_management.sql).
+  // The reads rely on the is_platform_admin() branch of each table's SELECT
+  // policy, so a non-staff caller gets nothing back.
+
+  /** Active company memberships across every company, for the Access console. */
+  listAdminMembers(): Promise<AdminMember[]>;
+  /** Every VendorClr staff account (platform_admins), company or not. */
+  listPlatformAdmins(): Promise<AdminStaff[]>;
+  /** Resolve a user by email to grant them staff access; null if none. */
+  findUserByEmail(email: string): Promise<AdminStaff | null>;
+  /** Change one membership's role. Refuses to drop a company's last owner. */
+  setCompanyMemberRole(memberId: string, role: CompanyRole): Promise<void>;
+  /** Soft-remove a membership. Refuses to drop a company's last owner. */
+  removeCompanyMember(memberId: string): Promise<void>;
+  /** Grant or revoke super-admin. Refuses to revoke the caller's own access. */
+  setPlatformAdmin(userId: string, enabled: boolean): Promise<void>;
+  /** Email the user a password-reset link (the public reset flow). */
+  sendPasswordReset(email: string): Promise<void>;
+  /** Staff-only: change a company's plan. */
+  setCompanyPlan(companyId: string, plan: CompanyPlan): Promise<void>;
 }
 
 export const COMPLIANCE_LABELS: Record<ComplianceKey, string> = {

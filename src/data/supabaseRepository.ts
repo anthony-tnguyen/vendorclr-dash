@@ -3,6 +3,8 @@ import type {
   ActivatedWorkspace,
   ActivationCode,
   ActivationCodeDraft,
+  AdminMember,
+  AdminStaff,
   Company,
   ComplianceItem,
   ComplianceKey,
@@ -778,6 +780,141 @@ export function createSupabaseRepository(
     async requestCompanyChanges(companyId: string): Promise<void> {
       const supabase = clientFactory();
       unwrap(await supabase.rpc("request_company_changes", { target_company: companyId }));
+    },
+
+    // ---------------------------------------------------------------------
+    // Staff account & company management
+    // (supabase/migrations/20261009120000_admin_account_and_company_management.sql)
+    // ---------------------------------------------------------------------
+
+    async listAdminMembers(): Promise<AdminMember[]> {
+      const supabase = clientFactory();
+      // Active memberships only. Staff see every row via the is_platform_admin()
+      // branch of company_members_select. Company names and profiles are fetched
+      // in separate `in` queries rather than PostgREST embeds - the same pattern
+      // listAccessGrants() uses - to keep the shapes explicit under the untyped
+      // client.
+      const members = unwrap(
+        await supabase
+          .from("company_members")
+          .select("id, user_id, company_id, role, last_active_at")
+          .is("deactivated_at", null)
+          .order("created_at", { ascending: true }),
+      ) as Array<{
+        id: string;
+        user_id: string;
+        company_id: string;
+        role: CompanyRole;
+        last_active_at: string | null;
+      }>;
+
+      const userIds = [...new Set(members.map((m) => m.user_id))];
+      const companyIds = [...new Set(members.map((m) => m.company_id))];
+      const profileRows =
+        userIds.length === 0
+          ? []
+          : (unwrap(
+              await supabase.from("profiles").select("id, email, full_name").in("id", userIds),
+            ) as Array<{ id: string; email: string; full_name: string | null }>);
+      const companyRows =
+        companyIds.length === 0
+          ? []
+          : (unwrap(
+              await supabase.from("companies").select("id, name").in("id", companyIds),
+            ) as Array<{ id: string; name: string }>);
+      const adminRows = unwrap(await supabase.from("platform_admins").select("user_id")) as Array<{
+        user_id: string;
+      }>;
+
+      const profileById = new Map(profileRows.map((p) => [p.id, p]));
+      const companyById = new Map(companyRows.map((c) => [c.id, c]));
+      const adminIds = new Set(adminRows.map((a) => a.user_id));
+
+      return members.map((m) => {
+        const profile = profileById.get(m.user_id);
+        return {
+          id: m.id,
+          userId: m.user_id,
+          person: profile?.full_name ?? profile?.email ?? "Pending invitation",
+          email: profile?.email ?? "",
+          companyId: m.company_id,
+          companyName: companyById.get(m.company_id)?.name ?? "Unknown company",
+          role: m.role,
+          isPlatformAdmin: adminIds.has(m.user_id),
+          lastActiveOn: m.last_active_at ? m.last_active_at.slice(0, 10) : "Never",
+        };
+      });
+    },
+
+    async listPlatformAdmins(): Promise<AdminStaff[]> {
+      const supabase = clientFactory();
+      const adminRows = unwrap(
+        await supabase.from("platform_admins").select("user_id").order("created_at"),
+      ) as Array<{ user_id: string }>;
+      const ids = adminRows.map((a) => a.user_id);
+      const profileRows =
+        ids.length === 0
+          ? []
+          : (unwrap(
+              await supabase.from("profiles").select("id, email, full_name").in("id", ids),
+            ) as Array<{ id: string; email: string; full_name: string | null }>);
+      const profileById = new Map(profileRows.map((p) => [p.id, p]));
+      return adminRows.map((a) => {
+        const profile = profileById.get(a.user_id);
+        return {
+          userId: a.user_id,
+          person: profile?.full_name ?? profile?.email ?? a.user_id,
+          email: profile?.email ?? "",
+        };
+      });
+    },
+
+    async findUserByEmail(email: string): Promise<AdminStaff | null> {
+      const supabase = clientFactory();
+      const rows = unwrap(
+        await supabase
+          .from("profiles")
+          .select("id, email, full_name")
+          .ilike("email", email.trim())
+          .limit(1),
+      ) as Array<{ id: string; email: string; full_name: string | null }>;
+      const row = rows[0];
+      return row ? { userId: row.id, person: row.full_name ?? row.email, email: row.email } : null;
+    },
+
+    async setCompanyMemberRole(memberId: string, role: CompanyRole): Promise<void> {
+      const supabase = clientFactory();
+      unwrap(
+        await supabase.rpc("admin_set_company_member_role", {
+          target_member: memberId,
+          new_role: role,
+        }),
+      );
+    },
+
+    async removeCompanyMember(memberId: string): Promise<void> {
+      const supabase = clientFactory();
+      unwrap(await supabase.rpc("admin_remove_company_member", { target_member: memberId }));
+    },
+
+    async setPlatformAdmin(userId: string, enabled: boolean): Promise<void> {
+      const supabase = clientFactory();
+      unwrap(await supabase.rpc("admin_set_platform_admin", { target_user: userId, enabled }));
+    },
+
+    async sendPasswordReset(email: string): Promise<void> {
+      const supabase = clientFactory();
+      // Omit redirectTo entirely when there is no window, rather than passing
+      // undefined (exactOptionalPropertyTypes rejects the explicit undefined).
+      const options =
+        typeof window === "undefined" ? {} : { redirectTo: `${window.location.origin}/login` };
+      const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), options);
+      if (error) throw new Error(error.message);
+    },
+
+    async setCompanyPlan(companyId: string, plan: CompanyPlan): Promise<void> {
+      const supabase = clientFactory();
+      unwrap(await supabase.rpc("set_company_plan", { target_company: companyId, new_plan: plan }));
     },
   };
 }
