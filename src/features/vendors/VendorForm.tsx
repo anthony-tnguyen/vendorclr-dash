@@ -1,21 +1,37 @@
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient, type QueryKey } from "@tanstack/react-query";
 import { useState, type FormEvent } from "react";
 import { getRepository, isBackendConfigured } from "@/data/repository";
-import type { VendorTrade } from "@/data/contracts";
+import type { Vendor, VendorDraft, VendorTrade } from "@/data/contracts";
 import { VENDOR_TRADES } from "@/workflows/coiIntakeMapping";
 
 const trades = VENDOR_TRADES;
 
-export function VendorForm({ onDone }: { onDone?: () => void }) {
+/**
+ * Add-vendor form.
+ *
+ * `create` defaults to the caller's own company (repo.createVendor); the admin
+ * "manage a customer's vendors" view passes a company-bound admin create
+ * instead, with `invalidateKey` pointing at that view's query so the roster
+ * refreshes. Everything else is identical.
+ */
+export function VendorForm({
+  onDone,
+  create,
+  invalidateKey = ["vendors"],
+}: {
+  onDone?: () => void;
+  create?: (draft: VendorDraft) => Promise<Vendor>;
+  invalidateKey?: QueryKey;
+}) {
   const repo = getRepository();
   const queryClient = useQueryClient();
   const [notice, setNotice] = useState<string | null>(null);
   const isDemo = !isBackendConfigured();
 
   const mutation = useMutation({
-    mutationFn: repo.createVendor,
+    mutationFn: create ?? repo.createVendor,
     onSuccess: (vendor) => {
-      void queryClient.invalidateQueries({ queryKey: ["vendors"] });
+      void queryClient.invalidateQueries({ queryKey: invalidateKey });
       setNotice(
         isDemo
           ? `${vendor.name} added to the in-memory demo roster. Nothing was uploaded, emailed or saved to a backend.`

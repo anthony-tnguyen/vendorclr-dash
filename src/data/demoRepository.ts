@@ -755,5 +755,10 @@ export function createDemoRepository(): DashboardRepository {
       Promise.reject(new Error("Demo mode: no email is sent and there is no account to reset.")),
     setCompanyPlan: (): Promise<void> =>
       Promise.reject(new Error("Demo mode: there is no company here to change the plan of.")),
+    listCompanyVendors: (): Promise<Vendor[]> => delay(vendorStore.map((v) => ({ ...v }))),
+    adminCreateVendor: (): Promise<Vendor> =>
+      Promise.reject(
+        new Error("Demo mode: there is no real company here to add a vendor on behalf of."),
+      ),
   };
 }
