@@ -20,6 +20,7 @@ import { Route as SignupRouteImport } from './routes/signup'
 import { Route as TermsRouteImport } from './routes/terms'
 import { Route as AcceptInviteTokenRouteImport } from './routes/accept-invite.$token'
 import { Route as DashboardIndexRouteImport } from './routes/dashboard.index'
+import { Route as DashboardAccountRouteImport } from './routes/dashboard.account'
 import { Route as DashboardHelpRouteImport } from './routes/dashboard.help'
 import { Route as DashboardReportsRouteImport } from './routes/dashboard.reports'
 import { Route as DashboardRequirementProfilesRouteImport } from './routes/dashboard.requirement-profiles'
@@ -98,6 +99,11 @@ const AcceptInviteTokenRoute = AcceptInviteTokenRouteImport.update({
 const DashboardIndexRoute = DashboardIndexRouteImport.update({
   id: '/dashboard/',
   path: '/dashboard/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DashboardAccountRoute = DashboardAccountRouteImport.update({
+  id: '/dashboard/account',
+  path: '/dashboard/account',
   getParentRoute: () => rootRouteImport,
 } as any)
 const DashboardHelpRoute = DashboardHelpRouteImport.update({
@@ -241,6 +247,7 @@ export interface FileRoutesByFullPath {
   '/signup': typeof SignupRoute
   '/terms': typeof TermsRoute
   '/accept-invite/$token': typeof AcceptInviteTokenRoute
+  '/dashboard/account': typeof DashboardAccountRoute
   '/dashboard/help': typeof DashboardHelpRoute
   '/dashboard/reports': typeof DashboardReportsRoute
   '/dashboard/requirement-profiles': typeof DashboardRequirementProfilesRoute
@@ -278,6 +285,7 @@ export interface FileRoutesByTo {
   '/signup': typeof SignupRoute
   '/terms': typeof TermsRoute
   '/accept-invite/$token': typeof AcceptInviteTokenRoute
+  '/dashboard/account': typeof DashboardAccountRoute
   '/dashboard/help': typeof DashboardHelpRoute
   '/dashboard/reports': typeof DashboardReportsRoute
   '/dashboard/requirement-profiles': typeof DashboardRequirementProfilesRoute
@@ -316,6 +324,7 @@ export interface FileRoutesById {
   '/signup': typeof SignupRoute
   '/terms': typeof TermsRoute
   '/accept-invite/$token': typeof AcceptInviteTokenRoute
+  '/dashboard/account': typeof DashboardAccountRoute
   '/dashboard/help': typeof DashboardHelpRoute
   '/dashboard/reports': typeof DashboardReportsRoute
   '/dashboard/requirement-profiles': typeof DashboardRequirementProfilesRoute
@@ -355,6 +364,7 @@ export interface FileRouteTypes {
     | '/signup'
     | '/terms'
     | '/accept-invite/$token'
+    | '/dashboard/account'
     | '/dashboard/help'
     | '/dashboard/reports'
     | '/dashboard/requirement-profiles'
@@ -392,6 +402,7 @@ export interface FileRouteTypes {
     | '/signup'
     | '/terms'
     | '/accept-invite/$token'
+    | '/dashboard/account'
     | '/dashboard/help'
     | '/dashboard/reports'
     | '/dashboard/requirement-profiles'
@@ -429,6 +440,7 @@ export interface FileRouteTypes {
     | '/signup'
     | '/terms'
     | '/accept-invite/$token'
+    | '/dashboard/account'
     | '/dashboard/help'
     | '/dashboard/reports'
     | '/dashboard/requirement-profiles'
@@ -467,6 +479,7 @@ export interface RootRouteChildren {
   SignupRoute: typeof SignupRoute
   TermsRoute: typeof TermsRoute
   AcceptInviteTokenRoute: typeof AcceptInviteTokenRoute
+  DashboardAccountRoute: typeof DashboardAccountRoute
   DashboardHelpRoute: typeof DashboardHelpRoute
   DashboardReportsRoute: typeof DashboardReportsRoute
   DashboardRequirementProfilesRoute: typeof DashboardRequirementProfilesRoute
@@ -592,6 +605,13 @@ declare module '@tanstack/react-router' {
       path: '/dashboard/requirement-profiles'
       fullPath: '/dashboard/requirement-profiles'
       preLoaderRoute: typeof DashboardRequirementProfilesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/dashboard/account': {
+      id: '/dashboard/account'
+      path: '/dashboard/account'
+      fullPath: '/dashboard/account'
+      preLoaderRoute: typeof DashboardAccountRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/dashboard/settings': {
@@ -755,6 +775,7 @@ const rootRouteChildren: RootRouteChildren = {
   SignupRoute: SignupRoute,
   TermsRoute: TermsRoute,
   AcceptInviteTokenRoute: AcceptInviteTokenRoute,
+  DashboardAccountRoute: DashboardAccountRoute,
   DashboardHelpRoute: DashboardHelpRoute,
   DashboardReportsRoute: DashboardReportsRoute,
   DashboardRequirementProfilesRoute: DashboardRequirementProfilesRoute,
