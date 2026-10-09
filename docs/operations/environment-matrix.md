@@ -23,8 +23,8 @@ re-verified 2026-09-22 (see the Supabase table).
 > - **`company_vendor_usage()` is broken in production.** It is recorded in the
 >   ledger (via `self_checkout_billing_and_onboarding`) but its body selected a
 >   non-existent `company_id` column out of `current_company_ids()` (which
->   returns `setof uuid`), so every call raises `42703 column "company_id" does
->   not exist` — reproduced live. Fixed in `main` by migration
+>   returns `setof uuid`), so every call raises a `42703` undefined-column error
+>   — reproduced live. Fixed in `main` by migration
 >   `20261009000400_fix_company_vendor_usage_company_ids` (+ a regression test
 >   that invokes the RPC); **still pending deploy to prod and staging.**
 > - **Dash migrations not yet applied to the hosted projects.** Prod's ledger
@@ -43,7 +43,7 @@ re-verified 2026-09-22 (see the Supabase table).
 > - **Three prod-ledger migrations are NOT dash's and must not be copied here:**
 >   `coi_scanner_lead_tables`, `requirement_builder_sessions`,
 >   `correction_generator_sessions` (plus the `analyze-coi` Edge Function) belong
->   to the sibling **vendorclear** marketing repo, which deploys to this *same*
+>   to the sibling **vendorclear** marketing repo, which deploys to this same
 >   Supabase project (dash carries cross-repo tests gated on
 >   `VENDORCLEAR_REPO_DIR`, e.g. `supabase/tests/scanner-parser-feedback.test.ts`,
 >   and vendorclear stamps `coi_scanner_lead_tables` at a different version). The
