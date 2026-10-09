@@ -45,7 +45,10 @@ export function OnboardingReviewSummary({
             {providedFields.length > 0 ? (
               <dl className="mt-2 space-y-1.5">
                 {providedFields.map(({ field, display }) => (
-                  <div key={field.key} className="grid gap-0.5 text-sm sm:grid-cols-[10rem_1fr] sm:gap-2">
+                  <div
+                    key={field.key}
+                    className="grid gap-0.5 text-sm sm:grid-cols-[10rem_1fr] sm:gap-2"
+                  >
                     <dt className="text-muted-foreground">
                       {field.label}
                       {field.required ? <span className="text-destructive"> *</span> : null}
@@ -55,7 +58,9 @@ export function OnboardingReviewSummary({
                 ))}
               </dl>
             ) : (
-              <p className="mt-2 text-xs text-muted-foreground">No details added — that&apos;s okay.</p>
+              <p className="mt-2 text-xs text-muted-foreground">
+                No details added — that&apos;s okay.
+              </p>
             )}
           </section>
         );
