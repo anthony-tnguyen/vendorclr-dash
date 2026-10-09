@@ -228,7 +228,7 @@ function OnboardingWizard() {
   const queryClient = useQueryClient();
   const checkoutSuccess = useRouterState({
     select: (state) =>
-      String((state.location.search as Record<string, unknown>).checkout ?? "") === "success",
+      String((state.location.search as Record<string, unknown>)["checkout"] ?? "") === "success",
   });
 
   const onboarding = useQuery({
