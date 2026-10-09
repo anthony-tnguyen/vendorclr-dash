@@ -8,6 +8,7 @@ import type { PlanId } from "@/domain/billing/plans";
 import { PLANS, SELF_CHECKOUT_PLAN_IDS } from "@/domain/billing/plans";
 import { getRepository, isBackendConfigured } from "@/data/repository";
 import { cn } from "@/lib/utils";
+import logoAsset from "@/assets/vendorclr-logo.svg.asset.json";
 
 /**
  * Plan selection + Stripe self-checkout. Shown to a signed-in account that has
@@ -40,7 +41,7 @@ export function CheckoutPage() {
     <div className="min-h-screen bg-background">
       <header className="border-b border-border bg-card">
         <div className="mx-auto flex w-full max-w-4xl items-center justify-between gap-3 px-4 py-4 sm:px-6">
-          <img src="/vendorclr-logo-black.svg" alt="VendorClr" className="h-5 w-auto" />
+          <img src={logoAsset.url} alt="VendorClr" className="h-5 w-auto" />
           {status === "authenticated" && mode === "live" ? (
             <div className="flex items-center gap-3">
               {personName ? (

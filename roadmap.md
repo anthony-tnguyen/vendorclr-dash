@@ -1,5 +1,9 @@
 # Roadmap
 
+## Brand asset update
+
+- [x] Replace all existing wordmark placements with the uploaded logo; verified logo rendering on sign-in, signup, reset, demo, checkout, terms and privacy, plus the uploaded favicon.
+
 ## Activation-code access model (approved plan: `.lovable/plan/activation-code-access-model-2026-09-18.md`)
 
 - [x] PR 1 — Migration authored, applied to the live project
