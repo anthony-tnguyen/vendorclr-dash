@@ -248,6 +248,8 @@ describe("validateRows()", () => {
 interface FakeTableState {
   /** Result of the can_write_company() role check; defaults to true (a writer). */
   canWrite?: boolean;
+  /** Result of the is_platform_admin() check; defaults to false (not staff). */
+  isPlatformAdmin?: boolean;
   projects: Array<{ name: string }>;
   vendors: Array<{ name: string; contact_email: string }>;
   batches: Map<
@@ -342,7 +344,9 @@ function makeFakeSupabase(
     rpc: async (name: string, params: Record<string, unknown>) =>
       name === "can_write_company"
         ? { data: state.canWrite ?? true, error: null }
-        : rpcImpl(params),
+        : name === "is_platform_admin"
+          ? { data: state.isPlatformAdmin ?? false, error: null }
+          : rpcImpl(params),
   };
 }
 
@@ -594,6 +598,32 @@ describe("assignment prediction and write-role guard", () => {
     ).rejects.toThrow(/cannot import/);
     expect(rpcCalls).toHaveLength(0);
     expect(state.batches.size).toBe(0);
+  });
+
+  it("lets a platform admin import on a customer's behalf though they are no member", async () => {
+    // can_write_company() is false for staff (they belong to no company), but
+    // the managed-service path authorizes them via is_platform_admin().
+    const state = { ...emptyState(), canWrite: false, isPlatformAdmin: true };
+    const rpcCalls: string[] = [];
+    const supabase = makeFakeSupabase(state, (params) => {
+      rpcCalls.push(String(params["p_vendor_name"]));
+      return successfulRpc(params);
+    });
+
+    const result = await executeVendorImportHandler(
+      supabase as never,
+      {
+        companyId: "company-1",
+        idempotencyKey: "staff-key",
+        rows: [row({ rowNumber: 1, projectName: "Harbor Point", vendorName: "Bay Steel" })],
+        dispatchRequests: false,
+      },
+      async () => okDispatch,
+    );
+
+    expect(result.acceptedRows).toBe(1);
+    expect(rpcCalls).toEqual(["Bay Steel"]);
+    expect(state.batches.size).toBe(1);
   });
 });
 
