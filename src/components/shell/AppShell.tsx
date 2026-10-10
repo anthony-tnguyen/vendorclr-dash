@@ -13,10 +13,32 @@ import logoAsset from "@/assets/vendorclr-logo.svg.asset.json";
 type NavItems = readonly NavItem[];
 
 // While staff act as a company, only the pages whose reads are scoped to the
-// acting company are shown; the rest (projects, settings, team, requirement
-// profiles) are not yet acting-aware, so they are hidden to avoid showing a
-// staff member every company's data under one company's banner.
+// acting company are shown; the rest (projects, settings, team) are not yet
+// acting-aware, so they are hidden to avoid showing a staff member every
+// company's data under one company's banner.
 const ACTING_NAV_LABELS = new Set(["Overview", "Vendors", "Tasks", "Reports", "Help"]);
+
+// Requirement profiles is acting-aware (reads scope to the acting company, and
+// staff writes are allowed by migration 20261010000200) but is not part of
+// customerNav - customers reach it from Projects - so it is added explicitly to
+// the acting nav, kept just before Help.
+const ACTING_EXTRA_NAV: readonly NavItem[] = [
+  {
+    label: "Requirement profiles",
+    to: routes.requirementProfiles,
+    description: "Compliance rules for projects and vendors",
+  },
+];
+
+function buildActingNav(baseNav: NavItems): NavItems {
+  const result: NavItem[] = [];
+  for (const item of baseNav) {
+    if (!ACTING_NAV_LABELS.has(item.label)) continue;
+    if (item.label === "Help") result.push(...ACTING_EXTRA_NAV);
+    result.push(item);
+  }
+  return result;
+}
 
 function NavList({
   title,
@@ -201,9 +223,7 @@ export function AppShell({ title, subtitle, actions, children }: AppShellProps) 
   const pathname = useRouterState({ select: (state) => state.location.pathname });
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const baseNav: NavItems = role === "admin" ? adminNav : customerNav;
-  const navigation: NavItems = acting
-    ? baseNav.filter((item) => ACTING_NAV_LABELS.has(item.label))
-    : baseNav;
+  const navigation: NavItems = acting ? buildActingNav(baseNav) : baseNav;
   const navigationTitle = role === "admin" ? "Operations" : "Workspace";
 
   /**
