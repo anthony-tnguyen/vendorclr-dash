@@ -565,16 +565,24 @@ async function fetchValidationContext(
 
 /**
  * import_vendor_row() only lets owners/risk managers/project engineers write
- * (can_write_company(), migration 20260922140000). Checked up front so a
- * read-only member gets one clear refusal before any row is attempted,
- * instead of a per-row "not authorized" on every line.
+ * (can_write_company(), migration 20260922140000), OR a VendorClr staff member
+ * running a managed-service import on a customer's behalf (is_platform_admin(),
+ * which import_vendor_row() and the widened vendor_import_batches_insert policy
+ * both honour). Checked up front so a read-only member gets one clear refusal
+ * before any row is attempted, instead of a per-row "not authorized".
  */
 async function assertCanWriteCompany(supabase: SupabaseClient, companyId: string) {
   const { data, error } = await supabase.rpc("can_write_company", { target_company: companyId });
   if (error) throw new Error(error.message);
-  if (data !== true) {
-    throw new Error("Your role can view this company's data but cannot import into it.");
-  }
+  if (data === true) return;
+
+  // A platform admin belongs to no company, so can_write_company() is false for
+  // them; the import path still authorizes them, so let them through here too.
+  const { data: isAdmin, error: adminError } = await supabase.rpc("is_platform_admin");
+  if (adminError) throw new Error(adminError.message);
+  if (isAdmin === true) return;
+
+  throw new Error("Your role can view this company's data but cannot import into it.");
 }
 
 const parsedRowSchema = z.object({
