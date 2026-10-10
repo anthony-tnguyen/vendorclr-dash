@@ -7,21 +7,31 @@ import { VENDOR_TRADES } from "@/workflows/coiIntakeMapping";
 const trades = VENDOR_TRADES;
 
 /**
- * Add-vendor form.
+ * Add/edit-vendor form.
  *
  * `create` defaults to the caller's own company (repo.createVendor); the admin
  * "manage a customer's vendors" view passes a company-bound admin create
  * instead, with `invalidateKey` pointing at that view's query so the roster
- * refreshes. Everything else is identical.
+ * refreshes. Passing `initial` prefills the fields and turns this into an edit
+ * form (pair it with an update-bound `create`); `heading`, `submitLabel` and
+ * `successMessage` relabel it. Everything else is identical.
  */
 export function VendorForm({
   onDone,
   create,
   invalidateKey = ["vendors"],
+  initial,
+  heading = "Add vendor",
+  submitLabel,
+  successMessage,
 }: {
   onDone?: () => void;
   create?: (draft: VendorDraft) => Promise<Vendor>;
   invalidateKey?: QueryKey;
+  initial?: VendorDraft;
+  heading?: string;
+  submitLabel?: string;
+  successMessage?: (vendor: Vendor) => string;
 }) {
   const repo = getRepository();
   const queryClient = useQueryClient();
@@ -33,10 +43,13 @@ export function VendorForm({
     onSuccess: (vendor) => {
       void queryClient.invalidateQueries({ queryKey: invalidateKey });
       setNotice(
-        isDemo
-          ? `${vendor.name} added to the in-memory demo roster. Nothing was uploaded, emailed or saved to a backend.`
-          : `${vendor.name} was added to the vendor roster.`,
+        successMessage
+          ? successMessage(vendor)
+          : isDemo
+            ? `${vendor.name} added to the in-memory demo roster. Nothing was uploaded, emailed or saved to a backend.`
+            : `${vendor.name} was added to the vendor roster.`,
       );
+      if (initial && onDone) onDone();
     },
   });
 
@@ -60,12 +73,14 @@ export function VendorForm({
       className="rounded-md border border-border bg-card p-4"
     >
       <h2 id="vendor-form-heading" className="text-sm font-semibold text-foreground">
-        Add vendor
+        {heading}
       </h2>
       <p className="mt-1 text-xs text-muted-foreground">
-        {isDemo
-          ? "Demo-only: the vendor is held in memory for this session and starts with every requirement marked missing."
-          : "New vendors start with every required document marked missing."}
+        {initial
+          ? "Edits apply immediately. Compliance rows and existing documents are left untouched."
+          : isDemo
+            ? "Demo-only: the vendor is held in memory for this session and starts with every requirement marked missing."
+            : "New vendors start with every required document marked missing."}
       </p>
 
       <div className="mt-4 grid gap-3 sm:grid-cols-2">
@@ -77,6 +92,7 @@ export function VendorForm({
             id="vendor-name"
             name="vendor-name"
             required
+            defaultValue={initial?.name ?? ""}
             className="focusable mt-1 w-full rounded-sm border border-input bg-background px-3 py-2 text-sm"
           />
         </div>
@@ -87,6 +103,7 @@ export function VendorForm({
           <select
             id="vendor-trade"
             name="vendor-trade"
+            defaultValue={initial?.trade ?? "Concrete"}
             className="focusable mt-1 w-full rounded-sm border border-input bg-background px-3 py-2 text-sm"
           >
             {trades.map((t) => (
@@ -103,6 +120,7 @@ export function VendorForm({
           <input
             id="vendor-project"
             name="vendor-project"
+            defaultValue={initial?.project ?? ""}
             className="focusable mt-1 w-full rounded-sm border border-input bg-background px-3 py-2 text-sm"
           />
         </div>
@@ -116,6 +134,7 @@ export function VendorForm({
             type="number"
             min={0}
             step={1000}
+            defaultValue={initial ? initial.contractValue : ""}
             className="numeric focusable mt-1 w-full rounded-sm border border-input bg-background px-3 py-2 text-sm"
           />
         </div>
@@ -126,6 +145,7 @@ export function VendorForm({
           <input
             id="vendor-contact"
             name="vendor-contact"
+            defaultValue={initial?.contactName ?? ""}
             className="focusable mt-1 w-full rounded-sm border border-input bg-background px-3 py-2 text-sm"
           />
         </div>
@@ -137,6 +157,7 @@ export function VendorForm({
             id="vendor-email"
             name="vendor-email"
             type="email"
+            defaultValue={initial?.contactEmail ?? ""}
             className="focusable mt-1 w-full rounded-sm border border-input bg-background px-3 py-2 text-sm"
           />
         </div>
@@ -148,7 +169,11 @@ export function VendorForm({
           disabled={mutation.isPending}
           className="focusable rounded-sm bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-60"
         >
-          {mutation.isPending ? "Adding…" : isDemo ? "Add to demo roster" : "Add vendor"}
+          {mutation.isPending
+            ? initial
+              ? "Saving…"
+              : "Adding…"
+            : (submitLabel ?? (isDemo ? "Add to demo roster" : "Add vendor"))}
         </button>
         {onDone ? (
           <button

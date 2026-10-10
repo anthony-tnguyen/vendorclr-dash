@@ -961,5 +961,46 @@ export function createSupabaseRepository(
       if (!created) throw new Error("Vendor was created but could not be read back");
       return created;
     },
+
+    async adminUpdateVendor(vendorId: string, draft: VendorDraft): Promise<Vendor> {
+      const supabase = clientFactory();
+      // Direct update via vendors_update's is_platform_admin() branch
+      // (migration 20261009180000). The table's CHECK constraints validate the
+      // trade and email exactly as they do for a customer edit.
+      unwrap(
+        await supabase
+          .from("vendors")
+          .update({
+            name: draft.name,
+            trade: draft.trade,
+            project: draft.project,
+            contract_value: Math.max(0, Math.round(draft.contractValue || 0)),
+            contact_name: draft.contactName,
+            contact_email: draft.contactEmail,
+          })
+          .eq("id", vendorId)
+          .is("archived_at", null)
+          .select("id")
+          .single(),
+      );
+      const updated = await loadVendorById(vendorId);
+      if (!updated) throw new Error("Vendor was updated but could not be read back");
+      return updated;
+    },
+
+    async adminArchiveVendor(vendorId: string): Promise<void> {
+      const supabase = clientFactory();
+      // Soft archive: the active roster filters on archived_at is null, so this
+      // removes the vendor from view without destroying its compliance history.
+      unwrap(
+        await supabase
+          .from("vendors")
+          .update({ archived_at: new Date().toISOString() })
+          .eq("id", vendorId)
+          .is("archived_at", null)
+          .select("id")
+          .single(),
+      );
+    },
   };
 }

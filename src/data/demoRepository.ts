@@ -760,5 +760,21 @@ export function createDemoRepository(): DashboardRepository {
       Promise.reject(
         new Error("Demo mode: there is no real company here to add a vendor on behalf of."),
       ),
+    adminUpdateVendor: (vendorId: string, draft: VendorDraft): Promise<Vendor> => {
+      const vendor = vendorStore.find((v) => v.id === vendorId);
+      if (!vendor) return Promise.reject(new Error("Demo mode: that vendor is not in the roster."));
+      vendor.name = draft.name;
+      vendor.trade = draft.trade;
+      vendor.project = draft.project;
+      vendor.contractValue = draft.contractValue;
+      vendor.contactName = draft.contactName;
+      vendor.contactEmail = draft.contactEmail;
+      return delay({ ...vendor });
+    },
+    adminArchiveVendor: (vendorId: string): Promise<void> => {
+      const index = vendorStore.findIndex((v) => v.id === vendorId);
+      if (index >= 0) vendorStore.splice(index, 1);
+      return delay(undefined);
+    },
   };
 }

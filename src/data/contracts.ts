@@ -349,6 +349,18 @@ export interface DashboardRepository {
   listCompanyVendors(companyId: string): Promise<Vendor[]>;
   /** Staff-only: add a vendor on a company's behalf (admin_create_vendor RPC). */
   adminCreateVendor(companyId: string, draft: VendorDraft): Promise<Vendor>;
+  /**
+   * Staff-only: edit a vendor on a company's behalf. Writes through the
+   * is_platform_admin() branch of vendors_update (migration 20261009180000),
+   * so no RPC is needed; the table's CHECK constraints still validate.
+   */
+  adminUpdateVendor(vendorId: string, draft: VendorDraft): Promise<Vendor>;
+  /**
+   * Staff-only: remove a vendor on a company's behalf. A soft archive
+   * (sets archived_at) rather than a delete, so compliance history survives
+   * and the row simply drops out of the active roster. Uses vendors_update.
+   */
+  adminArchiveVendor(vendorId: string): Promise<void>;
 }
 
 export const COMPLIANCE_LABELS: Record<ComplianceKey, string> = {
