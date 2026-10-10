@@ -25,6 +25,7 @@ function CompanyVendorsPanel({
   companyName: string;
 }) {
   const repo = getRepository();
+  const queryClient = useQueryClient();
   const vendorsKey = ["admin", "company-vendors", companyId];
   const vendors = useQuery({
     queryKey: vendorsKey,
@@ -32,6 +33,12 @@ function CompanyVendorsPanel({
   });
   const [adding, setAdding] = useState(false);
   const [openVendor, setOpenVendor] = useState<string | null>(null);
+  const [editingVendor, setEditingVendor] = useState<string | null>(null);
+
+  const archive = useMutation({
+    mutationFn: (vendorId: string) => repo.adminArchiveVendor(vendorId),
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: vendorsKey }),
+  });
 
   return (
     <div className="space-y-3 rounded-md border border-border bg-background p-4">
@@ -69,7 +76,7 @@ function CompanyVendorsPanel({
         </p>
       ) : (
         <div className="overflow-x-auto rounded-sm border border-border bg-card">
-          <table className="w-full min-w-[560px] text-left text-sm">
+          <table className="w-full min-w-[680px] text-left text-sm">
             <caption className="sr-only">{companyName} vendors</caption>
             <thead className="border-b border-border text-xs uppercase tracking-wide text-muted-foreground">
               <tr>
@@ -88,11 +95,15 @@ function CompanyVendorsPanel({
                 <th scope="col" className="px-3 py-2 font-medium">
                   Requests
                 </th>
+                <th scope="col" className="px-3 py-2 font-medium">
+                  Manage
+                </th>
               </tr>
             </thead>
             <tbody>
               {(vendors.data ?? []).map((v) => {
                 const open = openVendor === v.id;
+                const editing = editingVendor === v.id;
                 return (
                   <Fragment key={v.id}>
                     <tr className="border-b border-border last:border-0">
@@ -114,10 +125,60 @@ function CompanyVendorsPanel({
                           {open ? "Hide" : "Contacts & COI"}
                         </button>
                       </td>
+                      <td className="px-3 py-2 text-xs">
+                        <div className="flex gap-2">
+                          <button
+                            type="button"
+                            aria-expanded={editing}
+                            onClick={() => setEditingVendor(editing ? null : v.id)}
+                            className="focusable rounded-sm border border-input px-2 py-1 text-xs font-semibold"
+                          >
+                            {editing ? "Close" : "Edit"}
+                          </button>
+                          <button
+                            type="button"
+                            disabled={archive.isPending}
+                            onClick={() => {
+                              if (
+                                window.confirm(
+                                  `Archive ${v.name}? It leaves the active roster but its compliance history is kept.`,
+                                )
+                              ) {
+                                archive.mutate(v.id);
+                              }
+                            }}
+                            className="focusable rounded-sm border border-input px-2 py-1 text-xs font-semibold text-destructive disabled:opacity-50"
+                          >
+                            Archive
+                          </button>
+                        </div>
+                      </td>
                     </tr>
+                    {editing ? (
+                      <tr className="border-b border-border last:border-0">
+                        <td colSpan={6} className="px-3 py-3">
+                          <VendorForm
+                            heading={`Edit ${v.name}`}
+                            submitLabel="Save changes"
+                            initial={{
+                              name: v.name,
+                              trade: v.trade,
+                              project: v.project,
+                              contactName: v.contactName,
+                              contactEmail: v.contactEmail,
+                              contractValue: v.contractValue,
+                            }}
+                            create={(draft) => repo.adminUpdateVendor(v.id, draft)}
+                            invalidateKey={vendorsKey}
+                            successMessage={(vendor) => `${vendor.name} was updated.`}
+                            onDone={() => setEditingVendor(null)}
+                          />
+                        </td>
+                      </tr>
+                    ) : null}
                     {open ? (
                       <tr className="border-b border-border last:border-0">
-                        <td colSpan={5} className="px-3 py-3">
+                        <td colSpan={6} className="px-3 py-3">
                           <VendorCommunicationsSection vendorId={v.id} canWrite />
                         </td>
                       </tr>
